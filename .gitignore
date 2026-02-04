@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+.pytype/
+.mypy_cache/
+.ruff_cache/
+
+# Environment
+.env
+.venv
+venv/
+
+# Data
+data/
+.sociopsi/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Git worktrees
+.worktrees/
