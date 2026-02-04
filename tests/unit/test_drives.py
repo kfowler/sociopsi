@@ -1,7 +1,6 @@
 """Tests for drive system."""
 
 import pytest
-import time
 from sociopsi.subsystems.drives import Drive, DriveSystem
 from sociopsi.core.event_bus import EventBus
 

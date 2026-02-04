@@ -17,7 +17,7 @@ class Config:
         if config_path is None:
             # Load default config from project root
             project_root = Path(__file__).parent.parent.parent.parent
-            config_path = project_root / "config.toml"
+            config_path = str(project_root / "config.toml")
 
         self._config_path = Path(config_path)
         self._config = self._load_config()

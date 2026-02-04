@@ -26,7 +26,7 @@ class VisualPerception:
 
         # Initialize OpenCV Haar Cascade face detector
         self.face_cascade = cv2.CascadeClassifier(
-            cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
+            cv2.data.haarcascades + "haarcascade_frontalface_default.xml"  # type: ignore
         )
 
         self.camera: Optional[cv2.VideoCapture] = None
@@ -75,24 +75,24 @@ class VisualPerception:
 
         # Detect faces
         faces = self.face_cascade.detectMultiScale(
-            gray,
-            scaleFactor=1.1,
-            minNeighbors=5,
-            minSize=(30, 30)
+            gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30)
         )
 
         faces_detected = len(faces)
         if faces_detected > 0:
             # Publish face detection event
-            self.event_bus.publish("perception.visual.face_detected", {
-                "count": faces_detected,
-                "timestamp": cv2.getTickCount() / cv2.getTickFrequency(),
-            })
+            self.event_bus.publish(
+                "perception.visual.face_detected",
+                {
+                    "count": faces_detected,
+                    "timestamp": cv2.getTickCount() / cv2.getTickFrequency(),
+                },
+            )
 
         return {
             "faces_detected": faces_detected,
             "frame_shape": frame.shape,
-            "faces": faces.tolist() if faces_detected > 0 else [],
+            "faces": faces.tolist() if faces_detected > 0 else [],  # type: ignore
         }
 
     def draw_detections(self, frame: np.ndarray, faces: list) -> np.ndarray:
@@ -110,7 +110,7 @@ class VisualPerception:
 
         annotated_frame = frame.copy()
 
-        for (x, y, w, h) in faces:
+        for x, y, w, h in faces:
             cv2.rectangle(annotated_frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
 
         return annotated_frame

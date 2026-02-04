@@ -55,8 +55,11 @@ class SimpleCognition:
         thought = self.generate_thought(drive_state)
 
         # Publish thought event
-        self.event_bus.publish("cognition.thought", {
-            "thought": thought,
-            "drive_state": drive_state,
-            "physical_state": physical_state,
-        })
+        self.event_bus.publish(
+            "cognition.thought",
+            {
+                "thought": thought,
+                "drive_state": drive_state,
+                "physical_state": physical_state,
+            },
+        )

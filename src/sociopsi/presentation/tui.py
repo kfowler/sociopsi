@@ -3,7 +3,6 @@
 from textual.app import App, ComposeResult
 from textual.widgets import Header, Footer, Static, Label
 from textual.containers import Container, Vertical
-from textual import events
 from rich.text import Text
 
 
@@ -65,12 +64,13 @@ class MonologueDisplay(Static):
     def add_thought(self, thought: str) -> None:
         """Add a new thought to the monologue."""
         from datetime import datetime
+
         timestamp = datetime.now().strftime("%H:%M:%S")
         self.thoughts.append(f"[{timestamp}] {thought}")
 
         # Keep only recent thoughts
         if len(self.thoughts) > self.max_thoughts:
-            self.thoughts = self.thoughts[-self.max_thoughts:]
+            self.thoughts = self.thoughts[-self.max_thoughts :]
 
         self.refresh()
 

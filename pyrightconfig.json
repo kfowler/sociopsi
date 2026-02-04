@@ -1,0 +1,11 @@
+{
+  "include": ["src", "tests"],
+  "exclude": [
+    "**/__pycache__",
+    "**/.venv",
+    "**/node_modules",
+    "**/.git"
+  ],
+  "pythonVersion": "3.11",
+  "typeCheckingMode": "basic"
+}

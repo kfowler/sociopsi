@@ -1,6 +1,5 @@
 """Tests for event bus."""
 
-import pytest
 from sociopsi.core.event_bus import EventBus
 
 

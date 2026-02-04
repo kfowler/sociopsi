@@ -22,7 +22,7 @@ class SocioPsiApp(SocioPsiTUI):
     def action_quit(self) -> None:
         """Stop agent before quitting."""
         self.agent.stop()
-        super().action_quit()
+        self.exit()
 
 
 def main() -> None:

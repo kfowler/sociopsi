@@ -43,10 +43,13 @@ async def test_drive_satisfaction():
     agent.drive_system.drives["affiliation"].value = 0.3
 
     # Simulate face detection
-    agent.event_bus.publish("perception.visual.face_detected", {
-        "count": 1,
-        "timestamp": 0.0,
-    })
+    agent.event_bus.publish(
+        "perception.visual.face_detected",
+        {
+            "count": 1,
+            "timestamp": 0.0,
+        },
+    )
 
     # Wait for event processing
     await asyncio.sleep(0.1)

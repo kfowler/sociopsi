@@ -1,6 +1,5 @@
 """Tests for physical state monitoring."""
 
-import pytest
 from sociopsi.utils.physical_state import PhysicalState
 
 

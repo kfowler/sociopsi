@@ -2,7 +2,6 @@
 
 import tempfile
 from pathlib import Path
-import pytest
 from sociopsi.core.config import Config
 
 
@@ -17,7 +16,7 @@ def test_load_default_config():
 
 def test_load_custom_config():
     """Test loading custom config file."""
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.toml', delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
         f.write("""
 [system]
 log_level = "DEBUG"

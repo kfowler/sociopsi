@@ -122,24 +122,33 @@ class DriveSystem:
             # Check for threshold crossing
             now_below = drive.is_below_threshold()
             if now_below and not was_below:
-                self.event_bus.publish("drives.threshold_crossed", {
-                    "drive_name": drive.name,
-                    "value": drive.value,
-                    "direction": "below",
-                })
+                self.event_bus.publish(
+                    "drives.threshold_crossed",
+                    {
+                        "drive_name": drive.name,
+                        "value": drive.value,
+                        "direction": "below",
+                    },
+                )
             elif not now_below and was_below:
-                self.event_bus.publish("drives.threshold_crossed", {
-                    "drive_name": drive.name,
-                    "value": drive.value,
-                    "direction": "above",
-                })
+                self.event_bus.publish(
+                    "drives.threshold_crossed",
+                    {
+                        "drive_name": drive.name,
+                        "value": drive.value,
+                        "direction": "above",
+                    },
+                )
 
             # Publish update event
-            self.event_bus.publish("drives.updated", {
-                "drive_name": drive.name,
-                "value": drive.value,
-                "below_threshold": now_below,
-            })
+            self.event_bus.publish(
+                "drives.updated",
+                {
+                    "drive_name": drive.name,
+                    "value": drive.value,
+                    "below_threshold": now_below,
+                },
+            )
 
     def satisfy_drive(self, drive_name: str, amount: float, quality: float = 1.0) -> None:
         """Satisfy a specific drive.
@@ -154,7 +163,4 @@ class DriveSystem:
 
     def get_state(self) -> dict:
         """Get state of all drives."""
-        return {
-            name: drive.get_state()
-            for name, drive in self.drives.items()
-        }
+        return {name: drive.get_state() for name, drive in self.drives.items()}

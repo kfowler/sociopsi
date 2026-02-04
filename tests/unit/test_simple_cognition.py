@@ -1,6 +1,5 @@
 """Tests for simple rule-based cognition."""
 
-import pytest
 from sociopsi.subsystems.cognition.simple import SimpleCognition
 from sociopsi.core.event_bus import EventBus
 
