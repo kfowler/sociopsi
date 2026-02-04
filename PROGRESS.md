@@ -1,6 +1,6 @@
 # Phase 1 Implementation Progress
 
-## Completed Tasks (5/12)
+## Completed Tasks (7/12)
 
 ✅ **Task 1: Project Scaffolding** (Commit: c8e95fa)
 - Created pyproject.toml with all dependencies
@@ -28,17 +28,25 @@
 - Event publishing for updates and threshold crossings
 - All tests passing (7/7)
 
-**Total Tests Passing: 19/19** ✓
+✅ **Task 6: Visual Perception (Face Detection)** (Commit: 4c48f92)
+- OpenCV Haar Cascade face detection
+- Camera capture and frame processing
+- Face detection events published to event bus
+- All tests passing (2/2, 1 skipped)
 
-## Remaining Tasks (7/12)
+✅ **Task 7: Simple Cognition (Rule-Based)** (Commit: e43fd64)
+- SimpleCognition class with drive-based thought generation
+- Rule-based thoughts based on affiliation and nurturing drives
+- Cognition.thought events published
+- All tests passing (4/4)
 
-⏳ **Task 6: Visual Perception (Face Detection)**
-- OpenCV + MediaPipe integration
-- Face detection with events
+**Total Tests Passing: 25/26** ✓ (1 skipped)
 
-⏳ **Task 7: Simple Cognition (Rule-Based)**
-- Basic rule-based thought generation
-- Drive-based monologue
+## Remaining Tasks (5/12)
+
+⏳ **Task 8: Basic TUI with Textual**
+- Terminal interface
+- Drive displays, monologue viewer
 
 ⏳ **Task 8: Basic TUI with Textual**
 - Terminal interface
@@ -62,4 +70,4 @@
 
 ## Next Steps
 
-Continue with Task 6 (Visual Perception) following the implementation plan.
+Continue with Task 8 (Basic TUI with Textual) following the implementation plan.
