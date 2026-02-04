@@ -1,0 +1,19 @@
+[system]
+data_dir = "~/.sociopsi"
+log_level = "INFO"
+
+[perception.visual]
+adaptive_sampling = true
+min_fps = 1.0
+max_fps = 15.0
+idle_fps = 3.0
+
+[drives.affiliation]
+decay_rate = 0.01
+base_threshold = 0.4
+is_core = true
+
+[drives.nurturing]
+decay_rate = 0.008
+base_threshold = 0.3
+is_core = true
