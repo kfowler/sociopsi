@@ -1,6 +1,6 @@
 # Phase 1 Implementation Progress
 
-## Completed Tasks (8/12)
+## Completed Tasks (9/12)
 
 ✅ **Task 1: Project Scaffolding** (Commit: c8e95fa)
 - Created pyproject.toml with all dependencies
@@ -47,13 +47,17 @@
 - Keybindings for quit and pause
 - TUI launches successfully
 
+✅ **Task 9: Integration - Main Loop** (Commit: d8f5ef6)
+- SocioPsiAgent coordinating all subsystems
+- Event-driven updates for drives, perception, cognition
+- TUI updates via event handlers
+- Face detection satisfies affiliation drive
+- Main loop at ~10 FPS
+- Full system integration operational
+
 **Total Tests Passing: 25/26** ✓ (1 skipped)
 
-## Remaining Tasks (4/12)
-
-⏳ **Task 9: Integration - Main Loop**
-- Main agent loop
-- Connect all subsystems
+## Remaining Tasks (3/12)
 
 ⏳ **Task 10: macOS Camera Permissions**
 - README with setup instructions
@@ -69,4 +73,4 @@
 
 ## Next Steps
 
-Continue with Task 9 (Integration - Main Loop) following the implementation plan.
+Continue with Task 10 (macOS Camera Permissions Setup) following the implementation plan.
