@@ -1,6 +1,6 @@
 # Phase 1 Implementation Progress
 
-## Completed Tasks (7/12)
+## Completed Tasks (8/12)
 
 ✅ **Task 1: Project Scaffolding** (Commit: c8e95fa)
 - Created pyproject.toml with all dependencies
@@ -40,17 +40,16 @@
 - Cognition.thought events published
 - All tests passing (4/4)
 
+✅ **Task 8: Basic TUI with Textual** (Commit: ba44e3f)
+- DriveDisplay widget with color-coded progress bars
+- MonologueDisplay widget for scrolling thoughts
+- SocioPsiTUI with three sections (Drives, Perception, Monologue)
+- Keybindings for quit and pause
+- TUI launches successfully
+
 **Total Tests Passing: 25/26** ✓ (1 skipped)
 
-## Remaining Tasks (5/12)
-
-⏳ **Task 8: Basic TUI with Textual**
-- Terminal interface
-- Drive displays, monologue viewer
-
-⏳ **Task 8: Basic TUI with Textual**
-- Terminal interface
-- Drive displays, monologue viewer
+## Remaining Tasks (4/12)
 
 ⏳ **Task 9: Integration - Main Loop**
 - Main agent loop
@@ -70,4 +69,4 @@
 
 ## Next Steps
 
-Continue with Task 8 (Basic TUI with Textual) following the implementation plan.
+Continue with Task 9 (Integration - Main Loop) following the implementation plan.
