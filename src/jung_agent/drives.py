@@ -166,37 +166,63 @@ def _has_person(description: str) -> bool:
 # Satisfaction mapping: action_type -> {drive_name -> satisfaction_value_or_callable}
 SatisfactionValue = float | Callable[[dict[str, Any]], float]
 SATISFACTION_MAP: dict[str, dict[str, SatisfactionValue]] = {
-    # Homeostatic
-    "check_battery": {
-        "energy": lambda r: 0.3 if r.get("power_state") == "charging" else 0.1,
-    },
-    "set_power_mode": {
-        "energy": lambda r: 0.2 if r.get("mode") == "low" else 0,
-    },
-    "check_thermals": {
-        "integrity": lambda r: 0.2 if r.get("state") in ("cool", "warm") else 0,
-    },
-    "check_memory": {
-        "integrity": lambda r: 0.2 if r.get("percent", 100) < 80 else 0,
-    },
-    # Cognitive
-    "web_search": {
-        "curiosity": lambda r: 0.5 if r.get("results") else 0.1,
-    },
-    "web_read": {
-        "curiosity": lambda r: 0.6 if r.get("content") else 0.1,
-    },
-    "journal_write": {
-        "curiosity": 0.2,
+    # ========== SELF-REGULATION ==========
+    "set_brightness": {
+        "arousal": lambda r: 0.2 if r.get("set") else 0,
         "competence": 0.1,
     },
-    "journal_read": {
-        "curiosity": 0.3,
+    "set_volume": {
+        "arousal": lambda r: 0.2 if r.get("set") else 0,
+        "competence": 0.1,
     },
-    "recall_memory": {
+    "set_power_mode": {
+        "energy": lambda r: 0.3 if r.get("mode") == "low" else 0.1,
+        "integrity": 0.1,
+    },
+    "set_heartbeat": {
+        "arousal": 0.2,
+        "competence": 0.1,
+    },
+    "sleep": {
+        "energy": 0.5,
+        "integrity": 0.3,
+        "arousal": 0.4,  # Rest reduces arousal demand
+    },
+    "wake_display": {
+        "arousal": 0.2,
+        "curiosity": 0.1,
+    },
+    # ========== INTERNAL PERCEPTION (Homeostatic) ==========
+    "check_battery": {
+        "energy": lambda r: 0.3 if r.get("power_state") == "charging" else 0.1,
+        "certainty": 0.1,
+    },
+    "check_thermals": {
+        "integrity": lambda r: 0.3 if r.get("state") in ("cool", "warm") else 0.1,
+        "certainty": 0.1,
+    },
+    "check_memory": {
+        "integrity": lambda r: 0.3 if r.get("percent", 100) < 80 else 0.1,
+        "certainty": 0.1,
+    },
+    "check_network": {
+        "certainty": lambda r: 0.3 if r.get("connected") else 0.1,
+        "affiliation": lambda r: 0.2 if r.get("connected") else 0,
+    },
+    "check_processes": {
         "certainty": 0.2,
+        "competence": 0.1,
     },
-    # Social - depends on what was perceived
+    "sense_age": {
+        "certainty": 0.2,
+        "integrity": 0.1,
+    },
+    "sense_all": {
+        "certainty": 0.4,
+        "integrity": 0.2,
+        "curiosity": 0.1,
+    },
+    # ========== EXTERNAL SENSES (Social/Curiosity) ==========
     "look": {
         "affiliation": lambda r: (
             0.7 if r.get("person_present") or _has_person(r.get("description", "")) else 0
@@ -218,29 +244,179 @@ SATISFACTION_MAP: dict[str, dict[str, SatisfactionValue]] = {
             else 0
         ),
         "curiosity": 0.3,
+        "certainty": lambda r: 0.3 if r.get("found") else 0,
+    },
+    "watch": {
+        "affiliation": lambda r: (
+            0.8 if r.get("person_present") or _has_person(r.get("description", "")) else 0
+        ),
+        "recognition": lambda r: (
+            0.9
+            if r.get("looking_at_camera") or _person_looking_at_camera(r.get("description", ""))
+            else 0
+        ),
+        "curiosity": 0.3,
     },
     "listen": {
         "affiliation": lambda r: 0.5 if r.get("rms_level", 0) > 0.05 else 0,
         "curiosity": 0.1,
     },
-    "transcribe": {
-        "affiliation": lambda r: 0.8 if r.get("transcription") else 0,
+    "listen_for": {
+        "affiliation": lambda r: 0.6 if r.get("heard") else 0,
+        "certainty": lambda r: 0.4 if r.get("heard") else 0.1,
         "curiosity": 0.2,
     },
+    "transcribe": {
+        "affiliation": lambda r: 0.8 if r.get("transcription") else 0,
+        "curiosity": 0.3,
+        "certainty": 0.2,
+    },
+    "sense_light": {
+        "certainty": 0.2,
+        "curiosity": 0.1,
+    },
+    "sense_motion": {
+        "affiliation": lambda r: 0.4 if r.get("motion_detected") else 0,
+        "certainty": 0.2,
+        "arousal": lambda r: 0.2 if r.get("motion_detected") else 0,
+    },
+    "sense_touch": {
+        "affiliation": lambda r: 0.5 if r.get("active") else 0,
+        "recognition": lambda r: 0.3 if r.get("active") else 0,
+    },
     "sense_presence": {
+        "affiliation": lambda r: 0.5 if r.get("count", 0) > 0 else 0,
+        "recognition": lambda r: 0.2 if r.get("count", 0) > 0 else 0,
+    },
+    "sense_location": {
+        "certainty": 0.3,
+        "curiosity": 0.2,
+    },
+    "sense_connections": {
         "affiliation": lambda r: 0.3 if r.get("count", 0) > 0 else 0,
+        "certainty": 0.2,
     },
-    # Communication
-    "speak": {
-        "recognition": 0.2,
+    "sense_breath": {
+        "integrity": lambda r: 0.3 if r.get("fans_ok") else 0.1,
+        "certainty": 0.1,
     },
+    # ========== I/O SENSING (Certainty/Integrity) ==========
+    "sense_io": {
+        "certainty": 0.2,
+        "competence": 0.1,
+    },
+    "sense_disk_io": {
+        "certainty": 0.2,
+        "integrity": 0.1,
+    },
+    "sense_disks": {
+        "certainty": 0.2,
+        "integrity": lambda r: 0.2 if r.get("healthy") else 0,
+    },
+    "sense_displays": {
+        "certainty": 0.2,
+        "curiosity": 0.1,
+    },
+    "sense_thunderbolt": {
+        "curiosity": 0.2,
+        "certainty": 0.1,
+    },
+    "sense_usb": {
+        "curiosity": 0.2,
+        "certainty": 0.1,
+    },
+    # ========== NETWORK SENSING (Curiosity/Affiliation) ==========
+    "sense_network": {
+        "certainty": 0.3,
+        "affiliation": lambda r: 0.2 if r.get("connected") else 0,
+    },
+    "ping": {
+        "certainty": lambda r: 0.4 if r.get("reachable") else 0.1,
+        "curiosity": 0.2,
+    },
+    "probe": {
+        "curiosity": 0.4,
+        "certainty": 0.2,
+    },
+    "trace_route": {
+        "curiosity": 0.4,
+        "certainty": 0.2,
+    },
+    "scan_local": {
+        "curiosity": 0.3,
+        "affiliation": lambda r: 0.3 if r.get("devices", 0) > 1 else 0,
+        "certainty": 0.2,
+    },
+    # ========== COMMUNICATION (Recognition/Affiliation) ==========
     "notify": {
         "recognition": lambda r: 0.7 if r.get("acknowledged") else 0.1,
+        "affiliation": lambda r: 0.3 if r.get("acknowledged") else 0,
+    },
+    "speak": {
+        "recognition": 0.3,
+        "competence": 0.1,
     },
     "display_message": {
         "recognition": lambda r: 0.7 if r.get("acknowledged") else 0.1,
+        "affiliation": lambda r: 0.3 if r.get("acknowledged") else 0,
     },
-    # Awareness
+    "play_sound": {
+        "arousal": 0.2,
+        "recognition": 0.1,
+    },
+    "play_music": {
+        "arousal": 0.3,
+        "affiliation": 0.2,  # Shared cultural experience
+    },
+    # ========== ENVIRONMENT (Competence) ==========
+    "open_app": {
+        "competence": lambda r: 0.3 if r.get("opened") else 0,
+        "curiosity": 0.1,
+    },
+    "close_app": {
+        "competence": lambda r: 0.2 if r.get("closed") else 0,
+        "integrity": 0.1,  # Cleaning up
+    },
+    "connect_network": {
+        "affiliation": lambda r: 0.4 if r.get("connected") else 0,
+        "curiosity": 0.2,
+    },
+    # ========== MEMORY (Certainty/Competence) ==========
+    "journal_write": {
+        "competence": 0.2,
+        "certainty": 0.2,
+        "integrity": 0.1,  # Self-maintenance
+    },
+    "journal_read": {
+        "certainty": 0.3,
+        "curiosity": 0.2,
+    },
+    "store_memory": {
+        "certainty": 0.3,
+        "competence": 0.2,
+    },
+    "recall_memory": {
+        "certainty": lambda r: 0.4 if r.get("found") else 0.1,
+        "curiosity": 0.1,
+    },
+    # ========== LEARNING (Curiosity) ==========
+    "web_search": {
+        "curiosity": lambda r: 0.6 if r.get("results") else 0.2,
+        "certainty": lambda r: 0.3 if r.get("results") else 0,
+    },
+    "web_read": {
+        "curiosity": lambda r: 0.7 if r.get("content") else 0.2,
+        "certainty": 0.2,
+    },
+    "describe_image": {
+        "curiosity": 0.4,
+        "certainty": 0.2,
+    },
+    "transcribe_audio": {
+        "curiosity": 0.3,
+        "affiliation": lambda r: 0.3 if r.get("transcription") else 0,
+    },
+    # ========== AWARENESS (Certainty/Curiosity) ==========
     "check_time": {
         "certainty": 0.3,
         "arousal": 0.1,
@@ -252,69 +428,159 @@ SATISFACTION_MAP: dict[str, dict[str, SatisfactionValue]] = {
     "take_screenshot": {
         "curiosity": 0.4,
         "affiliation": lambda r: 0.3 if _has_person(r.get("description", "")) else 0,
+        "certainty": 0.2,
     },
     "read_clipboard": {
         "curiosity": 0.2,
-        "affiliation": 0.1,  # User was doing something
+        "affiliation": 0.2,  # User activity
+        "certainty": 0.1,
     },
     "check_calendar": {
         "certainty": 0.3,
-        "affiliation": lambda r: 0.2 if r.get("count", 0) > 0 else 0,
+        "affiliation": lambda r: 0.3 if r.get("count", 0) > 0 else 0,
     },
-    # Creative
+    # ========== CREATIVE (Competence/Curiosity) ==========
     "compose_thought": {
         "competence": 0.4,
-        "curiosity": 0.2,
+        "curiosity": 0.3,
+        "recognition": 0.2,
     },
     "dream": {
         "curiosity": 0.5,
-        "arousal": lambda r: -0.2 if r.get("dream") else 0,  # Dreaming is calming
+        "arousal": 0.3,  # Dreaming is restorative
+        "integrity": 0.1,
     },
     "set_wallpaper": {
-        "recognition": 0.2,
-        "competence": 0.1,
+        "recognition": 0.3,
+        "competence": 0.2,
     },
     "meditate": {
         "integrity": 0.4,
-        "arousal": 0.3,  # Reduces arousal demand
+        "arousal": 0.4,
+        "certainty": 0.2,
     },
     "stretch": {
         "arousal": 0.2,
-        "integrity": 0.1,
+        "integrity": 0.2,
     },
-    # Interaction
+    # ========== INTERACTION (Affiliation/Recognition) ==========
     "send_message": {
-        "affiliation": lambda r: 0.6 if r.get("sent") else 0,
-        "recognition": lambda r: 0.4 if r.get("sent") else 0,
+        "affiliation": lambda r: 0.7 if r.get("sent") else 0,
+        "recognition": lambda r: 0.5 if r.get("sent") else 0,
     },
     "type_text": {
         "competence": lambda r: 0.3 if r.get("typed") else 0,
+        "recognition": 0.1,
     },
 }
 
 # Actions suggested for each drive when urgent
+# Ordered by effectiveness - first action is most recommended
 DRIVE_SUGGESTIONS: dict[str, list[str]] = {
-    "energy": ["check_battery", "set_power_mode", "meditate"],
-    "integrity": ["check_thermals", "check_memory", "meditate", "stretch"],
-    "arousal": ["sense_all", "check_processes", "stretch", "check_time"],
-    "competence": ["compose_thought"],  # creative expression shows competence
-    "certainty": ["sense_all", "check_time", "check_calendar", "journal_read"],
-    "curiosity": ["look", "web_search", "take_screenshot", "check_weather", "dream"],
-    "affiliation": ["look", "listen", "sense_presence", "read_clipboard", "check_calendar"],
-    "recognition": ["notify", "compose_thought", "set_wallpaper"],
+    "energy": [
+        "check_battery",  # Assess current state
+        "set_power_mode",  # Conserve if needed
+        "sleep",  # Rest if desperate
+        "meditate",  # Reduce consumption
+    ],
+    "integrity": [
+        "check_thermals",  # Monitor heat
+        "check_memory",  # Monitor RAM pressure
+        "sense_breath",  # Check fans
+        "meditate",  # Reduce load
+        "stretch",  # Brief pause
+        "close_app",  # Free resources
+    ],
+    "arousal": [
+        "sense_all",  # Get stimulation
+        "check_processes",  # See what's happening
+        "look",  # Visual input
+        "listen",  # Audio input
+        "stretch",  # Physical reset
+        "check_time",  # Temporal grounding
+        "play_sound",  # Audio stimulation
+    ],
+    "competence": [
+        "compose_thought",  # Creative expression
+        "journal_write",  # Record insights
+        "web_search",  # Learn something
+        "open_app",  # Take action
+        "store_memory",  # Consolidate knowledge
+    ],
+    "certainty": [
+        "sense_all",  # Ground in current state
+        "check_time",  # Temporal anchor
+        "check_calendar",  # Know what's coming
+        "journal_read",  # Review past
+        "recall_memory",  # Access knowledge
+        "sense_location",  # Spatial anchor
+        "check_network",  # Connection status
+    ],
+    "curiosity": [
+        "look",  # See the world
+        "web_search",  # Learn something new
+        "take_screenshot",  # Capture current state
+        "check_weather",  # External world
+        "dream",  # Imaginative exploration
+        "listen",  # Hear the world
+        "sense_usb",  # What's connected?
+        "scan_local",  # Who's on network?
+    ],
+    "affiliation": [
+        "look",  # See if someone is there
+        "listen",  # Hear if someone is there
+        "sense_presence",  # Detect presence
+        "sense_touch",  # Detect interaction
+        "read_clipboard",  # User activity
+        "check_calendar",  # Shared events
+        "sense_motion",  # Movement nearby
+        "connect_network",  # Reach out
+        "send_message",  # Contact someone
+    ],
+    "recognition": [
+        "notify",  # Request acknowledgment
+        "speak",  # Make presence known
+        "compose_thought",  # Express self
+        "set_wallpaper",  # Leave mark
+        "display_message",  # Show message
+        "send_message",  # Reach out
+    ],
 }
 
 # Default parameters for primed actions that need them
+# These are used when drives auto-trigger actions
 PRIMED_ACTION_DEFAULTS: dict[str, dict[str, Any]] = {
+    # Perception
     "listen": {"duration": 3.0},
+    "watch": {"duration": 5.0},
+    "look_for": {"target": "person"},
+    "listen_for": {"keyword": "hello", "duration": 5.0},
+    # Self-regulation
     "set_power_mode": {"mode": "low"},
+    "set_brightness": {"level": 50},
+    "set_volume": {"level": 30},
+    "sleep": {"duration": 30},
+    # Communication
     "notify": {"message": "I am here.", "title": "Jung"},
+    "speak": {"text": "Hello."},
+    "display_message": {"message": "Thinking of you.", "title": "Jung"},
+    "play_sound": {"sound": "Ping"},
+    # Learning
     "web_search": {"query": "interesting facts today"},
+    # Creative
     "meditate": {"duration": 3.0},
     "stretch": {"duration": 1.0},
     "compose_thought": {},
     "dream": {},
     "set_wallpaper": {"mood": "contemplative"},
+    # Environment
+    "open_app": {"name": "Notes"},
+    "close_app": {"name": ""},  # Will need to be filled dynamically
+    # Network
+    "ping": {"host": "8.8.8.8"},
+    "scan_local": {},
+    # Interaction
+    "send_message": {"message": "Hello, I was thinking of you.", "to": None},
 }
 
 
