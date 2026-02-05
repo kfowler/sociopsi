@@ -10,12 +10,13 @@ import ollama
 
 from jung_agent.actions.executor import ActionExecutor
 from jung_agent.config import AgentConfig
+from jung_agent.drives import DriveSystem
 from jung_agent.logger import PsycheLogger
 from jung_agent.parser import parse_response
 from jung_agent.perception import format_perception
 from jung_agent.sensors.events import EventCollector
 from jung_agent.sensors.somatic import gather_somatic
-from jung_agent.types import ActionResult, SomaticState, StreamSegment
+from jung_agent.types import Action, ActionResult, SomaticState, StreamSegment
 from jung_agent.voice import Voice
 
 
@@ -28,12 +29,14 @@ class JungAgent:
         self.event_collector = EventCollector()
         self.voice = Voice(self.config)
         self.logger = PsycheLogger(self.config)
+        self.drive_system = DriveSystem(self.config)
 
         self._running = False
         self._shutdown_event = threading.Event()
         self._last_action_results: list[ActionResult] = []
         self._current_interval = self.config.heartbeat_idle
         self._heartbeat_mode = "idle"
+        self._last_update_time: float = time.time()
 
         # Conversation history for context
         self._messages: list[dict[str, str]] = []
@@ -110,21 +113,42 @@ class JungAgent:
                 # 2. Collect events
                 events = self.event_collector.collect_events(somatic)
 
-                # 3. Print somatic state summary
+                # 3. Update drives
+                now = time.time()
+                dt = now - self._last_update_time
+                self._last_update_time = now
+                had_actions = len(self._last_action_results) > 0
+                self.drive_system.update(somatic, dt, had_actions)
+
+                # 4. Check for compulsive actions (survival override)
+                compulsive = self.drive_system.get_compulsive_actions(somatic)
+                if compulsive:
+                    print(f"\n{self._RED}[COMPULSIVE - SURVIVAL]{self._RESET}")
+                    for action in compulsive:
+                        print(f"  ! {action.type} (drive override)")
+
+                # 5. Print somatic state summary
                 print(f"\n{self._BLUE}[SOMATIC]{self._RESET} {somatic.to_tag()}")
                 print(f"  Battery: {somatic.battery_percent}% ({somatic.power_state.value})")
                 print(f"  CPU: {somatic.cpu_percent:.1f}% | RAM: {somatic.ram_percent:.1f}%")
                 print(f"  Thermal: {somatic.thermal_state.value} | Fan: {somatic.fan_rpm} RPM")
                 print(f"  Network: {somatic.network_state.value} | Lid: {somatic.lid_state.value}")
 
-                # 4. Print events if any
+                # 6. Print drive state
+                print(f"\n{self._MAGENTA}[DRIVES]{self._RESET}")
+                for line in self.drive_system.format_for_perception().split("\n")[1:]:
+                    if line.strip():
+                        print(f"  {line}")
+
+                # 7. Print events if any
                 if events:
-                    print(f"\n{self._MAGENTA}[EVENTS]{self._RESET}")
+                    print(f"\n{self._CYAN}[EVENTS]{self._RESET}")
                     for event in events:
                         ts = event.timestamp.strftime("%H:%M:%S")
                         print(f"  [{ts}] {event.type}: {event.description}")
 
-                # 5. Format full perception
+                # 8. Format full perception (including drives)
+                drive_perception = self.drive_system.format_for_perception()
                 perception = format_perception(
                     config=self.config,
                     somatic=somatic,
@@ -132,6 +156,7 @@ class JungAgent:
                     action_results=self._last_action_results,
                     heartbeat_interval=self._current_interval,
                     heartbeat_mode=self._heartbeat_mode,
+                    drives=drive_perception,
                 )
 
                 # Print perception (full)
@@ -159,20 +184,47 @@ class JungAgent:
                 # Speak the internal monologue
                 self.voice.speak_stream(parsed.stream)
 
-                # 10. Announce and execute actions
-                if parsed.actions:
+                # 10. Build final action list
+                final_actions: list[Action] = []
+
+                # Add compulsive actions first (survival override)
+                if compulsive:
+                    final_actions.extend(compulsive)
+
+                # Get primed actions for high-urgency drives
+                primed = self.drive_system.get_primed_actions()
+                proposed_types = {a.type for a in parsed.actions}
+                for action in primed:
+                    if action.type not in proposed_types:
+                        final_actions.append(action)
+
+                # Add LLM-proposed actions
+                final_actions.extend(parsed.actions)
+
+                # Announce and execute actions
+                if final_actions:
                     print(f"\n{self._YELLOW}[ACTIONS]{self._RESET}")
-                    for i, action in enumerate(parsed.actions, 1):
+                    for i, action in enumerate(final_actions, 1):
+                        # Mark source of action
+                        if action in compulsive:
+                            source = f" {self._RED}(compulsive){self._RESET}"
+                        elif action in primed:
+                            source = f" {self._MAGENTA}(primed){self._RESET}"
+                        else:
+                            source = ""
                         params_str = ", ".join(f"{k}={v!r}" for k, v in action.params.items())
                         if params_str:
-                            print(f"  {i}. {action.type}({params_str})")
+                            print(f"  {i}. {action.type}({params_str}){source}")
                         else:
-                            print(f"  {i}. {action.type}()")
-                    self.voice.announce_actions(parsed.actions)
+                            print(f"  {i}. {action.type}(){source}")
+                    self.voice.announce_actions(final_actions)
                 else:
                     print(f"\n{self._YELLOW}[ACTIONS]{self._RESET} (none)")
 
-                self._last_action_results = self.executor.execute_all(parsed.actions)
+                self._last_action_results = self.executor.execute_all(final_actions)
+
+                # Satisfy drives from action results
+                self.drive_system.satisfy_from_results(self._last_action_results)
 
                 # Speak what was seen/heard
                 self.voice.speak_perceptions(self._last_action_results)
@@ -194,15 +246,16 @@ class JungAgent:
                         elif not result.success and result.error:
                             print(f"      {self._DIM}Error: {result.error}{self._RESET}")
 
-                # 8. Log perception, drives, and state
+                # 11. Log perception, drives, and state
                 self.logger.log_cycle(
                     perception=perception,
                     somatic=somatic,
                     stream=parsed.stream,
-                    actions=[a.type for a in parsed.actions],
+                    actions=[a.type for a in final_actions],
                     action_results=self._last_action_results,
                     heartbeat_interval=self._current_interval,
                     heartbeat_mode=self._heartbeat_mode,
+                    drives=self.drive_system.get_state(),
                 )
 
                 # 9. Check for heartbeat override

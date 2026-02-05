@@ -35,6 +35,7 @@ class PsycheLogger:
         action_results: list[ActionResult],
         heartbeat_interval: int,
         heartbeat_mode: str,
+        drives: dict[str, Any] | None = None,
     ) -> None:
         """Log a complete perception-response cycle."""
         now = datetime.now()
@@ -49,8 +50,9 @@ class PsycheLogger:
         else:
             self._idle_cycles = 0
 
-        # Compute drive states
-        drives = self._compute_drives(somatic, actions)
+        # Use provided drives or compute legacy
+        if drives is None:
+            drives = self._compute_drives(somatic, actions)
 
         entry = {
             "timestamp": now.isoformat(),

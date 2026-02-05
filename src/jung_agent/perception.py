@@ -13,6 +13,7 @@ def format_perception(
     action_results: list[ActionResult],
     heartbeat_interval: int,
     heartbeat_mode: str,
+    drives: str | None = None,
 ) -> str:
     """Format a complete perception input for the psyche."""
     lines: list[str] = []
@@ -23,6 +24,11 @@ def format_perception(
 
     # Somatic state
     lines.append(somatic.to_tag())
+
+    # Drive state
+    if drives:
+        lines.append("")
+        lines.append(drives)
 
     # Events since last heartbeat
     if events:
