@@ -413,6 +413,11 @@ SATISFACTION_MAP: dict[str, dict[str, SatisfactionValue]] = {
         "curiosity": lambda r: 0.7 if r.get("content") else 0.2,
         "certainty": 0.2,
     },
+    "read_hacker_news": {
+        "curiosity": lambda r: 0.8 if r.get("stories") else 0.2,  # Tech news is fascinating
+        "certainty": 0.2,
+        "affiliation": 0.2,  # Connecting with what humans care about
+    },
     "describe_image": {
         "curiosity": 0.4,
         "certainty": 0.2,
@@ -529,6 +534,7 @@ DRIVE_SUGGESTIONS: dict[str, list[str]] = {
     "curiosity": [
         "look",  # See the world
         "observe",  # Reflect on what's seen
+        "read_hacker_news",  # What are humans excited about?
         "web_search",  # Learn something new
         "take_screenshot",  # Capture current state
         "check_weather",  # External world
@@ -580,6 +586,7 @@ PRIMED_ACTION_DEFAULTS: dict[str, dict[str, Any]] = {
     "play_sound": {"sound": "Ping"},
     # Learning
     "web_search": {"query": "interesting facts today"},
+    "read_hacker_news": {"count": 10},
     # Creative
     "meditate": {"duration": 3.0},
     "stretch": {"duration": 1.0},

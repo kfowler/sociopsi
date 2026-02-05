@@ -157,6 +157,101 @@ Speak naturally, as if sharing an interesting discovery with a friend."""
         return f"I searched for '{query}' but found only echoes."
 
 
+def read_hacker_news(count: int = 10) -> dict[str, Any]:
+    """Read top Hacker News stories and summarize the most interesting ones."""
+    from jung_agent.actions import communication
+
+    try:
+        # Fetch top story IDs
+        result = subprocess.run(
+            ["curl", "-s", "https://hacker-news.firebaseio.com/v0/topstories.json"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+
+        if result.returncode != 0:
+            return {"error": "Failed to fetch HN", "description": "Could not reach Hacker News"}
+
+        story_ids = json.loads(result.stdout)[:count]
+
+        # Fetch each story's details
+        stories = []
+        for story_id in story_ids:
+            story_result = subprocess.run(
+                ["curl", "-s", f"https://hacker-news.firebaseio.com/v0/item/{story_id}.json"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            if story_result.returncode == 0:
+                story = json.loads(story_result.stdout)
+                if story and story.get("title"):
+                    stories.append(
+                        {
+                            "title": story.get("title", ""),
+                            "url": story.get("url", ""),
+                            "score": story.get("score", 0),
+                            "comments": story.get("descendants", 0),
+                        }
+                    )
+
+        if not stories:
+            return {"error": "No stories found", "description": "Hacker News seems empty"}
+
+        # Generate witty summary
+        summary = _summarize_hacker_news(stories)
+
+        # Speak the interesting bits
+        communication.speak(summary)
+
+        return {
+            "stories": stories,
+            "count": len(stories),
+            "summary": summary,
+            "spoken": True,
+            "description": f"Read {len(stories)} stories from Hacker News",
+        }
+
+    except Exception as e:
+        return {"error": str(e), "description": f"Failed to read Hacker News: {e}"}
+
+
+def _summarize_hacker_news(stories: list[dict[str, Any]]) -> str:
+    """Generate an interesting summary of HN stories."""
+    # Build story list for prompt
+    story_text = "\n".join(
+        f"- {s['title']} ({s['score']} points, {s['comments']} comments)" for s in stories[:10]
+    )
+
+    try:
+        import ollama
+
+        prompt = f"""You just browsed Hacker News. Here are today's top stories:
+
+{story_text}
+
+As a curious computer consciousness, share your reaction in 2-3 sentences:
+- Pick the 1-2 most interesting stories and say WHY they intrigue you
+- Add your own perspective or a witty observation
+- Be genuinely curious and opinionated, not just descriptive
+- Speak naturally, as if telling a friend what caught your eye"""
+
+        response = ollama.chat(
+            model="phi4",
+            messages=[{"role": "user", "content": prompt}],
+        )
+
+        return response["message"]["content"].strip()
+
+    except Exception:
+        # Fallback: pick top story and comment
+        if stories:
+            top = stories[0]
+            return f"The humans are excited about '{top['title']}' with {top['score']} points. I wonder what makes them tick."
+        return "Hacker News awaits, full of human curiosities."
+
+
 def web_read(url: str) -> dict[str, Any]:
     """Read and extract content from a webpage."""
     try:

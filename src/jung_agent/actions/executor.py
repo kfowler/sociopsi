@@ -95,6 +95,7 @@ class ActionExecutor:
             # Learning
             "web_search": learning.web_search,
             "web_read": learning.web_read,
+            "read_hacker_news": learning.read_hacker_news,
             "describe_image": learning.describe_image,
             "transcribe_audio": learning.transcribe_audio,
             # Awareness (with world model updates)
