@@ -170,7 +170,11 @@ def look(duration: float = 0.5) -> dict[str, Any]:
         return result
 
     # Try to describe what we see using vision model
-    description = _describe_with_vision(result, "Describe what you see briefly in 1-2 sentences.")
+    description = _describe_with_vision(
+        result,
+        "This is what I am seeing right now through my camera in real time. "
+        "Describe what I see briefly in 1-2 sentences."
+    )
     if description:
         result["description"] = description
     return result
@@ -187,7 +191,8 @@ def look_for(description: str, duration: float = 1.0) -> dict[str, Any]:
     # Ask vision model if the thing is present
     vision_result = _describe_with_vision(
         result,
-        f"Is there {description} in this image? Describe briefly what you see related to this."
+        f"This is what I am seeing right now through my camera in real time. "
+        f"Is there {description} in what I see? Describe briefly what I observe."
     )
     if vision_result:
         result["description"] = vision_result

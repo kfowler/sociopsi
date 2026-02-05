@@ -192,7 +192,11 @@ def describe_image(prompt: str | None = None) -> dict[str, Any]:
             has_vision = "llava" in check_result.stdout.lower()
 
             if has_vision:
-                vision_prompt = prompt or "Describe what you see in this image in detail."
+                default_prompt = (
+                    "This is what I am seeing right now through my camera in real time. "
+                    "Describe what I see in detail."
+                )
+                vision_prompt = prompt or default_prompt
 
                 import ollama as ollama_client
                 response = ollama_client.chat(
