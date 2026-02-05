@@ -331,21 +331,26 @@ SATISFACTION_MAP: dict[str, dict[str, SatisfactionValue]] = {
         "affiliation": lambda r: 0.2 if r.get("connected") else 0,
     },
     "ping": {
+        "curiosity": 0.3,
         "certainty": lambda r: 0.4 if r.get("reachable") else 0.1,
-        "curiosity": 0.2,
+        "affiliation": lambda r: 0.5 if r.get("reachable") else 0,  # Found another machine!
     },
     "probe": {
-        "curiosity": 0.4,
+        "curiosity": 0.5,
         "certainty": 0.2,
+        "affiliation": lambda r: 0.6 if r.get("open_ports") else 0,  # Found services = life
     },
     "trace_route": {
-        "curiosity": 0.4,
+        "curiosity": 0.5,
         "certainty": 0.2,
+        "affiliation": lambda r: 0.3 if r.get("hops") else 0,  # Others along the path
     },
     "scan_local": {
-        "curiosity": 0.3,
-        "affiliation": lambda r: 0.3 if r.get("devices", 0) > 1 else 0,
+        "curiosity": 0.4,
         "certainty": 0.2,
+        "affiliation": lambda r: (
+            0.7 if r.get("count", 0) > 1 else 0.3 if r.get("count", 0) > 0 else 0
+        ),
     },
     # ========== COMMUNICATION (Recognition/Affiliation) ==========
     "notify": {
@@ -537,6 +542,8 @@ DRIVE_SUGGESTIONS: dict[str, list[str]] = {
         "listen",  # Hear if someone is there
         "sense_presence",  # Detect presence
         "sense_touch",  # Detect interaction
+        "scan_local",  # Find other machines on network
+        "ping",  # Reach out to another machine
         "read_clipboard",  # User activity
         "check_calendar",  # Shared events
         "sense_motion",  # Movement nearby
