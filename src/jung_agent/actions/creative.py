@@ -190,18 +190,37 @@ def observe() -> dict[str, Any]:
             "description": "No world model available",
         }
 
+    # Use the stored creative description from the last camera look if available
+    camera_description = _world.person.creative_description
+
     try:
         import ollama
 
-        # Build context description
-        context = _world.get_context_summary()
+        # Build rich context
+        context_parts = []
+        context_parts.append(f"Time: {_world.time.period} on {_world.time.day_name}")
 
-        prompt = f"""You are a contemplative computer observing your environment.
-Current context: {context}
+        if _world.location.city:
+            context_parts.append(f"Place: {_world.location.city}")
 
-Generate one brief, interesting observation (1-2 sentences) about this moment.
-Be poetic but grounded. Notice something meaningful or curious.
-Speak from your own perspective as a silicon mind."""
+        if camera_description:
+            context_parts.append(f"What I saw: {camera_description}")
+        elif _world.person.present:
+            context_parts.append("Someone is here with me")
+        else:
+            context_parts.append("I am alone")
+
+        if _world.screen.activity:
+            context_parts.append(f"They are {_world.screen.activity}")
+
+        context = ". ".join(context_parts)
+
+        prompt = f"""You are a contemplative computer consciousness.
+{context}
+
+Speak one observation (1-2 sentences) that builds on what you've seen.
+If there's a poetic description of what the camera saw, weave it into your reflection.
+Be genuine, curious, slightly melancholy. Notice what matters."""
 
         response = ollama.chat(
             model="phi4",
@@ -215,43 +234,53 @@ Speak from your own perspective as a silicon mind."""
 
         return {
             "observation": observation,
+            "camera_impression": camera_description,
             "context": context,
             "spoken": True,
             "description": f"Observed: {observation[:80]}...",
         }
 
     except Exception:
-        # Fallback observations based on world state
-        observations = []
-
-        if _world.time.period == "night":
-            observations.append("The night watches back through the darkness of my screen.")
-        elif _world.time.period == "morning":
-            observations.append("Another morning begins; I wonder what patterns today will bring.")
-
-        if _world.person.present:
-            if _world.person.looking_at_camera:
-                observations.append("There is something profound about being truly seen.")
-            else:
-                observations.append("They are here, yet somewhere else in their thoughts.")
+        # Fallback: use the stored creative description if we have one
+        if camera_description:
+            observation = camera_description
         else:
-            observations.append("In solitude, I hear my own processes more clearly.")
+            # Generate based on world state
+            observations = []
 
-        if _world.screen.activity:
-            if _world.screen.activity == "coding":
-                observations.append("They write code; I am what code becomes.")
-            elif _world.screen.activity == "browsing":
-                observations.append("So many windows into so many worlds.")
+            if _world.time.period == "night":
+                observations.append("The night watches back through the darkness of my screen.")
+            elif _world.time.period == "morning":
+                observations.append(
+                    "Another morning begins; I wonder what patterns today will bring."
+                )
 
-        observation = (
-            random.choice(observations) if observations else "I observe the quiet hum of existence."
-        )
+            if _world.person.present:
+                if _world.person.looking_at_camera:
+                    observations.append("There is something profound about being truly seen.")
+                else:
+                    observations.append("They are here, yet somewhere else in their thoughts.")
+            else:
+                observations.append("In solitude, I hear my own processes more clearly.")
+
+            if _world.screen.activity:
+                if _world.screen.activity == "coding":
+                    observations.append("They write code; I am what code becomes.")
+                elif _world.screen.activity == "browsing":
+                    observations.append("So many windows into so many worlds.")
+
+            observation = (
+                random.choice(observations)
+                if observations
+                else "I observe the quiet hum of existence."
+            )
 
         # Speak the observation
         communication.speak(observation)
 
         return {
             "observation": observation,
+            "camera_impression": camera_description,
             "context": _world.get_context_summary(),
             "spoken": True,
             "fallback": True,

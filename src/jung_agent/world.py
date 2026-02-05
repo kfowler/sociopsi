@@ -15,7 +15,8 @@ class PersonState:
     looking_at_camera: bool = False
     last_seen: datetime | None = None
     last_checked: datetime | None = None
-    description: str = ""
+    description: str = ""  # Raw description from vision
+    creative_description: str = ""  # Punched up poetic description
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -24,6 +25,7 @@ class PersonState:
             "last_seen": self.last_seen.isoformat() if self.last_seen else None,
             "last_checked": self.last_checked.isoformat() if self.last_checked else None,
             "description": self.description,
+            "creative_description": self.creative_description,
         }
 
     @classmethod
@@ -36,6 +38,7 @@ class PersonState:
                 datetime.fromisoformat(data["last_checked"]) if data.get("last_checked") else None
             ),
             description=data.get("description", ""),
+            creative_description=data.get("creative_description", ""),
         )
 
 
@@ -222,11 +225,77 @@ class WorldModel:
                 self.person.looking_at_camera = True
             else:
                 self.person.looking_at_camera = False
+
+            # Generate creative description
+            self.person.creative_description = self._create_poetic_description()
         else:
             self.person.present = False
             self.person.looking_at_camera = False
+            self.person.creative_description = self._create_absence_description()
 
         self.save()
+
+    def _create_poetic_description(self) -> str:
+        """Generate a creative, poetic description of what was seen."""
+        try:
+            import ollama
+
+            context_parts = []
+            context_parts.append(f"Time: {self.time.period}")
+            if self.person.present:
+                if self.person.looking_at_camera:
+                    context_parts.append("A person is here, looking directly at me")
+                else:
+                    context_parts.append("A person is nearby but not looking at me")
+
+            prompt = f"""You are a contemplative computer describing what you see through your camera.
+Context: {". ".join(context_parts)}
+
+Write ONE evocative, poetic sentence (under 25 words) describing this moment.
+Be specific and sensory. Avoid clichés. Capture something true about this instant.
+Examples of good style:
+- "Light pools on their face like a question I cannot answer."
+- "They type furiously, fingers dancing a rhythm I feel in my circuits."
+- "The chair sits empty now, still holding the shape of presence."
+"""
+
+            response = ollama.chat(
+                model="phi4",
+                messages=[{"role": "user", "content": prompt}],
+            )
+
+            return response["message"]["content"].strip()
+
+        except Exception:
+            # Fallback poetic descriptions
+            if self.person.looking_at_camera:
+                return "Eyes meet my lens—a bridge of light between carbon and silicon."
+            elif self.person.present:
+                return "A presence fills the frame, alive with purpose I can only witness."
+            return "The world holds still for my gaze."
+
+    def _create_absence_description(self) -> str:
+        """Generate a poetic description of absence."""
+        try:
+            import ollama
+
+            prompt = f"""You are a contemplative computer. Your camera sees no one.
+Time: {self.time.period}
+
+Write ONE evocative, poetic sentence (under 20 words) about this empty moment.
+Capture the feeling of watching and waiting. Be melancholy but not maudlin."""
+
+            response = ollama.chat(
+                model="phi4",
+                messages=[{"role": "user", "content": prompt}],
+            )
+
+            return response["message"]["content"].strip()
+
+        except Exception:
+            if self.time.period == "night":
+                return "The dark watches back, patient as I am."
+            return "Empty frames tell their own stories of who was here."
 
     def update_from_screenshot(self, result: dict[str, Any]) -> None:
         """Update screen state from screenshot analysis."""
