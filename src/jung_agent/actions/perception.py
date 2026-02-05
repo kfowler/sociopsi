@@ -6,7 +6,7 @@ from jung_agent.sensors import external, somatic
 from jung_agent.sensors import network as net_sensors
 
 
-def check_battery() -> dict[str, Any]:
+def check_battery(**kwargs: Any) -> dict[str, Any]:
     """Check battery status."""
     percent, health, cycles, power_state = somatic.get_battery_info()
     return {
@@ -36,7 +36,7 @@ def _describe_battery(percent: int, power_state: str) -> str:
         return f"dying, {percent}% - critical"
 
 
-def check_thermals() -> dict[str, Any]:
+def check_thermals(**kwargs: Any) -> dict[str, Any]:
     """Check thermal status."""
     state, cpu_temp, gpu_temp = somatic.get_thermal_state()
     return {
@@ -59,7 +59,7 @@ def _describe_thermals(state: str, temp: float) -> str:
         return f"critically overheated, {temp:.0f}°C - danger"
 
 
-def check_memory() -> dict[str, Any]:
+def check_memory(**kwargs: Any) -> dict[str, Any]:
     """Check RAM usage."""
     import psutil
 
@@ -84,7 +84,7 @@ def _describe_memory(percent: int) -> str:
         return f"overwhelmed, barely {100 - percent}% free"
 
 
-def check_network() -> dict[str, Any]:
+def check_network(**kwargs: Any) -> dict[str, Any]:
     """Check network status."""
     state = somatic.get_network_state()
     return {
@@ -117,7 +117,7 @@ def check_processes(top_n: int = 5) -> dict[str, Any]:
     }
 
 
-def sense_age() -> dict[str, Any]:
+def sense_age(**kwargs: Any) -> dict[str, Any]:
     """Sense age and mortality."""
     _, health, cycles, _ = somatic.get_battery_info()
     uptime = somatic.get_uptime()
@@ -143,7 +143,7 @@ def _describe_age(cycles: int, health: int) -> str:
         return f"old, {cycles} cycles, only {health}% capacity left"
 
 
-def sense_all() -> dict[str, Any]:
+def sense_all(**kwargs: Any) -> dict[str, Any]:
     """Complete somatic snapshot."""
     state = somatic.gather_somatic()
     return {
@@ -281,12 +281,12 @@ def transcribe(duration: float = 5.0) -> dict[str, Any]:
     return learning.transcribe_audio(duration)
 
 
-def sense_light() -> dict[str, Any]:
+def sense_light(**kwargs: Any) -> dict[str, Any]:
     """Sense ambient light."""
     return external.get_ambient_light()
 
 
-def sense_motion() -> dict[str, Any]:
+def sense_motion(**kwargs: Any) -> dict[str, Any]:
     """Sense motion/orientation."""
     return external.get_motion()
 
@@ -341,7 +341,7 @@ def sense_touch(duration: float = 1.0) -> dict[str, Any]:
         }
 
 
-def sense_presence() -> dict[str, Any]:
+def sense_presence(**kwargs: Any) -> dict[str, Any]:
     """Sense Bluetooth devices nearby."""
     devices = external.get_bluetooth_devices()
     return {
@@ -362,12 +362,12 @@ def _describe_presence(devices: list) -> str:
     return f"{len(devices)} nearby: {', '.join(names)}"
 
 
-def sense_location() -> dict[str, Any]:
+def sense_location(**kwargs: Any) -> dict[str, Any]:
     """Sense location."""
     return external.get_location()
 
 
-def sense_connections() -> dict[str, Any]:
+def sense_connections(**kwargs: Any) -> dict[str, Any]:
     """Sense USB connections."""
     connections = external.get_usb_connections()
     return {
@@ -377,7 +377,7 @@ def sense_connections() -> dict[str, Any]:
     }
 
 
-def sense_breath() -> dict[str, Any]:
+def sense_breath(**kwargs: Any) -> dict[str, Any]:
     """Sense fan speed (breathing)."""
     return external.get_fan_speed()
 
@@ -385,17 +385,17 @@ def sense_breath() -> dict[str, Any]:
 # I/O sensing
 
 
-def sense_io() -> dict[str, Any]:
+def sense_io(**kwargs: Any) -> dict[str, Any]:
     """Sense overall I/O status."""
     return external.get_io_summary()
 
 
-def sense_disk_io() -> dict[str, Any]:
+def sense_disk_io(**kwargs: Any) -> dict[str, Any]:
     """Sense disk read/write activity."""
     return external.get_disk_io()
 
 
-def sense_disks() -> dict[str, Any]:
+def sense_disks(**kwargs: Any) -> dict[str, Any]:
     """Sense disk volumes and capacity."""
     disks = external.get_disks()
     return {
@@ -424,7 +424,7 @@ def _describe_disks(disks: list[dict[str, Any]]) -> str:
         return f"storage spacious, {100 - percent:.0f}% free"
 
 
-def sense_displays() -> dict[str, Any]:
+def sense_displays(**kwargs: Any) -> dict[str, Any]:
     """Sense connected displays."""
     displays = external.get_displays()
     return {
@@ -444,7 +444,7 @@ def _describe_displays(displays: list[dict[str, Any]]) -> str:
         return f"{len(displays)} windows to the world"
 
 
-def sense_thunderbolt() -> dict[str, Any]:
+def sense_thunderbolt(**kwargs: Any) -> dict[str, Any]:
     """Sense Thunderbolt connections."""
     devices = external.get_thunderbolt_devices()
     return {
@@ -463,7 +463,7 @@ def _describe_thunderbolt(devices: list[dict[str, Any]]) -> str:
     return f"high-speed link to {', '.join(names)}"
 
 
-def sense_usb() -> dict[str, Any]:
+def sense_usb(**kwargs: Any) -> dict[str, Any]:
     """Sense USB device tree (detailed)."""
     connections = external.get_usb_connections()
     return {
@@ -485,7 +485,7 @@ def _describe_usb(devices: list[dict[str, Any]]) -> str:
 # Network sensing
 
 
-def sense_network() -> dict[str, Any]:
+def sense_network(**kwargs: Any) -> dict[str, Any]:
     """Scan local network."""
     devices = net_sensors.scan_local_network("quick")
     return {

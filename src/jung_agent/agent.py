@@ -85,19 +85,46 @@ class JungAgent:
         self.stop()
         sys.exit(0)
 
+    _MAGENTA = "\033[35m"
+    _RED = "\033[31m"
+    _BLUE = "\033[34m"
+    _BOLD = "\033[1m"
+
     def _run_loop(self) -> None:
         """Main agent loop."""
+        cycle_count = 0
         while self._running:
             loop_start = time.time()
+            cycle_count += 1
 
             try:
+                # Header with cycle number and timestamp
+                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                print(f"\n{'=' * 70}")
+                print(f"{self._BOLD}[CYCLE {cycle_count}] {timestamp}{self._RESET}")
+                print("=" * 70)
+
                 # 1. Gather somatic state
                 somatic = gather_somatic()
 
                 # 2. Collect events
                 events = self.event_collector.collect_events(somatic)
 
-                # 3. Format perception
+                # 3. Print somatic state summary
+                print(f"\n{self._BLUE}[SOMATIC]{self._RESET} {somatic.to_tag()}")
+                print(f"  Battery: {somatic.battery_percent}% ({somatic.power_state.value})")
+                print(f"  CPU: {somatic.cpu_percent:.1f}% | RAM: {somatic.ram_percent:.1f}%")
+                print(f"  Thermal: {somatic.thermal_state.value} | Fan: {somatic.fan_rpm} RPM")
+                print(f"  Network: {somatic.network_state.value} | Lid: {somatic.lid_state.value}")
+
+                # 4. Print events if any
+                if events:
+                    print(f"\n{self._MAGENTA}[EVENTS]{self._RESET}")
+                    for event in events:
+                        ts = event.timestamp.strftime("%H:%M:%S")
+                        print(f"  [{ts}] {event.type}: {event.description}")
+
+                # 5. Format full perception
                 perception = format_perception(
                     config=self.config,
                     somatic=somatic,
@@ -107,32 +134,65 @@ class JungAgent:
                     heartbeat_mode=self._heartbeat_mode,
                 )
 
-                # 4. Send to psyche
+                # Print perception (full)
+                print(f"\n{self._CYAN}[PERCEPTION → LLM]{self._RESET}")
+                print("-" * 50)
+                for line in perception.split("\n"):
+                    print(f"  {self._DIM}{line}{self._RESET}")
+                print("-" * 50)
+
+                # 6. Send to psyche
                 response = self._query_psyche(perception)
 
-                # 5. Parse response
+                # 7. Parse response
                 parsed = parse_response(response)
 
-                # 6. Log and speak stream
+                # 8. Print raw response if no stream parsed
+                if not parsed.stream and not parsed.actions:
+                    print(f"\n{self._RED}[RAW RESPONSE - PARSE FAILED]{self._RESET}")
+                    print(response[:500] + ("..." if len(response) > 500 else ""))
+
+                # 9. Log and speak stream
                 if self.config.log_stream:
                     self._log_stream(parsed.stream)
 
                 # Speak the internal monologue
                 self.voice.speak_stream(parsed.stream)
 
-                # 7. Announce and execute actions
+                # 10. Announce and execute actions
                 if parsed.actions:
+                    print(f"\n{self._YELLOW}[ACTIONS]{self._RESET}")
+                    for i, action in enumerate(parsed.actions, 1):
+                        params_str = ", ".join(f"{k}={v!r}" for k, v in action.params.items())
+                        if params_str:
+                            print(f"  {i}. {action.type}({params_str})")
+                        else:
+                            print(f"  {i}. {action.type}()")
                     self.voice.announce_actions(parsed.actions)
+                else:
+                    print(f"\n{self._YELLOW}[ACTIONS]{self._RESET} (none)")
 
                 self._last_action_results = self.executor.execute_all(parsed.actions)
 
                 # Speak what was seen/heard
                 self.voice.speak_perceptions(self._last_action_results)
 
-                # Log action results
-                for result in self._last_action_results:
-                    status = "OK" if result.success else "FAILED"
-                    print(f"  [{status}] {result.action_type}")
+                # Log action results with full details
+                if self._last_action_results:
+                    print(f"\n{self._GREEN}[RESULTS]{self._RESET}")
+                    for result in self._last_action_results:
+                        status_color = self._GREEN if result.success else self._RED
+                        status = "✓" if result.success else "✗"
+                        print(f"  {status_color}{status} {result.action_type}{self._RESET}")
+                        if result.success and isinstance(result.result, dict):
+                            # Print all result fields
+                            for key, value in result.result.items():
+                                if key != "full_data":  # Skip raw image data
+                                    if isinstance(value, str) and len(value) > 100:
+                                        value = value[:100] + "..."
+                                    print(f"      {self._DIM}{key}: {value}{self._RESET}")
+                        elif not result.success and result.error:
+                            print(f"      {self._DIM}Error: {result.error}{self._RESET}")
 
                 # 8. Log perception, drives, and state
                 self.logger.log_cycle(
@@ -198,6 +258,10 @@ class JungAgent:
         "default": ("\033[37m", "💭"),   # White
     }
     _RESET = "\033[0m"
+    _DIM = "\033[2m"
+    _CYAN = "\033[36m"
+    _GREEN = "\033[32m"
+    _YELLOW = "\033[33m"
 
     def _log_stream(self, segments: list[StreamSegment]) -> None:
         """Log the psyche's stream to console with timestamped, colored component labels."""

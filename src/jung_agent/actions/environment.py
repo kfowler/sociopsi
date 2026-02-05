@@ -43,7 +43,7 @@ def close_app(name: str) -> dict[str, Any]:
         return {"error": str(e), "description": f"could not close {name}"}
 
 
-def connect_network() -> dict[str, Any]:
+def connect_network(**kwargs: Any) -> dict[str, Any]:
     """Connect to WiFi."""
     try:
         # Get the WiFi interface name
@@ -82,7 +82,7 @@ def connect_network() -> dict[str, Any]:
         return {"error": str(e), "description": "could not connect"}
 
 
-def disconnect_network() -> dict[str, Any]:
+def disconnect_network(**kwargs: Any) -> dict[str, Any]:
     """Disconnect from WiFi."""
     try:
         result = subprocess.run(

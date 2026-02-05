@@ -126,7 +126,7 @@ def sleep_system(duration: int | None = None) -> dict[str, Any]:
         return {"error": str(e), "description": "could not sleep"}
 
 
-def wake_display() -> dict[str, Any]:
+def wake_display(**kwargs: Any) -> dict[str, Any]:
     """Wake the display."""
     try:
         subprocess.run(
