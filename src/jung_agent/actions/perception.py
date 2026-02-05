@@ -173,7 +173,7 @@ def look(duration: float = 0.5) -> dict[str, Any]:
     description = _describe_with_vision(
         result,
         "This is what I am seeing right now through my camera in real time. "
-        "Describe what I see briefly in 1-2 sentences."
+        "Describe what I see briefly in 1-2 sentences.",
     )
     if description:
         result["description"] = description
@@ -192,7 +192,7 @@ def look_for(description: str, duration: float = 1.0) -> dict[str, Any]:
     vision_result = _describe_with_vision(
         result,
         f"This is what I am seeing right now through my camera in real time. "
-        f"Is there {description} in what I see? Describe briefly what I observe."
+        f"Is there {description} in what I see? Describe briefly what I observe.",
     )
     if vision_result:
         result["description"] = vision_result
@@ -228,13 +228,16 @@ def _describe_with_vision(capture: dict[str, Any], prompt: str) -> str | None:
 
         # Query vision model
         import ollama
+
         response = ollama.chat(
             model="llava",
-            messages=[{
-                "role": "user",
-                "content": prompt,
-                "images": [temp_path],
-            }],
+            messages=[
+                {
+                    "role": "user",
+                    "content": prompt,
+                    "images": [temp_path],
+                }
+            ],
         )
 
         Path(temp_path).unlink()
@@ -278,6 +281,7 @@ def listen_for(description: str, duration: float = 5.0) -> dict[str, Any]:
 def transcribe(duration: float = 5.0) -> dict[str, Any]:
     """Listen and transcribe."""
     from jung_agent.actions import learning
+
     return learning.transcribe_audio(duration)
 
 
@@ -345,9 +349,7 @@ def sense_presence(**kwargs: Any) -> dict[str, Any]:
     """Sense Bluetooth devices nearby."""
     devices = external.get_bluetooth_devices()
     return {
-        "devices": [
-            {"name": d.name, "rssi": d.rssi, "type": d.device_type} for d in devices
-        ],
+        "devices": [{"name": d.name, "rssi": d.rssi, "type": d.device_type} for d in devices],
         "count": len(devices),
         "description": _describe_presence(devices),
     }
@@ -373,7 +375,9 @@ def sense_connections(**kwargs: Any) -> dict[str, Any]:
     return {
         "connections": connections,
         "count": len(connections),
-        "description": f"{len(connections)} devices connected" if connections else "nothing connected",
+        "description": f"{len(connections)} devices connected"
+        if connections
+        else "nothing connected",
     }
 
 
@@ -489,9 +493,7 @@ def sense_network(**kwargs: Any) -> dict[str, Any]:
     """Scan local network."""
     devices = net_sensors.scan_local_network("quick")
     return {
-        "devices": [
-            {"ip": d.ip, "mac": d.mac, "hostname": d.hostname} for d in devices
-        ],
+        "devices": [{"ip": d.ip, "mac": d.mac, "hostname": d.hostname} for d in devices],
         "count": len(devices),
         "description": f"{len(devices)} presences on local network",
     }

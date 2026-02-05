@@ -93,7 +93,7 @@ def _log_json_error(raw_response: str, json_str: str, error: json.JSONDecodeErro
             start = max(0, error.pos - 50)
             end = min(len(json_str), error.pos + 50)
             f.write(f"Context around error (char {error.pos}):\n")
-            f.write(json_str[start:error.pos] + " <<ERROR>> " + json_str[error.pos:end])
+            f.write(json_str[start : error.pos] + " <<ERROR>> " + json_str[error.pos : end])
             f.write("\n")
 
     print(f"  JSON error logged to: {error_file}")

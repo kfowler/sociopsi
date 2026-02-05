@@ -58,9 +58,7 @@ class EventCollector:
         self._last_state = current_state
         return events
 
-    def _detect_state_changes(
-        self, old: SomaticState, new: SomaticState
-    ) -> list[Event]:
+    def _detect_state_changes(self, old: SomaticState, new: SomaticState) -> list[Event]:
         """Detect significant state changes."""
         events: list[Event] = []
 

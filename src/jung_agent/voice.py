@@ -67,11 +67,13 @@ class Voice:
 
         if announcements:
             text = "I will " + ", and ".join(announcements) + "."
-            self._queue.put((
-                text,
-                self.config.voice_actions,
-                self.config.voice_actions_rate,
-            ))
+            self._queue.put(
+                (
+                    text,
+                    self.config.voice_actions,
+                    self.config.voice_actions_rate,
+                )
+            )
 
     def speak_perceptions(self, results: list[ActionResult]) -> None:
         """Speak what was seen, heard, or learned from perception/learning actions."""
@@ -131,11 +133,13 @@ class Voice:
                         rate = self.config.voice_actions_rate
 
             if text:
-                self._queue.put((
-                    self._clean_for_speech(text),
-                    voice,
-                    rate,
-                ))
+                self._queue.put(
+                    (
+                        self._clean_for_speech(text),
+                        voice,
+                        rate,
+                    )
+                )
 
     def _clean_for_speech(self, text: str) -> str:
         """Clean text for natural speech."""

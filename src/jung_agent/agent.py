@@ -271,6 +271,7 @@ class JungAgent:
             except Exception as e:
                 print(f"Error in loop: {e}")
                 import traceback
+
                 traceback.print_exc()
 
             # 9. Wait for next heartbeat (or interrupt)
@@ -287,7 +288,7 @@ class JungAgent:
 
         # Trim history if needed
         if len(self._messages) > self._max_history * 2:
-            self._messages = self._messages[-self._max_history * 2:]
+            self._messages = self._messages[-self._max_history * 2 :]
 
         # Query model
         response = ollama.chat(
@@ -304,11 +305,11 @@ class JungAgent:
 
     # ANSI color codes and emojis for psyche components
     _COMPONENT_STYLE = {
-        "shadow": ("\033[31m", "🌑"),    # Red
-        "anima": ("\033[36m", "✨"),      # Cyan
-        "persona": ("\033[33m", "🎭"),   # Yellow
-        "self": ("\033[35m", "☀️"),       # Magenta
-        "default": ("\033[37m", "💭"),   # White
+        "shadow": ("\033[31m", "🌑"),  # Red
+        "anima": ("\033[36m", "✨"),  # Cyan
+        "persona": ("\033[33m", "🎭"),  # Yellow
+        "self": ("\033[35m", "☀️"),  # Magenta
+        "default": ("\033[37m", "💭"),  # White
     }
     _RESET = "\033[0m"
     _DIM = "\033[2m"
@@ -322,7 +323,9 @@ class JungAgent:
 
         for segment in segments:
             timestamp = datetime.now().strftime("%H:%M:%S")
-            color, emoji = self._COMPONENT_STYLE.get(segment.component, self._COMPONENT_STYLE["default"])
+            color, emoji = self._COMPONENT_STYLE.get(
+                segment.component, self._COMPONENT_STYLE["default"]
+            )
             label = segment.component.upper()
 
             print(f"[{timestamp}] {color}{emoji} {label}{self._RESET}: {segment.text}")

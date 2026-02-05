@@ -90,7 +90,12 @@ def set_power_mode(mode: str) -> dict[str, Any]:
                 capture_output=True,
                 timeout=5,
             )
-            return {"mode": mode, "description": "normal operation" if mode == "normal" else "running at full capacity"}
+            return {
+                "mode": mode,
+                "description": "normal operation"
+                if mode == "normal"
+                else "running at full capacity",
+            }
     except Exception as e:
         return {"error": str(e), "description": "could not change power mode"}
 

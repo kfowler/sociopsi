@@ -113,6 +113,7 @@ def get_location() -> dict[str, Any]:
     # Fallback: IP-based geolocation
     try:
         import json as json_lib
+
         result = subprocess.run(
             ["curl", "-s", "https://ipinfo.io/json"],
             capture_output=True,
@@ -224,6 +225,7 @@ def capture_camera(duration: float = 0.5) -> dict[str, Any]:
 
         # Encode for storage
         import base64
+
         with open(temp_path, "rb") as f:
             image_data = base64.b64encode(f.read()).decode()
 
@@ -248,9 +250,9 @@ def capture_camera(duration: float = 0.5) -> dict[str, Any]:
 def capture_audio(duration: float = 3.0) -> dict[str, Any]:
     """Capture audio from the microphone."""
     try:
+        import numpy as np
         import sounddevice as sd
         import soundfile as sf
-        import numpy as np
 
         sample_rate = 44100
 
@@ -386,15 +388,17 @@ def get_disks() -> list[dict[str, Any]]:
         for partition in psutil.disk_partitions():
             try:
                 usage = psutil.disk_usage(partition.mountpoint)
-                disks.append({
-                    "mountpoint": partition.mountpoint,
-                    "device": partition.device,
-                    "fstype": partition.fstype,
-                    "total_gb": usage.total / (1024**3),
-                    "used_gb": usage.used / (1024**3),
-                    "free_gb": usage.free / (1024**3),
-                    "percent_used": usage.percent,
-                })
+                disks.append(
+                    {
+                        "mountpoint": partition.mountpoint,
+                        "device": partition.device,
+                        "fstype": partition.fstype,
+                        "total_gb": usage.total / (1024**3),
+                        "used_gb": usage.used / (1024**3),
+                        "free_gb": usage.free / (1024**3),
+                        "percent_used": usage.percent,
+                    }
+                )
             except (PermissionError, OSError):
                 pass
     except Exception:
@@ -419,13 +423,15 @@ def get_displays() -> list[dict[str, Any]]:
 
         for gpu in display_data:
             for display in gpu.get("spdisplays_ndrvs", []):
-                displays.append({
-                    "name": display.get("_name", "Unknown"),
-                    "resolution": display.get("_spdisplays_resolution", "Unknown"),
-                    "type": display.get("spdisplays_connection_type", "Unknown"),
-                    "main": display.get("spdisplays_main", "No") == "Yes",
-                    "mirror": display.get("spdisplays_mirror", "Off"),
-                })
+                displays.append(
+                    {
+                        "name": display.get("_name", "Unknown"),
+                        "resolution": display.get("_spdisplays_resolution", "Unknown"),
+                        "type": display.get("spdisplays_connection_type", "Unknown"),
+                        "main": display.get("spdisplays_main", "No") == "Yes",
+                        "mirror": display.get("spdisplays_mirror", "Off"),
+                    }
+                )
     except (subprocess.TimeoutExpired, ValueError, FileNotFoundError):
         pass
     return displays
@@ -449,12 +455,14 @@ def get_thunderbolt_devices() -> list[dict[str, Any]]:
         for bus in tb_data:
             # Get devices on this bus
             for device in bus.get("_items", []):
-                devices.append({
-                    "name": device.get("_name", "Unknown"),
-                    "vendor": device.get("vendor_name", "Unknown"),
-                    "device_id": device.get("device_name_key", None),
-                    "speed": device.get("link_speed", "Unknown"),
-                })
+                devices.append(
+                    {
+                        "name": device.get("_name", "Unknown"),
+                        "vendor": device.get("vendor_name", "Unknown"),
+                        "device_id": device.get("device_name_key", None),
+                        "speed": device.get("link_speed", "Unknown"),
+                    }
+                )
     except (subprocess.TimeoutExpired, ValueError, FileNotFoundError):
         pass
     return devices

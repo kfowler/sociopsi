@@ -1,7 +1,8 @@
 """Psi drive system - motivational economy based on Joscha Bach's Psi theory."""
 
-from dataclasses import dataclass, field
-from typing import Any, Callable
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Any
 
 from jung_agent.config import AgentConfig
 from jung_agent.types import Action, ActionResult, SomaticState
@@ -306,9 +307,7 @@ class DriveSystem:
             else:
                 self._recent_failures += 1
                 # Failure increases competence demand (via negative satisfaction effect)
-                self.drives["competence"].demand = min(
-                    1.0, self.drives["competence"].demand + 0.1
-                )
+                self.drives["competence"].demand = min(1.0, self.drives["competence"].demand + 0.1)
 
             # Decay counters over time
             if self._recent_successes + self._recent_failures > 20:
@@ -372,8 +371,16 @@ class DriveSystem:
         """Format drive state for inclusion in perception."""
         lines = ["[DRIVES]"]
 
-        for name in ["energy", "integrity", "arousal", "competence",
-                     "certainty", "curiosity", "affiliation", "recognition"]:
+        for name in [
+            "energy",
+            "integrity",
+            "arousal",
+            "competence",
+            "certainty",
+            "curiosity",
+            "affiliation",
+            "recognition",
+        ]:
             drive = self.drives[name]
 
             # Bar visualization
@@ -394,9 +401,7 @@ class DriveSystem:
             else:
                 marker = ""
 
-            lines.append(
-                f"  {name:12} {bar} {drive.demand:.2f}{arrow}{marker:5} {drive.reason}"
-            )
+            lines.append(f"  {name:12} {bar} {drive.demand:.2f}{arrow}{marker:5} {drive.reason}")
 
         # Suggestions
         suggestions = self.get_suggestions()

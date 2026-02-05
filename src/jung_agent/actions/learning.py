@@ -17,7 +17,8 @@ def web_search(query: str) -> dict[str, Any]:
     try:
         result = subprocess.run(
             [
-                "curl", "-s",
+                "curl",
+                "-s",
                 f"https://en.wikipedia.org/w/api.php?action=opensearch&search={encoded_query}&limit=5&format=json",
             ],
             capture_output=True,
@@ -31,11 +32,13 @@ def web_search(query: str) -> dict[str, Any]:
                 titles, descriptions, urls = data[1], data[2], data[3]
                 results = []
                 for i, title in enumerate(titles):
-                    results.append({
-                        "title": title,
-                        "url": urls[i] if i < len(urls) else "",
-                        "abstract": descriptions[i] if i < len(descriptions) else "",
-                    })
+                    results.append(
+                        {
+                            "title": title,
+                            "url": urls[i] if i < len(urls) else "",
+                            "abstract": descriptions[i] if i < len(descriptions) else "",
+                        }
+                    )
 
                 if results:
                     return {
@@ -80,8 +83,10 @@ def web_search(query: str) -> dict[str, Any]:
     try:
         result = subprocess.run(
             [
-                "curl", "-s",
-                "-H", "Accept: application/json",
+                "curl",
+                "-s",
+                "-H",
+                "Accept: application/json",
                 f"https://search.brave.com/api/suggest?q={encoded_query}",
             ],
             capture_output=True,
@@ -122,8 +127,10 @@ def web_read(url: str) -> dict[str, Any]:
                 "curl",
                 "-s",
                 "-L",  # Follow redirects
-                "-A", "Mozilla/5.0",
-                "--max-time", "30",
+                "-A",
+                "Mozilla/5.0",
+                "--max-time",
+                "30",
                 url,
             ],
             capture_output=True,
@@ -132,7 +139,11 @@ def web_read(url: str) -> dict[str, Any]:
         )
 
         if result.returncode != 0:
-            return {"url": url, "error": "Failed to fetch", "description": "Could not read the page"}
+            return {
+                "url": url,
+                "error": "Failed to fetch",
+                "description": "Could not read the page",
+            }
 
         html = result.stdout
 
@@ -192,6 +203,7 @@ def describe_image(prompt: str | None = None) -> dict[str, Any]:
 
         # Save full image data to temp file for vision model
         import base64
+
         with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as f:
             temp_path = f.name
             f.write(base64.b64decode(capture["full_data"]))
@@ -215,13 +227,16 @@ def describe_image(prompt: str | None = None) -> dict[str, Any]:
                 vision_prompt = prompt or default_prompt
 
                 import ollama as ollama_client
+
                 response = ollama_client.chat(
                     model="llava",
-                    messages=[{
-                        "role": "user",
-                        "content": vision_prompt,
-                        "images": [temp_path],
-                    }],
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": vision_prompt,
+                            "images": [temp_path],
+                        }
+                    ],
                 )
 
                 description = response["message"]["content"]
@@ -272,8 +287,17 @@ def transcribe_audio(duration: float = 5.0) -> dict[str, Any]:
 
         # Try to use whisper for transcription if available
         try:
-            result = subprocess.run(
-                ["whisper", temp_path, "--model", "tiny", "--output_format", "txt", "--output_dir", "/tmp"],
+            subprocess.run(
+                [
+                    "whisper",
+                    temp_path,
+                    "--model",
+                    "tiny",
+                    "--output_format",
+                    "txt",
+                    "--output_dir",
+                    "/tmp",
+                ],
                 capture_output=True,
                 text=True,
                 timeout=60,
@@ -289,7 +313,9 @@ def transcribe_audio(duration: float = 5.0) -> dict[str, Any]:
                     "duration": duration,
                     "rms_level": capture.get("rms_level"),
                     "transcription": transcription,
-                    "description": f"Heard: {transcription[:100]}..." if len(transcription) > 100 else f"Heard: {transcription}",
+                    "description": f"Heard: {transcription[:100]}..."
+                    if len(transcription) > 100
+                    else f"Heard: {transcription}",
                 }
         except FileNotFoundError:
             pass
