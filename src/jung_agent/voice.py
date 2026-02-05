@@ -102,6 +102,13 @@ class Voice:
 
         _voice_instance = None
 
+        # Drain the queue to prevent more speech
+        while not self._queue.empty():
+            try:
+                self._queue.get_nowait()
+            except Exception:
+                break
+
         # Stop any current speech
         with self._synth_lock:
             if self._current_synthesizer:
@@ -113,9 +120,9 @@ class Voice:
         self._queue.put(None)  # Unblock the worker
 
         if self._thread:
-            self._thread.join(timeout=2.0)
-            if self._thread.is_alive():
-                logger.warning("Voice thread did not stop within timeout")
+            self._thread.join(timeout=1.0)
+            # Thread is daemon, so it'll be killed on exit anyway
+            # Don't warn - PyObjC callbacks can be slow to complete
 
     def _is_running(self) -> bool:
         """Thread-safe check of running state."""
