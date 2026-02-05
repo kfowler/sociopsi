@@ -82,7 +82,6 @@ class ActionExecutor:
             "open_app": environment.open_app,
             "close_app": environment.close_app,
             "connect_network": environment.connect_network,
-            "disconnect_network": environment.disconnect_network,
             # Memory
             "journal_write": self._journal_write,
             "journal_read": self._journal_read,
@@ -108,9 +107,6 @@ class ActionExecutor:
             # Interaction
             "send_message": interaction.send_message,
             "type_text": interaction.type_text,
-            "click": interaction.click,
-            "move_mouse": interaction.move_mouse,
-            "press_key": interaction.press_key,
         }
 
     def execute(self, action: Action) -> ActionResult:

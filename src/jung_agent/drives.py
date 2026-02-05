@@ -290,9 +290,6 @@ SATISFACTION_MAP: dict[str, dict[str, SatisfactionValue]] = {
     "type_text": {
         "competence": lambda r: 0.3 if r.get("typed") else 0,
     },
-    "click": {
-        "competence": lambda r: 0.2 if r.get("clicked") else 0,
-    },
 }
 
 # Actions suggested for each drive when urgent
