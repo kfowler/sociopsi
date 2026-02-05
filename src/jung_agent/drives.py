@@ -185,7 +185,7 @@ SATISFACTION_MAP: dict[str, dict[str, SatisfactionValue]] = {
         "recognition": 0.2,
     },
     "notify": {
-        "recognition": 0.3,
+        "recognition": lambda r: 0.7 if r.get("acknowledged") else 0.1,
     },
     "display_message": {
         "recognition": lambda r: 0.7 if r.get("acknowledged") else 0.1,
@@ -400,8 +400,8 @@ class DriveSystem:
                     if _person_looking_at_camera(description):
                         self._recently_acknowledged = True
 
-                # Track if user acknowledged a message
-                if action_type == "display_message" and result_dict.get("acknowledged"):
+                # Track if user acknowledged a message/notification
+                if action_type in ("display_message", "notify") and result_dict.get("acknowledged"):
                     self._recently_acknowledged = True
 
                 for drive_name, value in SATISFACTION_MAP[action_type].items():

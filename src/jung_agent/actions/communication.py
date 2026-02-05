@@ -4,24 +4,32 @@ import subprocess
 from typing import Any
 
 
-def notify(message: str, title: str | None = None) -> dict[str, Any]:
-    """Send a system notification."""
+def notify(message: str, title: str | None = None, duration: int = 30) -> dict[str, Any]:
+    """Send a notification dialog that can be dismissed."""
     title = title or "Jung"
 
     try:
         script = f'''
-        display notification "{message}" with title "{title}"
+        tell application "System Events"
+            display dialog "{message}" with title "{title}" buttons {{"OK"}} giving up after {duration}
+        end tell
         '''
-        subprocess.run(
+        result = subprocess.run(
             ["osascript", "-e", script],
             capture_output=True,
-            timeout=5,
+            text=True,
+            timeout=duration + 5,
         )
+        # Check if user clicked OK vs dialog timed out
+        acknowledged = "gave up:true" not in result.stdout.lower()
         return {
             "sent": True,
+            "acknowledged": acknowledged,
             "title": title,
             "message": message,
-            "description": "message sent to the User",
+            "description": "acknowledged by User"
+            if acknowledged
+            else "notification shown, no response",
         }
     except Exception as e:
         return {"error": str(e), "description": "could not notify"}
