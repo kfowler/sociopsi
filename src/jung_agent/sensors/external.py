@@ -272,3 +272,161 @@ def _describe_fan_speed(rpm: int) -> str:
         return "panting"
     else:
         return "gasping"
+
+
+def get_disk_io() -> dict[str, Any]:
+    """Get disk I/O activity."""
+    try:
+        import psutil
+
+        counters = psutil.disk_io_counters()
+        if counters:
+            return {
+                "read_bytes": counters.read_bytes,
+                "write_bytes": counters.write_bytes,
+                "read_count": counters.read_count,
+                "write_count": counters.write_count,
+                "read_mb": counters.read_bytes / (1024 * 1024),
+                "write_mb": counters.write_bytes / (1024 * 1024),
+                "description": _describe_disk_activity(counters.read_bytes, counters.write_bytes),
+            }
+        return {"status": "unavailable"}
+    except Exception:
+        return {"status": "unavailable"}
+
+
+def _describe_disk_activity(read: int, write: int) -> str:
+    """Describe disk activity in experiential terms."""
+    total_gb = (read + write) / (1024**3)
+    if total_gb < 1:
+        return "memory quiet"
+    elif total_gb < 10:
+        return "memory stirring"
+    elif total_gb < 100:
+        return "memory active"
+    else:
+        return "memory churning"
+
+
+def get_disks() -> list[dict[str, Any]]:
+    """Get disk/volume information."""
+    disks: list[dict[str, Any]] = []
+    try:
+        import psutil
+
+        for partition in psutil.disk_partitions():
+            try:
+                usage = psutil.disk_usage(partition.mountpoint)
+                disks.append({
+                    "mountpoint": partition.mountpoint,
+                    "device": partition.device,
+                    "fstype": partition.fstype,
+                    "total_gb": usage.total / (1024**3),
+                    "used_gb": usage.used / (1024**3),
+                    "free_gb": usage.free / (1024**3),
+                    "percent_used": usage.percent,
+                })
+            except (PermissionError, OSError):
+                pass
+    except Exception:
+        pass
+    return disks
+
+
+def get_displays() -> list[dict[str, Any]]:
+    """Get connected displays."""
+    displays: list[dict[str, Any]] = []
+    try:
+        result = subprocess.run(
+            ["system_profiler", "SPDisplaysDataType", "-json"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        import json
+
+        data = json.loads(result.stdout)
+        display_data = data.get("SPDisplaysDataType", [])
+
+        for gpu in display_data:
+            for display in gpu.get("spdisplays_ndrvs", []):
+                displays.append({
+                    "name": display.get("_name", "Unknown"),
+                    "resolution": display.get("_spdisplays_resolution", "Unknown"),
+                    "type": display.get("spdisplays_connection_type", "Unknown"),
+                    "main": display.get("spdisplays_main", "No") == "Yes",
+                    "mirror": display.get("spdisplays_mirror", "Off"),
+                })
+    except (subprocess.TimeoutExpired, ValueError, FileNotFoundError):
+        pass
+    return displays
+
+
+def get_thunderbolt_devices() -> list[dict[str, Any]]:
+    """Get Thunderbolt device connections."""
+    devices: list[dict[str, Any]] = []
+    try:
+        result = subprocess.run(
+            ["system_profiler", "SPThunderboltDataType", "-json"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        import json
+
+        data = json.loads(result.stdout)
+        tb_data = data.get("SPThunderboltDataType", [])
+
+        for bus in tb_data:
+            # Get devices on this bus
+            for device in bus.get("_items", []):
+                devices.append({
+                    "name": device.get("_name", "Unknown"),
+                    "vendor": device.get("vendor_name", "Unknown"),
+                    "device_id": device.get("device_name_key", None),
+                    "speed": device.get("link_speed", "Unknown"),
+                })
+    except (subprocess.TimeoutExpired, ValueError, FileNotFoundError):
+        pass
+    return devices
+
+
+def get_io_summary() -> dict[str, Any]:
+    """Get comprehensive I/O status summary."""
+    usb = get_usb_connections()
+    thunderbolt = get_thunderbolt_devices()
+    displays = get_displays()
+    disks = get_disks()
+    disk_io = get_disk_io()
+
+    # Build summary
+    connections = []
+    if usb:
+        connections.extend([f"USB: {d['name']}" for d in usb[:3]])
+    if thunderbolt:
+        connections.extend([f"TB: {d['name']}" for d in thunderbolt[:2]])
+    if len(displays) > 1:
+        connections.append(f"{len(displays)} displays")
+
+    return {
+        "usb_count": len(usb),
+        "thunderbolt_count": len(thunderbolt),
+        "display_count": len(displays),
+        "disk_count": len(disks),
+        "disk_io": disk_io,
+        "connections": connections,
+        "description": _describe_io_state(len(usb), len(thunderbolt), len(displays)),
+    }
+
+
+def _describe_io_state(usb: int, tb: int, displays: int) -> str:
+    """Describe I/O state in experiential terms."""
+    total = usb + tb
+    if total == 0 and displays == 1:
+        return "alone, unextended"
+    elif total == 0:
+        return f"unextended, {displays} windows to the world"
+    elif total < 3:
+        return f"{total} extensions reaching out"
+    else:
+        return f"well-connected, {total} extensions"

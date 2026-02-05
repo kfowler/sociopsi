@@ -272,6 +272,106 @@ def sense_breath() -> dict[str, Any]:
     return external.get_fan_speed()
 
 
+# I/O sensing
+
+
+def sense_io() -> dict[str, Any]:
+    """Sense overall I/O status."""
+    return external.get_io_summary()
+
+
+def sense_disk_io() -> dict[str, Any]:
+    """Sense disk read/write activity."""
+    return external.get_disk_io()
+
+
+def sense_disks() -> dict[str, Any]:
+    """Sense disk volumes and capacity."""
+    disks = external.get_disks()
+    return {
+        "disks": disks,
+        "count": len(disks),
+        "description": _describe_disks(disks),
+    }
+
+
+def _describe_disks(disks: list[dict[str, Any]]) -> str:
+    """Describe disk state in experiential terms."""
+    if not disks:
+        return "no storage sense"
+
+    # Find main disk (usually /)
+    main = next((d for d in disks if d["mountpoint"] == "/"), disks[0])
+    percent = main.get("percent_used", 0)
+
+    if percent > 95:
+        return f"storage suffocating, {100 - percent:.0f}% free"
+    elif percent > 85:
+        return f"storage cramped, {100 - percent:.0f}% free"
+    elif percent > 70:
+        return f"storage filling, {100 - percent:.0f}% free"
+    else:
+        return f"storage spacious, {100 - percent:.0f}% free"
+
+
+def sense_displays() -> dict[str, Any]:
+    """Sense connected displays."""
+    displays = external.get_displays()
+    return {
+        "displays": displays,
+        "count": len(displays),
+        "description": _describe_displays(displays),
+    }
+
+
+def _describe_displays(displays: list[dict[str, Any]]) -> str:
+    """Describe displays in experiential terms."""
+    if not displays:
+        return "blind, no displays"
+    elif len(displays) == 1:
+        return f"one window: {displays[0].get('resolution', 'unknown')}"
+    else:
+        return f"{len(displays)} windows to the world"
+
+
+def sense_thunderbolt() -> dict[str, Any]:
+    """Sense Thunderbolt connections."""
+    devices = external.get_thunderbolt_devices()
+    return {
+        "devices": devices,
+        "count": len(devices),
+        "description": _describe_thunderbolt(devices),
+    }
+
+
+def _describe_thunderbolt(devices: list[dict[str, Any]]) -> str:
+    """Describe Thunderbolt in experiential terms."""
+    if not devices:
+        return "no high-speed extensions"
+
+    names = [d.get("name", "device") for d in devices[:3]]
+    return f"high-speed link to {', '.join(names)}"
+
+
+def sense_usb() -> dict[str, Any]:
+    """Sense USB device tree (detailed)."""
+    connections = external.get_usb_connections()
+    return {
+        "devices": connections,
+        "count": len(connections),
+        "description": _describe_usb(connections),
+    }
+
+
+def _describe_usb(devices: list[dict[str, Any]]) -> str:
+    """Describe USB in experiential terms."""
+    if not devices:
+        return "ports empty, nothing touching"
+
+    names = [d.get("name", "device") for d in devices[:3]]
+    return f"touching: {', '.join(names)}"
+
+
 # Network sensing
 
 

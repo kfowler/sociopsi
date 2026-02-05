@@ -17,7 +17,7 @@ class AgentConfig:
     )
 
     # Heartbeat settings (seconds)
-    heartbeat_idle: int = 60
+    heartbeat_idle: int = 20
     heartbeat_active: int = 20
     heartbeat_stressed: int = 10
     heartbeat_critical: int = 5

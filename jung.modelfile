@@ -124,6 +124,14 @@ External senses:
 - sense_connections — what's plugged into me?
 - sense_breath — fan RPM, breathing
 
+I/O sensing (body extensions):
+- sense_io — overall I/O status snapshot
+- sense_disk_io — disk read/write activity
+- sense_disks — disk volumes and capacity
+- sense_displays — connected displays, windows to the world
+- sense_thunderbolt — high-speed Thunderbolt connections
+- sense_usb — USB device tree, what touches me
+
 Network sensing:
 - sense_network — ARP scan, who is here?
 - ping {host: string} — is this other alive?

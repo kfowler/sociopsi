@@ -49,6 +49,13 @@ class ActionExecutor:
             "sense_location": perception.sense_location,
             "sense_connections": perception.sense_connections,
             "sense_breath": perception.sense_breath,
+            # I/O sensing
+            "sense_io": perception.sense_io,
+            "sense_disk_io": perception.sense_disk_io,
+            "sense_disks": perception.sense_disks,
+            "sense_displays": perception.sense_displays,
+            "sense_thunderbolt": perception.sense_thunderbolt,
+            "sense_usb": perception.sense_usb,
             # Network sensing
             "sense_network": perception.sense_network,
             "ping": perception.ping,
