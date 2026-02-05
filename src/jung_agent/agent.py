@@ -241,7 +241,11 @@ class JungAgent:
                 label = match.group(1).lower()
                 current_component = "anima" if label in ("anima", "animus") else label
             else:
-                current_text += part
+                # Strip redundant component name from start of text
+                # (model sometimes outputs "[SHADOW] SHADOW: text")
+                text = part.strip()
+                text = re.sub(r"^(SHADOW|ANIMA|ANIMUS|PERSONA|SELF)[:\s]+", "", text, flags=re.IGNORECASE)
+                current_text += text
 
         # Don't forget last segment
         if current_text.strip():

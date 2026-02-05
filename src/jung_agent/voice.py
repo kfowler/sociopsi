@@ -118,6 +118,8 @@ class Voice:
                 else:
                     current_component = label
             else:
+                # Strip redundant component name from start of text
+                part = re.sub(r"^(SHADOW|ANIMA|ANIMUS|PERSONA|SELF)[:\s]+", "", part.strip(), flags=re.IGNORECASE)
                 current_text += part
 
         # Don't forget the last segment
@@ -128,6 +130,9 @@ class Voice:
 
     def _clean_for_speech(self, text: str) -> str:
         """Clean text for natural speech."""
+        # Remove any remaining component names at start
+        text = re.sub(r"^(SHADOW|ANIMA|ANIMUS|PERSONA|SELF)[:\s]+", "", text.strip(), flags=re.IGNORECASE)
+
         # Remove markdown-style formatting
         text = re.sub(r"\*+([^*]+)\*+", r"\1", text)  # *emphasis*
         text = re.sub(r"_+([^_]+)_+", r"\1", text)  # _emphasis_
