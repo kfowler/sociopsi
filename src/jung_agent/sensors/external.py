@@ -86,27 +86,55 @@ def get_bluetooth_devices() -> list[BluetoothDevice]:
 
 def get_location() -> dict[str, Any]:
     """Get approximate location."""
-    # Note: This requires location permissions
+    # Try whereami tool first (precise, needs location permissions)
     try:
-        # Use CoreLocation via Python - simplified fallback
         result = subprocess.run(
-            ["whereami"],  # Third-party tool if installed
+            ["whereami"],
             capture_output=True,
             text=True,
             timeout=5,
         )
-        # Parse output
-        location: dict[str, Any] = {}
-        for line in result.stdout.split("\n"):
-            if "Latitude:" in line:
-                location["latitude"] = float(line.split(":")[-1].strip())
-            elif "Longitude:" in line:
-                location["longitude"] = float(line.split(":")[-1].strip())
-            elif "Address:" in line:
-                location["address"] = line.split(":", 1)[-1].strip()
-        return location if location else {"status": "unavailable"}
+        if result.returncode == 0:
+            location: dict[str, Any] = {}
+            for line in result.stdout.split("\n"):
+                if "Latitude:" in line:
+                    location["latitude"] = float(line.split(":")[-1].strip())
+                elif "Longitude:" in line:
+                    location["longitude"] = float(line.split(":")[-1].strip())
+                elif "Address:" in line:
+                    location["address"] = line.split(":", 1)[-1].strip()
+            if location:
+                location["source"] = "gps"
+                location["description"] = f"Located at {location.get('address', 'unknown address')}"
+                return location
     except (subprocess.TimeoutExpired, ValueError, FileNotFoundError):
-        return {"status": "unavailable"}
+        pass
+
+    # Fallback: IP-based geolocation
+    try:
+        import json as json_lib
+        result = subprocess.run(
+            ["curl", "-s", "https://ipinfo.io/json"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if result.returncode == 0:
+            data = json_lib.loads(result.stdout)
+            loc = data.get("loc", "").split(",")
+            return {
+                "city": data.get("city", "unknown"),
+                "region": data.get("region", "unknown"),
+                "country": data.get("country", "unknown"),
+                "latitude": float(loc[0]) if len(loc) == 2 else None,
+                "longitude": float(loc[1]) if len(loc) == 2 else None,
+                "source": "ip",
+                "description": f"Approximately in {data.get('city', 'unknown')}, {data.get('region', '')}",
+            }
+    except Exception:
+        pass
+
+    return {"status": "unavailable", "description": "Could not determine location"}
 
 
 def get_motion() -> dict[str, Any]:

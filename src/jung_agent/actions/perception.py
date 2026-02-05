@@ -209,10 +209,8 @@ def listen_for(description: str, duration: float = 5.0) -> dict[str, Any]:
 
 def transcribe(duration: float = 5.0) -> dict[str, Any]:
     """Listen and transcribe."""
-    # Would need speech-to-text
-    result = external.capture_audio(duration)
-    result["transcription"] = "transcription not implemented"
-    return result
+    from jung_agent.actions import learning
+    return learning.transcribe_audio(duration)
 
 
 def sense_light() -> dict[str, Any]:
@@ -227,8 +225,52 @@ def sense_motion() -> dict[str, Any]:
 
 def sense_touch(duration: float = 1.0) -> dict[str, Any]:
     """Sense trackpad activity."""
-    # Would need to monitor trackpad events
-    return {"status": "monitoring not implemented", "duration": duration}
+    import subprocess
+    import time
+
+    # Check for recent mouse/trackpad activity via ioreg
+    try:
+        # Sample mouse position at start and end
+        start_result = subprocess.run(
+            ["osascript", "-e", 'tell application "System Events" to get position of mouse'],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        start_pos = start_result.stdout.strip() if start_result.returncode == 0 else None
+
+        time.sleep(duration)
+
+        end_result = subprocess.run(
+            ["osascript", "-e", 'tell application "System Events" to get position of mouse'],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        end_pos = end_result.stdout.strip() if end_result.returncode == 0 else None
+
+        if start_pos and end_pos:
+            moved = start_pos != end_pos
+            return {
+                "duration": duration,
+                "movement_detected": moved,
+                "start_position": start_pos,
+                "end_position": end_pos,
+                "description": "Touch detected, cursor moved" if moved else "No touch detected",
+            }
+
+        return {
+            "duration": duration,
+            "movement_detected": False,
+            "description": "Could not sense touch",
+        }
+
+    except Exception as e:
+        return {
+            "duration": duration,
+            "error": str(e),
+            "description": f"Touch sensing failed: {e}",
+        }
 
 
 def sense_presence() -> dict[str, Any]:
