@@ -23,7 +23,10 @@ def parse_response(response: str) -> PsycheResponse:
                 component = item.get("component", "default")
                 text = item.get("text", "")
                 if text:
-                    stream_items.append({"component": component, "text": text})
+                    # Strip redundant component names from start of text
+                    text = re.sub(r"^(SHADOW|ANIMA|ANIMUS|PERSONA|SELF)[:\s]*", "", text, flags=re.IGNORECASE).strip()
+                    if text:
+                        stream_items.append({"component": component, "text": text})
 
             # Extract actions
             for action_dict in data.get("actions", []):
