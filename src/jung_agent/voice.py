@@ -126,27 +126,18 @@ class Voice:
 
         _voice_instance = None
 
-        # Drain the queue to prevent more speech
+        # Drain the queue to prevent new speech from being queued
         while not self._queue.empty():
             try:
                 self._queue.get_nowait()
             except Exception:
                 break
 
-        # Stop any current speech
-        with self._synth_lock:
-            if self._current_synthesizer:
-                try:
-                    self._current_synthesizer.stopSpeakingAtBoundary_(0)  # type: ignore[attr-defined]
-                except Exception:
-                    pass
+        self._queue.put(None)  # Signal worker to exit
 
-        self._queue.put(None)  # Unblock the worker
-
+        # Wait for worker to finish current speech and exit
         if self._thread:
-            self._thread.join(timeout=1.0)
-            # Thread is daemon, so it'll be killed on exit anyway
-            # Don't warn - PyObjC callbacks can be slow to complete
+            self._thread.join(timeout=6.0)  # Allow time for speech to complete
 
     def _is_running(self) -> bool:
         """Thread-safe check of running state."""
@@ -386,10 +377,15 @@ class Voice:
             except Exception as e:
                 logger.error(f"Voice synthesis error: {e}")
 
-        # Cleanup
+        # Wait for speech to finish (up to 5 seconds)
+        if synthesizer.isSpeaking():
+            logger.debug("Waiting for speech to finish...")
+            for _ in range(50):  # 5 seconds max
+                CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0.1, False)
+                if not synthesizer.isSpeaking():
+                    break
+
         with self._synth_lock:
-            if self._current_synthesizer:
-                self._current_synthesizer.stopSpeakingAtBoundary_(0)
             self._current_synthesizer = None
 
         logger.debug("Voice worker thread exiting")
