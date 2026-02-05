@@ -1,7 +1,8 @@
 """
 Voice output for the psyche.
 
-Uses NSSpeechSynthesizer with a delegate pattern for reliable speech queuing.
+Uses multiple NSSpeechSynthesizer instances (one per voice) to avoid
+voice switching delays. Each voice is preloaded at startup.
 """
 
 from __future__ import annotations
@@ -12,6 +13,7 @@ import threading
 from collections import deque
 from dataclasses import dataclass
 from threading import Event
+
 import objc
 from AppKit import NSSpeechSynthesizer
 from Foundation import NSDate, NSDefaultRunLoopMode, NSObject, NSRunLoop
@@ -71,35 +73,34 @@ class SpeechQueueDelegate(NSObject):
             return None  # type: ignore[return-value]
         self._finished_event: Event = Event()
         self._queue: deque[SpeechItem] = deque()
-        self._synthesizer: NSSpeechSynthesizer | None = None
-        self._voice_cache: dict[str, str | None] = {}
+        self._synthesizers: dict[str, NSSpeechSynthesizer] = {}
+        self._default_voice: str = ""
         return self
 
     def setQueue_(self, queue: deque[SpeechItem]) -> None:  # noqa: N802
         self._queue = queue
 
-    def setSynthesizer_(self, synthesizer: NSSpeechSynthesizer) -> None:  # noqa: N802
-        self._synthesizer = synthesizer
+    def setSynthesizers_(self, synths: dict[str, NSSpeechSynthesizer]) -> None:  # noqa: N802
+        self._synthesizers = synths
 
     def setFinishedEvent_(self, event: Event) -> None:  # noqa: N802
         self._finished_event = event
 
-    def setVoiceCache_(self, cache: dict[str, str | None]) -> None:  # noqa: N802
-        self._voice_cache = cache
+    def setDefaultVoice_(self, voice: str) -> None:  # noqa: N802
+        self._default_voice = voice
 
     def speechSynthesizer_didFinishSpeaking_(  # noqa: N802
         self, sender: NSSpeechSynthesizer, finished_speaking: bool
     ) -> None:
         """Called when the synthesizer finishes speaking."""
         del sender, finished_speaking  # unused
-        if self._queue and self._synthesizer:
+        if self._queue:
             item = self._queue.popleft()
-            # Set voice if different
-            if item.voice_name in self._voice_cache:
-                voice_id = self._voice_cache[item.voice_name]
-                if voice_id:
-                    self._synthesizer.setVoice_(voice_id)
-            self._synthesizer.startSpeakingString_(item.text)
+            # Get the synthesizer for this voice (or default)
+            voice_key = item.voice_name if item.voice_name in self._synthesizers else self._default_voice
+            synth = self._synthesizers.get(voice_key)
+            if synth:
+                synth.startSpeakingString_(item.text)
         else:
             self._finished_event.set()
 
@@ -110,9 +111,12 @@ class SpeechQueueDelegate(NSObject):
 
 
 class Voice:
-    """Text-to-speech voice for the psyche (macOS NSSpeechSynthesizer)."""
+    """Text-to-speech voice for the psyche (macOS NSSpeechSynthesizer).
 
-    MAX_QUEUE_SIZE = 10
+    Uses multiple pre-loaded synthesizer instances to avoid voice switching delays.
+    """
+
+    MAX_QUEUE_SIZE = 50
 
     def __init__(self, config: AgentConfig) -> None:
         self.config = config
@@ -120,17 +124,17 @@ class Voice:
         self._running = False
         self._running_lock = threading.Lock()
 
-        # Speech queue and synthesizer
+        # Speech queue
         self._queue: deque[SpeechItem] = deque()
         self._queue_lock = threading.Lock()
         self._finished_event = Event()
 
-        # Will be initialized on start()
-        self._synthesizer: NSSpeechSynthesizer | None = None
+        # One synthesizer per voice (preloaded)
+        self._synthesizers: dict[str, NSSpeechSynthesizer] = {}
         self._delegate: SpeechQueueDelegate | None = None
-        self._voice_cache: dict[str, str | None] = {}
+        self._voice_ids: dict[str, str] = {}  # voice name -> voice ID
 
-        # Voice mapping
+        # Voice mapping for components
         self._component_voices: dict[PsycheComponent, str] = {
             "anima": config.voice_anima,
             "shadow": config.voice_shadow,
@@ -155,29 +159,33 @@ class Voice:
                 return
             self._running = True
 
-        # Initialize synthesizer
-        self._synthesizer = NSSpeechSynthesizer.alloc().init()
+        # Build voice ID mapping
+        self._build_voice_ids()
+
+        # Create one synthesizer per voice
+        self._create_synthesizers()
+
+        # Set up delegate
         self._delegate = SpeechQueueDelegate.alloc().init()
         self._delegate.setQueue_(self._queue)
-        self._delegate.setSynthesizer_(self._synthesizer)
+        self._delegate.setSynthesizers_(self._synthesizers)
         self._delegate.setFinishedEvent_(self._finished_event)
-        self._delegate.setVoiceCache_(self._voice_cache)
-        self._synthesizer.setDelegate_(self._delegate)
+        self._delegate.setDefaultVoice_(self.config.voice_default)
 
-        # Build voice cache
-        self._build_voice_cache()
+        # Set delegate on all synthesizers
+        for synth in self._synthesizers.values():
+            synth.setDelegate_(self._delegate)
 
         with _voice_instance_lock:
             _voice_instance = self
 
-        logger.info("Voice system started")
+        logger.info(f"Voice system started with {len(self._synthesizers)} preloaded voices")
 
     def stop(self, wait_for_completion: bool = False) -> None:
         """Stop the voice system."""
         global _voice_instance
 
-        if wait_for_completion and self._synthesizer:
-            # Wait for current speech to finish
+        if wait_for_completion:
             self._wait_for_speech(timeout=30.0)
 
         with self._running_lock:
@@ -185,8 +193,9 @@ class Voice:
                 return
             self._running = False
 
-        if self._synthesizer:
-            self._synthesizer.stopSpeaking()
+        # Stop all synthesizers
+        for synth in self._synthesizers.values():
+            synth.stopSpeaking()
 
         with self._queue_lock:
             self._queue.clear()
@@ -200,10 +209,7 @@ class Voice:
         logger.info("Voice system stopped")
 
     def _wait_for_speech(self, timeout: float | None = None) -> bool:
-        """Wait for all speech to complete. Returns True if completed."""
-        if not self._synthesizer:
-            return True
-
+        """Wait for all speech to complete."""
         run_loop = NSRunLoop.currentRunLoop()
         interval = 0.1
         elapsed = 0.0
@@ -218,8 +224,8 @@ class Voice:
                     return False
         return True
 
-    def _build_voice_cache(self) -> None:
-        """Build a cache mapping voice display names to voice identifiers."""
+    def _build_voice_ids(self) -> None:
+        """Build a mapping from voice display names to voice identifiers."""
         available = NSSpeechSynthesizer.availableVoices()
         voice_map: dict[str, str] = {}
 
@@ -230,33 +236,54 @@ class Voice:
                 if name:
                     voice_map[name] = voice_id
 
-        # Map our config voice names to voice IDs
-        for config_voice in [
+        # Map config voice names to voice IDs
+        voices_to_map = {
             self.config.voice_anima,
             self.config.voice_shadow,
             self.config.voice_persona,
             self.config.voice_self,
             self.config.voice_default,
             self.config.voice_actions,
-        ]:
-            # Try exact match first
+        }
+
+        for config_voice in voices_to_map:
             if config_voice in voice_map:
-                self._voice_cache[config_voice] = voice_map[config_voice]
+                self._voice_ids[config_voice] = voice_map[config_voice]
             else:
-                # Try partial match (e.g., "Zoe (Premium)" -> "Zoe")
+                # Try partial match
                 base_name = config_voice.split("(")[0].strip()
                 for name, vid in voice_map.items():
                     if base_name in name:
-                        self._voice_cache[config_voice] = vid
+                        self._voice_ids[config_voice] = vid
                         break
                 else:
-                    # Fallback to default system voice
-                    self._voice_cache[config_voice] = None
-                    logger.debug(f"Voice '{config_voice}' not found, using default")
+                    logger.debug(f"Voice '{config_voice}' not found")
+
+    def _create_synthesizers(self) -> None:
+        """Create one synthesizer per unique voice."""
+        created_voices: set[str] = set()
+
+        for voice_name, voice_id in self._voice_ids.items():
+            if voice_id not in created_voices:
+                synth = NSSpeechSynthesizer.alloc().init()
+                synth.setVoice_(voice_id)
+                self._synthesizers[voice_name] = synth
+                created_voices.add(voice_id)
+                logger.debug(f"Preloaded voice: {voice_name}")
+
+        # Ensure we have at least a default synthesizer
+        if not self._synthesizers:
+            synth = NSSpeechSynthesizer.alloc().init()
+            self._synthesizers[self.config.voice_default] = synth
+            logger.debug("Using system default voice")
 
     def _is_running(self) -> bool:
         with self._running_lock:
             return self._running
+
+    def _any_speaking(self) -> bool:
+        """Check if any synthesizer is currently speaking."""
+        return any(synth.isSpeaking() for synth in self._synthesizers.values())
 
     # ----------------------------
     # Enqueue
@@ -277,33 +304,31 @@ class Voice:
         item = SpeechItem(text=cleaned, voice_name=voice_name, rate_wpm=rate_wpm)
 
         with self._queue_lock:
-            # Drop oldest if full
             while len(self._queue) >= self.MAX_QUEUE_SIZE:
                 dropped = self._queue.popleft()
                 logger.debug(f"Dropped queued speech (full): {dropped.text[:40]}...")
             self._queue.append(item)
 
             # If not currently speaking, start
-            if self._synthesizer and not self._synthesizer.isSpeaking():
+            if not self._any_speaking():
                 self._start_next()
 
         return True
 
     def _start_next(self) -> None:
         """Start speaking the next item in the queue."""
-        if not self._queue or not self._synthesizer:
+        if not self._queue:
             return
 
         item = self._queue.popleft()
         self._finished_event.clear()
 
-        # Set voice
-        if item.voice_name in self._voice_cache:
-            voice_id = self._voice_cache[item.voice_name]
-            if voice_id:
-                self._synthesizer.setVoice_(voice_id)
+        # Get the synthesizer for this voice
+        voice_key = item.voice_name if item.voice_name in self._synthesizers else self.config.voice_default
+        synth = self._synthesizers.get(voice_key)
 
-        self._synthesizer.startSpeakingString_(item.text)
+        if synth:
+            synth.startSpeakingString_(item.text)
 
     # ----------------------------
     # Public orchestration APIs
