@@ -58,20 +58,6 @@ def main() -> int:
         help="Disable voice output",
     )
 
-    parser.add_argument(
-        "--voice",
-        type=str,
-        default=None,
-        help="Voice name for TTS (default: Ava (Premium))",
-    )
-
-    parser.add_argument(
-        "--voice-rate",
-        type=int,
-        default=180,
-        help="Voice speed in words per minute (default: 180)",
-    )
-
     args = parser.parse_args()
 
     # Build config
@@ -80,12 +66,7 @@ def main() -> int:
         modules=args.modules,
         log_stream=not args.quiet,
         voice_enabled=not args.no_voice,
-        voice_rate=args.voice_rate,
     )
-
-    # Override voice name if specified
-    if args.voice:
-        config.voice_name = args.voice
 
     if args.heartbeat:
         config.heartbeat_idle = args.heartbeat

@@ -40,8 +40,12 @@ class AgentConfig:
 
     # Voice settings
     voice_enabled: bool = True
-    voice_name: str = "Ava (Premium)"  # High-quality female voice
-    voice_rate: int = 180  # Words per minute (default ~180-200)
+    # Internal thoughts voice (stream)
+    voice_thoughts: str = "Ava (Premium)"
+    voice_thoughts_rate: int = 250  # Fast, internal monologue
+    # Intentions/actions voice
+    voice_actions: str = "Evan (Enhanced)"
+    voice_actions_rate: int = 190  # Slower, deliberate announcements
 
     def __post_init__(self) -> None:
         """Ensure data directory exists."""

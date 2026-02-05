@@ -49,7 +49,11 @@ class JungAgent:
 
         print(f"Jung Agent starting with model: {self.config.model}")
         print(f"Modules enabled: {', '.join(self.config.modules)}")
-        print(f"Voice: {self.config.voice_name if self.config.voice_enabled else 'disabled'}")
+        if self.config.voice_enabled:
+            print(f"Voice (thoughts): {self.config.voice_thoughts} @ {self.config.voice_thoughts_rate} wpm")
+            print(f"Voice (actions): {self.config.voice_actions} @ {self.config.voice_actions_rate} wpm")
+        else:
+            print("Voice: disabled")
         print(f"Initial heartbeat: {self._current_interval}s")
         print("-" * 60)
 

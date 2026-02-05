@@ -14,7 +14,7 @@ class Voice:
 
     def __init__(self, config: AgentConfig) -> None:
         self.config = config
-        self._queue: Queue[str] = Queue()
+        self._queue: Queue[tuple[str, str, int]] = Queue()  # (text, voice, rate)
         self._thread: threading.Thread | None = None
         self._running = False
 
@@ -30,22 +30,26 @@ class Voice:
     def stop(self) -> None:
         """Stop the voice thread."""
         self._running = False
-        self._queue.put("")  # Unblock the worker
+        self._queue.put(("", "", 0))  # Unblock the worker
         if self._thread:
             self._thread.join(timeout=1.0)
 
     def speak_stream(self, stream: str) -> None:
-        """Speak the internal monologue stream."""
+        """Speak the internal monologue stream (thoughts voice, fast)."""
         if not self.config.voice_enabled:
             return
 
         # Clean up the stream for speech
         text = self._clean_for_speech(stream)
         if text:
-            self._queue.put(text)
+            self._queue.put((
+                text,
+                self.config.voice_thoughts,
+                self.config.voice_thoughts_rate,
+            ))
 
     def announce_actions(self, actions: list[Action]) -> None:
-        """Announce intended actions before executing them."""
+        """Announce intended actions (actions voice, deliberate)."""
         if not self.config.voice_enabled or not actions:
             return
 
@@ -57,7 +61,11 @@ class Voice:
 
         if announcements:
             text = "I will " + ", and ".join(announcements) + "."
-            self._queue.put(text)
+            self._queue.put((
+                text,
+                self.config.voice_actions,
+                self.config.voice_actions_rate,
+            ))
 
     def _clean_for_speech(self, text: str) -> str:
         """Clean text for natural speech."""
@@ -132,18 +140,19 @@ class Voice:
     def _voice_worker(self) -> None:
         """Background worker that speaks queued text."""
         while self._running:
-            text = self._queue.get()
+            item = self._queue.get()
+            text, voice, rate = item
             if not text or not self._running:
                 continue
 
             try:
-                # Use macOS say command with the configured voice
+                # Use macOS say command with the specified voice and rate
                 cmd = [
                     "say",
-                    "-v", self.config.voice_name,
-                    "-r", str(self.config.voice_rate),
+                    "-v", voice,
+                    "-r", str(rate),
                     text,
                 ]
-                subprocess.run(cmd, capture_output=True, timeout=60)
+                subprocess.run(cmd, capture_output=True, timeout=120)
             except (subprocess.TimeoutExpired, FileNotFoundError):
                 pass
