@@ -1,5 +1,6 @@
 """The main agent loop."""
 
+import re
 import signal
 import sys
 import threading
@@ -173,17 +174,67 @@ class JungAgent:
         return assistant_message
 
     def _log_stream(self, stream: str) -> None:
-        """Log the psyche's stream to console."""
+        """Log the psyche's stream to console with component labels."""
         timestamp = datetime.now().strftime("%H:%M:%S")
         print(f"\n[{timestamp}] STREAM:")
         print("-" * 40)
 
-        # Wrap and indent stream text
-        for line in stream.split("\n"):
-            if line.strip():
-                print(f"  {line}")
+        # Parse into segments by component
+        segments = self._parse_stream_components(stream)
+
+        for component, text in segments:
+            # Clean up text for display
+            text = text.strip()
+            if not text:
+                continue
+
+            # Format component label
+            if component != "default":
+                label = component.upper()
+                print(f"  [{label}]")
+
+            # Print text with indent
+            for line in text.split("\n"):
+                if line.strip():
+                    print(f"    {line.strip()}")
 
         print("-" * 40)
+
+    def _parse_stream_components(self, stream: str) -> list[tuple[str, str]]:
+        """Parse stream into (component, text) pairs."""
+        segments: list[tuple[str, str]] = []
+
+        # Pattern to find component labels
+        pattern = r"\[(SHADOW|ANIMA|ANIMUS|PERSONA|SELF)\]"
+
+        # Split by component labels, keeping the labels
+        parts = re.split(f"({pattern})", stream, flags=re.IGNORECASE)
+
+        current_component = "default"
+        current_text = ""
+
+        for part in parts:
+            if not part:
+                continue
+
+            match = re.match(pattern, part, re.IGNORECASE)
+            if match:
+                # Save previous segment
+                if current_text.strip():
+                    segments.append((current_component, current_text))
+                    current_text = ""
+
+                # Set new component
+                label = match.group(1).lower()
+                current_component = "anima" if label in ("anima", "animus") else label
+            else:
+                current_text += part
+
+        # Don't forget last segment
+        if current_text.strip():
+            segments.append((current_component, current_text))
+
+        return segments
 
     def _update_heartbeat(self, somatic: SomaticState) -> None:
         """Update heartbeat interval based on somatic state."""
