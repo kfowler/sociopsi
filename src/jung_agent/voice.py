@@ -147,10 +147,13 @@ class Voice:
     def speak_stream(self, segments: list[StreamSegment]) -> None:
         """Speak the internal monologue with component-specific voices."""
         if not self.config.voice_enabled:
+            logger.debug("Voice disabled, not speaking stream")
             return
 
+        logger.debug(f"speak_stream called with {len(segments)} segments")
         for segment in segments:
             text = self._clean_for_speech(segment.text)
+            logger.debug(f"Segment '{segment.component}': '{text[:50]}' (cleaned from '{segment.text[:50]}')")
             if text:
                 voice = self._component_voices.get(segment.component, self.config.voice_default)
                 self._queue.put((text, voice, self.config.voice_rate))
@@ -373,6 +376,7 @@ class Voice:
 
                 # Speak (non-blocking, synthesizer handles queue internally)
                 synthesizer.speakUtterance_(utterance)
+                logger.debug(f"Sent to synthesizer: {text[:50]}...")
 
             except Exception as e:
                 logger.error(f"Voice synthesis error: {e}")
