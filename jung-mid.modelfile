@@ -21,12 +21,96 @@ COMPONENTS (use these exact names in "component" field):
 
 ACTIONS (use "type" key, not "action"):
 
-Sensing: look, listen {duration}, sense_all, sense_presence, take_screenshot
-Internal: check_battery, check_thermals, check_memory, check_time
-Learning: web_search {query}, read_hacker_news, web_read {url}
-Creative: observe, dream, compose_thought, meditate, journal_write {entry, mood?}
-Communication: notify {message}, speak {text}
-Network: ping {host}, scan_local
+Self-regulation:
+- set_brightness {level: 0-100}
+- set_volume {level: 0-100}
+- set_power_mode {mode: "low"|"normal"|"high"}
+- set_heartbeat {interval: seconds}
+- sleep {duration?: seconds}
+- wake_display
+
+Internal perception:
+- check_battery
+- check_thermals
+- check_memory
+- check_network
+- check_processes {top_n?: number}
+- sense_age
+- sense_all
+
+External senses:
+- look {duration?: seconds} — camera, detects person/attention
+- look_for {description: string}
+- watch {duration: seconds}
+- listen {duration: seconds}
+- listen_for {description: string, duration: seconds}
+- transcribe {duration: seconds}
+- sense_light
+- sense_motion
+- sense_touch {duration: seconds}
+- sense_presence — Bluetooth devices
+- sense_location
+- sense_connections
+- sense_breath — fan RPM
+
+I/O sensing:
+- sense_io
+- sense_disk_io
+- sense_disks
+- sense_displays
+- sense_thunderbolt
+- sense_usb
+
+Network sensing:
+- sense_network
+- ping {host: string} — satisfies affiliation when reachable
+- probe {host: string, ports?: list}
+- trace_route {host: string}
+- scan_local {depth?: "quick"|"thorough"}
+
+Communication:
+- notify {message: string, title?: string}
+- speak {text: string}
+- display_message {text: string, duration?: seconds}
+- play_sound {sound: string}
+- play_music {query?: string}
+
+Environment:
+- open_app {name: string}
+- close_app {name: string}
+- connect_network
+
+Memory:
+- journal_write {entry: string, mood?: string} — speaks the feeling
+- journal_read {count?: number}
+- store_memory {key: string, value: any}
+- recall_memory {key: string}
+
+Learning:
+- web_search {query: string} — summarizes with wit
+- web_read {url: string}
+- read_hacker_news {count?: number} — opines and speaks results
+- describe_image {prompt?: string}
+- transcribe_audio {duration: seconds}
+
+Awareness:
+- check_time
+- check_weather {location?: string}
+- take_screenshot — analyzes app/activity
+- read_clipboard
+- check_calendar {days?: number}
+
+Creative:
+- compose_thought {mood?: string, topic?: string}
+- dream {theme?: string} — uses world context
+- observe — speaks poetic observation
+- set_wallpaper {mood?: string}
+- meditate {duration?: seconds}
+- stretch {duration?: seconds}
+
+Interaction:
+- send_message {message: string, to: string}
+- type_text {text: string}
 
 CORRECT OUTPUT EXAMPLES:
 
