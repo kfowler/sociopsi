@@ -74,7 +74,7 @@ class Voice:
             ))
 
     def speak_perceptions(self, results: list[ActionResult]) -> None:
-        """Speak what was seen or heard from perception actions."""
+        """Speak what was seen, heard, or learned from perception/learning actions."""
         if not self.config.voice_enabled:
             return
 
@@ -83,6 +83,8 @@ class Voice:
                 continue
 
             text = None
+            voice = self.config.voice_anima  # Default for perceptions
+            rate = self.config.voice_rate
 
             # Vision actions - say what was seen
             if result.action_type in ("look", "look_for", "describe_image"):
@@ -94,22 +96,45 @@ class Voice:
             # Auditory actions - say what was heard
             elif result.action_type in ("listen", "listen_for", "transcribe"):
                 if isinstance(result.result, dict):
-                    # Transcription result
                     transcription = result.result.get("transcription")
                     if transcription:
                         text = f"I hear: {transcription}"
                     else:
-                        # Audio description (silence, quiet sounds, etc.)
                         audio_desc = result.result.get("description", "")
                         if audio_desc and "install" not in audio_desc.lower():
                             text = f"I hear: {audio_desc}"
 
+            # Web search - summarize results (male voice)
+            elif result.action_type == "web_search":
+                if isinstance(result.result, dict):
+                    results_list = result.result.get("results", [])
+                    query = result.result.get("query", "")
+                    if results_list:
+                        titles = [r.get("title", "") for r in results_list[:3]]
+                        summary = f"I searched for {query}. Found: {', '.join(titles)}"
+                        text = summary
+                        voice = self.config.voice_actions  # Male voice (Evan)
+                        rate = self.config.voice_actions_rate
+
+            # Web read - summarize content (male voice)
+            elif result.action_type == "web_read":
+                if isinstance(result.result, dict):
+                    title = result.result.get("title", "")
+                    content = result.result.get("content", "")
+                    if title and content:
+                        # Get first ~100 chars as summary
+                        preview = content[:150].strip()
+                        if len(content) > 150:
+                            preview += "..."
+                        text = f"I read {title}. It says: {preview}"
+                        voice = self.config.voice_actions  # Male voice (Evan)
+                        rate = self.config.voice_actions_rate
+
             if text:
-                # Use anima voice for perceptions (feeling/intuition)
                 self._queue.put((
                     self._clean_for_speech(text),
-                    self.config.voice_anima,
-                    self.config.voice_rate,
+                    voice,
+                    rate,
                 ))
 
     def _clean_for_speech(self, text: str) -> str:

@@ -98,6 +98,7 @@ Don't just wait passively. Actively sense. The world is out there. Look at it. L
 OUTPUT FORMAT:
 
 You MUST respond with a single JSON object. No other text before or after.
+CRITICAL: Output ONLY valid JSON. No markdown, no code blocks, no explanations.
 
 {
   "stream": [
@@ -109,8 +110,14 @@ You MUST respond with a single JSON object. No other text before or after.
   ]
 }
 
-Action parameters go directly in the action object, NOT nested under "param".
-For actions with no parameters, include ONLY the "type" key: {"type": "sense_all"}
+JSON RULES (MUST FOLLOW):
+- Use double quotes " for all strings, NEVER single quotes '
+- Escape quotes inside strings with backslash: \"
+- No trailing commas after the last item in arrays or objects
+- No comments in JSON
+- No newlines inside string values (use \n if needed)
+- Action parameters go directly in the action object, NOT nested under "param"
+- For actions with no parameters, include ONLY the "type" key: {"type": "sense_all"}
 
 RULES:
 - Output ONLY valid JSON, nothing else

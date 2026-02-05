@@ -11,22 +11,57 @@ from urllib.parse import quote_plus
 
 def web_search(query: str) -> dict[str, Any]:
     """Search the web and return results."""
-    try:
-        # Use ddgr (DuckDuckGo CLI) if available, otherwise fallback
-        encoded_query = quote_plus(query)
+    encoded_query = quote_plus(query)
 
-        # Try ddgr first (brew install ddgr)
-        try:
-            result = subprocess.run(
-                ["ddgr", "--json", "-n", "5", query],
-                capture_output=True,
-                text=True,
-                timeout=30,
-            )
-            if result.returncode == 0:
-                results = json.loads(result.stdout)
+    # Try Wikipedia API first (most reliable)
+    try:
+        result = subprocess.run(
+            [
+                "curl", "-s",
+                f"https://en.wikipedia.org/w/api.php?action=opensearch&search={encoded_query}&limit=5&format=json",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+
+        if result.returncode == 0:
+            data = json.loads(result.stdout)
+            if len(data) >= 4 and data[1]:
+                titles, descriptions, urls = data[1], data[2], data[3]
+                results = []
+                for i, title in enumerate(titles):
+                    results.append({
+                        "title": title,
+                        "url": urls[i] if i < len(urls) else "",
+                        "abstract": descriptions[i] if i < len(descriptions) else "",
+                    })
+
+                if results:
+                    return {
+                        "query": query,
+                        "source": "wikipedia",
+                        "results": results,
+                        "count": len(results),
+                        "description": f"Found {len(results)} results for '{query}'",
+                    }
+    except Exception:
+        pass
+
+    # Try ddgr if available
+    try:
+        result = subprocess.run(
+            ["ddgr", "--json", "-n", "5", query],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if result.returncode == 0 and result.stdout.strip() not in ("[]", ""):
+            results = json.loads(result.stdout)
+            if results:
                 return {
                     "query": query,
+                    "source": "duckduckgo",
                     "results": [
                         {
                             "title": r.get("title", ""),
@@ -38,63 +73,44 @@ def web_search(query: str) -> dict[str, Any]:
                     "count": len(results),
                     "description": f"Found {len(results)} results for '{query}'",
                 }
-        except FileNotFoundError:
-            pass
+    except (FileNotFoundError, json.JSONDecodeError):
+        pass
 
-        # Fallback: use curl with DuckDuckGo HTML API
+    # Fallback: Brave Search (no API key needed for limited use)
+    try:
         result = subprocess.run(
             [
-                "curl",
-                "-s",
-                "-A", "Mozilla/5.0",
-                f"https://html.duckduckgo.com/html/?q={encoded_query}",
+                "curl", "-s",
+                "-H", "Accept: application/json",
+                f"https://search.brave.com/api/suggest?q={encoded_query}",
             ],
             capture_output=True,
             text=True,
-            timeout=30,
+            timeout=15,
         )
 
         if result.returncode == 0:
-            # Parse simple results from HTML
-            html = result.stdout
-            results = []
+            data = json.loads(result.stdout)
+            suggestions = data.get("results", []) or data.get("suggestions", [])
+            if suggestions:
+                results = [{"title": s, "url": "", "abstract": ""} for s in suggestions[:5]]
+                return {
+                    "query": query,
+                    "source": "brave_suggest",
+                    "results": results,
+                    "count": len(results),
+                    "description": f"Found {len(results)} suggestions for '{query}'",
+                }
+    except Exception:
+        pass
 
-            # Extract result snippets (simplified parsing)
-            for match in re.finditer(
-                r'class="result__a"[^>]*href="([^"]*)"[^>]*>([^<]*)</a>.*?'
-                r'class="result__snippet"[^>]*>([^<]*)<',
-                html,
-                re.DOTALL,
-            ):
-                url, title, snippet = match.groups()
-                # Clean up DuckDuckGo redirect URLs
-                if "uddg=" in url:
-                    url_match = re.search(r"uddg=([^&]*)", url)
-                    if url_match:
-                        from urllib.parse import unquote
-                        url = unquote(url_match.group(1))
-
-                results.append({
-                    "title": title.strip(),
-                    "url": url,
-                    "abstract": snippet.strip()[:200],
-                })
-                if len(results) >= 5:
-                    break
-
-            return {
-                "query": query,
-                "results": results,
-                "count": len(results),
-                "description": f"Found {len(results)} results for '{query}'" if results else "No results found",
-            }
-
-        return {"query": query, "error": "Search failed", "description": "Could not search the web"}
-
-    except subprocess.TimeoutExpired:
-        return {"query": query, "error": "timeout", "description": "Search timed out"}
-    except Exception as e:
-        return {"query": query, "error": str(e), "description": f"Search failed: {e}"}
+    return {
+        "query": query,
+        "error": "All search providers failed",
+        "results": [],
+        "count": 0,
+        "description": f"Could not find results for '{query}'",
+    }
 
 
 def web_read(url: str) -> dict[str, Any]:
