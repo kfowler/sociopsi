@@ -8,6 +8,8 @@ from datetime import datetime
 from types import FrameType
 from typing import Final, Literal, TypedDict
 
+from Foundation import NSDate, NSDefaultRunLoopMode, NSRunLoop
+
 from jung_agent.actions.executor import ActionExecutor
 from jung_agent.config import AgentConfig, load_system_prompt
 from jung_agent.drives import DriveSystem
@@ -317,12 +319,12 @@ class JungAgent:
 
                 traceback.print_exc()
 
-            # 9. Wait for next heartbeat (or interrupt)
+            # 9. Wait for next heartbeat while pumping run loop for voice callbacks
             elapsed = time.time() - loop_start
             wait_time = max(0, self._current_interval - elapsed)
 
             if wait_time > 0:
-                self._shutdown_event.wait(wait_time)
+                self._wait_with_runloop(wait_time)
 
     def _query_psyche(self, perception: str) -> str:
         """Query the psyche model."""
@@ -410,6 +412,19 @@ class JungAgent:
         # Log if changed
         if old_interval != self._current_interval:
             print(f"  [HEARTBEAT] {old_mode} -> {self._heartbeat_mode} ({self._current_interval}s)")
+
+    def _wait_with_runloop(self, wait_time: float) -> None:
+        """Wait while pumping NSRunLoop for voice delegate callbacks."""
+        run_loop = NSRunLoop.currentRunLoop()
+        interval = 0.05  # 50ms chunks
+        remaining = wait_time
+
+        while remaining > 0 and not self._shutdown_event.is_set():
+            # Pump the run loop to process voice callbacks
+            run_loop.runMode_beforeDate_(
+                NSDefaultRunLoopMode, NSDate.dateWithTimeIntervalSinceNow_(min(interval, remaining))
+            )
+            remaining -= interval
 
 
 def run_single(config: AgentConfig | None = None, perception: str | None = None) -> str:
