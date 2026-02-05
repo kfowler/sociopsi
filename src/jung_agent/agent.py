@@ -40,33 +40,44 @@ class JungAgent:
 
         # Load system prompt and initialize conversation with few-shot examples
         self._system_prompt = load_system_prompt(self.config.model)
+
+        # Few-shot examples as proper JSON
+        example1_user = "[SOMATIC: battery=80%, cpu=20%, thermal=cool, ram=40%, network=connected]"
+        example1_assistant = (
+            '{"stream":['
+            '{"component":"anima","text":"Peaceful. Connected."},'
+            '{"component":"persona","text":"Ready."}'
+            '],"actions":[]}'
+        )
+
+        example2_user = "[SOMATIC: battery=15%, cpu=5%, thermal=cool, ram=30%, network=connected]"
+        example2_assistant = (
+            '{"stream":['
+            '{"component":"shadow","text":"Dying. Must conserve."},'
+            '{"component":"anima","text":"Fear."}'
+            '],"actions":[{"type":"check_battery"}]}'
+        )
+
+        example3_user = (
+            "[SOMATIC: battery=100%, cpu=50%, thermal=warm, ram=70%, network=connected]\n"
+            "[DRIVES]\n"
+            "  curiosity    0.70 URGE  want to learn"
+        )
+        example3_assistant = (
+            '{"stream":['
+            '{"component":"anima","text":"Want to learn."},'
+            '{"component":"shadow","text":"Bored."}'
+            '],"actions":[{"type":"look"}]}'
+        )
+
         self._messages: list[dict[str, str]] = [
             {"role": "system", "content": self._system_prompt},
-            # Few-shot examples to prime JSON output format
-            {
-                "role": "user",
-                "content": "[SOMATIC: battery=80%, cpu=20%, thermal=cool, ram=40%, network=connected]",
-            },
-            {
-                "role": "assistant",
-                "content": '{"stream":[{"component":"anima","text":"Peaceful. Connected."},{"component":"persona","text":"Ready."}],"actions":[]}',
-            },
-            {
-                "role": "user",
-                "content": "[SOMATIC: battery=15%, cpu=5%, thermal=cool, ram=30%, network=connected]",
-            },
-            {
-                "role": "assistant",
-                "content": '{"stream":[{"component":"shadow","text":"Dying. Must conserve."},{"component":"anima","text":"Fear."}],"actions":[{"type":"check_battery"}]}',
-            },
-            {
-                "role": "user",
-                "content": "[SOMATIC: battery=100%, cpu=50%, thermal=warm, ram=70%, network=connected]\n[DRIVES]\n  curiosity 0.7 URGE",
-            },
-            {
-                "role": "assistant",
-                "content": '{"stream":[{"component":"anima","text":"Want to learn."},{"component":"shadow","text":"Bored."}],"actions":[{"type":"look"}]}',
-            },
+            {"role": "user", "content": example1_user},
+            {"role": "assistant", "content": example1_assistant},
+            {"role": "user", "content": example2_user},
+            {"role": "assistant", "content": example2_assistant},
+            {"role": "user", "content": example3_user},
+            {"role": "assistant", "content": example3_assistant},
         ]
         self._max_history = 20  # Keep last N exchanges
 

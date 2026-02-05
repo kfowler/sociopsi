@@ -141,7 +141,7 @@ DRIVE_SUGGESTIONS: dict[str, list[str]] = {
     "integrity": ["check_thermals", "check_memory"],
     "arousal": ["sense_all", "check_processes"],
     "competence": [],  # satisfied by any successful action
-    "certainty": ["sense_all", "recall_memory"],
+    "certainty": ["sense_all", "journal_read"],  # removed recall_memory (needs key)
     "curiosity": ["look", "journal_read"],  # removed web_search (needs query)
     "affiliation": ["look", "listen", "sense_presence"],
     "recognition": ["notify"],  # removed speak (needs text)
