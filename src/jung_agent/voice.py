@@ -260,13 +260,15 @@ class Voice:
                     logger.debug(f"Voice '{config_voice}' not found")
 
     def _create_synthesizers(self) -> None:
-        """Create one synthesizer per unique voice."""
+        """Create one synthesizer per unique voice and warm them up."""
         created_voices: set[str] = set()
 
         for voice_name, voice_id in self._voice_ids.items():
             if voice_id not in created_voices:
                 synth = NSSpeechSynthesizer.alloc().init()
                 synth.setVoice_(voice_id)
+                # Warm up by speaking empty string (primes audio subsystem)
+                synth.startSpeakingString_(" ")
                 self._synthesizers[voice_name] = synth
                 created_voices.add(voice_id)
                 logger.debug(f"Preloaded voice: {voice_name}")
