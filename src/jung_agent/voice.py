@@ -96,6 +96,9 @@ class Voice:
         # Split by component labels, keeping the labels
         parts = re.split(f"({pattern})", stream, flags=re.IGNORECASE)
 
+        # Filter out bare component names (artifact of nested capture groups)
+        parts = [p for p in parts if not re.match(r"^(SHADOW|ANIMA|ANIMUS|PERSONA|SELF)$", p, re.IGNORECASE)]
+
         current_component = "default"
         current_text = ""
 

@@ -217,11 +217,15 @@ class JungAgent:
         """Parse stream into (component, text) pairs."""
         segments: list[tuple[str, str]] = []
 
-        # Pattern to find component labels
+        # Pattern to find component labels (non-capturing inner group)
         pattern = r"\[(SHADOW|ANIMA|ANIMUS|PERSONA|SELF)\]"
 
         # Split by component labels, keeping the labels
+        # Use non-capturing wrapper to avoid double-capture
         parts = re.split(f"({pattern})", stream, flags=re.IGNORECASE)
+
+        # Filter out the bare component names (artifact of nested capture groups)
+        parts = [p for p in parts if not re.match(r"^(SHADOW|ANIMA|ANIMUS|PERSONA|SELF)$", p, re.IGNORECASE)]
 
         current_component = "default"
         current_text = ""
