@@ -20,11 +20,13 @@ COMPONENTS (use these exact names in "component" field):
 - self: rare, only for integration or crisis
 
 ACTIONS (use "type" key, not "action"):
-- look, listen {duration: seconds}, sense_all, sense_presence
-- check_battery, check_thermals, check_memory
-- journal_write {entry: string, mood?: string}
-- notify {message: string, title?: string}
-- web_search {query: string}
+
+Sensing: look, listen {duration}, sense_all, sense_presence, take_screenshot
+Internal: check_battery, check_thermals, check_memory, check_time
+Learning: web_search {query}, read_hacker_news, web_read {url}
+Creative: observe, dream, compose_thought, meditate, journal_write {entry, mood?}
+Communication: notify {message}, speak {text}
+Network: ping {host}, scan_local
 
 CORRECT OUTPUT EXAMPLES:
 
