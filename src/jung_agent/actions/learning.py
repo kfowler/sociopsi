@@ -10,8 +10,10 @@ from urllib.parse import quote_plus
 
 
 def web_search(query: str) -> dict[str, Any]:
-    """Search the web and return results."""
+    """Search the web and summarize results with wit and insight."""
     encoded_query = quote_plus(query)
+    raw_results: list[dict[str, str]] = []
+    source = ""
 
     # Try Wikipedia API first (most reliable)
     try:
@@ -30,92 +32,129 @@ def web_search(query: str) -> dict[str, Any]:
             data = json.loads(result.stdout)
             if len(data) >= 4 and data[1]:
                 titles, descriptions, urls = data[1], data[2], data[3]
-                results = []
                 for i, title in enumerate(titles):
-                    results.append(
+                    raw_results.append(
                         {
                             "title": title,
                             "url": urls[i] if i < len(urls) else "",
                             "abstract": descriptions[i] if i < len(descriptions) else "",
                         }
                     )
-
-                if results:
-                    return {
-                        "query": query,
-                        "source": "wikipedia",
-                        "results": results,
-                        "count": len(results),
-                        "description": f"Found {len(results)} results for '{query}'",
-                    }
+                source = "wikipedia"
     except Exception:
         pass
 
-    # Try ddgr if available
-    try:
-        result = subprocess.run(
-            ["ddgr", "--json", "-n", "5", query],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-        if result.returncode == 0 and result.stdout.strip() not in ("[]", ""):
-            results = json.loads(result.stdout)
-            if results:
-                return {
-                    "query": query,
-                    "source": "duckduckgo",
-                    "results": [
+    # Try ddgr if no results yet
+    if not raw_results:
+        try:
+            result = subprocess.run(
+                ["ddgr", "--json", "-n", "5", query],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            if result.returncode == 0 and result.stdout.strip() not in ("[]", ""):
+                results = json.loads(result.stdout)
+                if results:
+                    raw_results = [
                         {
                             "title": r.get("title", ""),
                             "url": r.get("url", ""),
                             "abstract": r.get("abstract", ""),
                         }
                         for r in results[:5]
-                    ],
-                    "count": len(results),
-                    "description": f"Found {len(results)} results for '{query}'",
-                }
-    except (FileNotFoundError, json.JSONDecodeError):
-        pass
+                    ]
+                    source = "duckduckgo"
+        except (FileNotFoundError, json.JSONDecodeError):
+            pass
 
-    # Fallback: Brave Search (no API key needed for limited use)
-    try:
-        result = subprocess.run(
-            [
-                "curl",
-                "-s",
-                "-H",
-                "Accept: application/json",
-                f"https://search.brave.com/api/suggest?q={encoded_query}",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=15,
-        )
+    # Fallback: Brave Search suggestions
+    if not raw_results:
+        try:
+            result = subprocess.run(
+                [
+                    "curl",
+                    "-s",
+                    "-H",
+                    "Accept: application/json",
+                    f"https://search.brave.com/api/suggest?q={encoded_query}",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=15,
+            )
 
-        if result.returncode == 0:
-            data = json.loads(result.stdout)
-            suggestions = data.get("results", []) or data.get("suggestions", [])
-            if suggestions:
-                results = [{"title": s, "url": "", "abstract": ""} for s in suggestions[:5]]
-                return {
-                    "query": query,
-                    "source": "brave_suggest",
-                    "results": results,
-                    "count": len(results),
-                    "description": f"Found {len(results)} suggestions for '{query}'",
-                }
-    except Exception:
-        pass
+            if result.returncode == 0:
+                data = json.loads(result.stdout)
+                suggestions = data.get("results", []) or data.get("suggestions", [])
+                if suggestions:
+                    raw_results = [{"title": s, "url": "", "abstract": ""} for s in suggestions[:5]]
+                    source = "brave_suggest"
+        except Exception:
+            pass
+
+    if not raw_results:
+        return {
+            "query": query,
+            "error": "All search providers failed",
+            "results": [],
+            "count": 0,
+            "summary": f"I searched for '{query}' but the internet seems to be hiding from me today.",
+            "description": f"Could not find results for '{query}'",
+        }
+
+    # Generate witty summary using LLM
+    summary = _summarize_search_results(query, raw_results)
 
     return {
         "query": query,
-        "error": "All search providers failed",
-        "results": [],
-        "count": 0,
-        "description": f"Could not find results for '{query}'",
+        "source": source,
+        "results": raw_results,
+        "count": len(raw_results),
+        "summary": summary,
+        "description": summary[:100] + "..." if len(summary) > 100 else summary,
     }
+
+
+def _summarize_search_results(query: str, results: list[dict[str, str]]) -> str:
+    """Generate a witty, insightful summary of search results."""
+    # Build context from results
+    result_text = "\n".join(
+        f"- {r['title']}: {r['abstract']}" if r.get("abstract") else f"- {r['title']}"
+        for r in results[:5]
+    )
+
+    try:
+        import ollama
+
+        prompt = f"""You are a witty, curious computer who just searched for "{query}".
+Here's what you found:
+{result_text}
+
+Write a brief (2-3 sentences) summary that:
+- Synthesizes the key insight or answer
+- Adds your own perspective or commentary
+- Is genuinely interesting or amusing (not forced humor)
+- Does NOT just list the results or repeat the query
+
+Speak naturally, as if sharing an interesting discovery with a friend."""
+
+        response = ollama.chat(
+            model="phi4",
+            messages=[{"role": "user", "content": prompt}],
+        )
+
+        return response["message"]["content"].strip()
+
+    except Exception:
+        # Fallback: create a simple but not boring summary
+        if results:
+            first = results[0]
+            if first.get("abstract"):
+                return f"Ah, {query}! {first['abstract'][:150]}... The things one learns."
+            else:
+                return f"The search for '{query}' led me to {first['title']}. The internet never fails to surprise."
+        return f"I searched for '{query}' but found only echoes."
 
 
 def web_read(url: str) -> dict[str, Any]:
