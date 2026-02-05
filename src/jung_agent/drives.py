@@ -195,6 +195,7 @@ class DriveSystem:
         self._idle_cycles: int = 0
         self._recent_failures: int = 0
         self._recent_successes: int = 0
+        self._recently_saw_person: bool = False  # Track if person was seen recently
 
         # Initialize drives
         for name, cfg in DRIVE_CONFIGS.items():
@@ -320,6 +321,8 @@ class DriveSystem:
         # Affiliation
         if somatic.lid_state.value == "closed":
             d["affiliation"].reason = "isolated, lid closed"
+        elif self._recently_saw_person:
+            d["affiliation"].reason = "someone nearby"
         elif d["affiliation"].demand > 0.7:
             d["affiliation"].reason = "lonely, no one seen"
         else:
@@ -333,6 +336,9 @@ class DriveSystem:
 
     def satisfy_from_results(self, results: list[ActionResult]) -> None:
         """Apply satisfaction from action results."""
+        # Reset person sighting flag at start of new results processing
+        self._recently_saw_person = False
+
         for result in results:
             action_type = result.action_type
 
@@ -354,6 +360,13 @@ class DriveSystem:
             # Apply specific satisfaction mapping
             if action_type in SATISFACTION_MAP:
                 result_dict = result.result if isinstance(result.result, dict) else {}
+
+                # Track if we saw a person (for affiliation reason updates)
+                if action_type in ("look", "look_for"):
+                    description = result_dict.get("description", "").lower()
+                    if "person" in description or "man" in description or "woman" in description:
+                        self._recently_saw_person = True
+
                 for drive_name, value in SATISFACTION_MAP[action_type].items():
                     if drive_name in self.drives:
                         if callable(value):
@@ -362,6 +375,10 @@ class DriveSystem:
                             sat = value
                         if sat > 0:
                             self.drives[drive_name].satisfy(sat)
+
+        # Update affiliation reason immediately if person was seen
+        if self._recently_saw_person:
+            self.drives["affiliation"].reason = "someone nearby"
 
     def get_suggestions(self) -> list[tuple[str, str, str]]:
         """Get suggested actions for urgent drives.
