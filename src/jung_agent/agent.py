@@ -8,7 +8,7 @@ from datetime import datetime
 from types import FrameType
 from typing import Final, Literal, TypedDict
 
-from Foundation import NSDate, NSDefaultRunLoopMode, NSRunLoop
+from Foundation import NSDate, NSDefaultRunLoopMode, NSOrderedAscending, NSRunLoop
 
 from jung_agent.actions.executor import ActionExecutor
 from jung_agent.config import AgentConfig, load_system_prompt
@@ -146,185 +146,203 @@ class JungAgent:
         sys.exit(0)
 
     def _run_loop(self) -> None:
-        """Main agent loop."""
+        """Main agent loop driven by NSRunLoop.
+
+        Uses NSRunLoop as the main driver, which allows voice delegate
+        callbacks to fire naturally without manual pumping.
+        """
+        run_loop = NSRunLoop.currentRunLoop()
         cycle_count = 0
+
         while self._running:
-            loop_start = time.time()
+            cycle_start = time.time()
             cycle_count += 1
 
-            try:
-                # Header with cycle number and timestamp
-                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                print(f"\n{'=' * 70}")
-                print(f"{colors.BOLD}[CYCLE {cycle_count}] {timestamp}{colors.RESET}")
-                print("=" * 70)
+            # Run one cycle
+            self._run_cycle(cycle_count)
 
-                # 1. Gather somatic state
-                somatic = gather_somatic()
+            # Calculate wait time until next cycle
+            elapsed = time.time() - cycle_start
+            wait_time = max(0.1, self._current_interval - elapsed)
 
-                # 2. Collect events
-                events = self.event_collector.collect_events(somatic)
+            # Wait until deadline while servicing the run loop
+            # This allows voice callbacks to fire naturally
+            deadline = NSDate.dateWithTimeIntervalSinceNow_(wait_time)
+            while (
+                self._running
+                and NSDate.date().compare_(deadline) == NSOrderedAscending
+            ):
+                # Run loop returns when: input processed, deadline reached, or no sources
+                run_loop.runMode_beforeDate_(NSDefaultRunLoopMode, deadline)
 
-                # 3. Update drives
-                now = time.time()
-                dt = now - self._last_update_time
-                self._last_update_time = now
-                had_actions = len(self._last_action_results) > 0
-                self.drive_system.update(somatic, dt, had_actions)
+    def _run_cycle(self, cycle_count: int) -> None:
+        """Run one perception-action cycle."""
+        try:
+            # Header with cycle number and timestamp
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            print(f"\n{'=' * 70}")
+            print(f"{colors.BOLD}[CYCLE {cycle_count}] {timestamp}{colors.RESET}")
+            print("=" * 70)
 
-                # 4. Check for compulsive actions (survival override)
-                compulsive = self.drive_system.get_compulsive_actions(somatic)
-                if compulsive:
-                    print(f"\n{colors.RED}[COMPULSIVE - SURVIVAL]{colors.RESET}")
-                    for action in compulsive:
-                        print(f"  ! {action.type} (drive override)")
+            # 1. Gather somatic state
+            somatic = gather_somatic()
 
-                # 5. Print somatic state summary
-                print(f"\n{colors.BLUE}[SOMATIC]{colors.RESET} {somatic.to_tag()}")
-                print(f"  Battery: {somatic.battery_percent}% ({somatic.power_state.value})")
-                print(f"  CPU: {somatic.cpu_percent:.1f}% | RAM: {somatic.ram_percent:.1f}%")
-                print(f"  Thermal: {somatic.thermal_state.value} | Fan: {somatic.fan_rpm} RPM")
-                print(f"  Network: {somatic.network_state.value} | Lid: {somatic.lid_state.value}")
+            # 2. Collect events
+            events = self.event_collector.collect_events(somatic)
 
-                # 6. Print drive state
-                print(f"\n{colors.MAGENTA}[DRIVES]{colors.RESET}")
-                for line in self.drive_system.format_for_perception().split("\n")[1:]:
-                    if line.strip():
-                        print(f"  {line}")
+            # 3. Update drives
+            now = time.time()
+            dt = now - self._last_update_time
+            self._last_update_time = now
+            had_actions = len(self._last_action_results) > 0
+            self.drive_system.update(somatic, dt, had_actions)
 
-                # 7. Print events if any
-                if events:
-                    print(f"\n{colors.CYAN}[EVENTS]{colors.RESET}")
-                    for event in events:
-                        ts = event.timestamp.strftime("%H:%M:%S")
-                        print(f"  [{ts}] {event.type}: {event.description}")
+            # 4. Check for compulsive actions (survival override)
+            compulsive = self.drive_system.get_compulsive_actions(somatic)
+            if compulsive:
+                print(f"\n{colors.RED}[COMPULSIVE - SURVIVAL]{colors.RESET}")
+                for action in compulsive:
+                    print(f"  ! {action.type} (drive override)")
 
-                # 8. Format full perception (including drives)
-                drive_perception = self.drive_system.format_for_perception()
-                perception = format_perception(
-                    config=self.config,
-                    somatic=somatic,
-                    events=events,
-                    action_results=self._last_action_results,
-                    heartbeat_interval=self._current_interval,
-                    heartbeat_mode=self._heartbeat_mode,
-                    drives=drive_perception,
-                )
+            # 5. Print somatic state summary
+            print(f"\n{colors.BLUE}[SOMATIC]{colors.RESET} {somatic.to_tag()}")
+            print(f"  Battery: {somatic.battery_percent}% ({somatic.power_state.value})")
+            print(f"  CPU: {somatic.cpu_percent:.1f}% | RAM: {somatic.ram_percent:.1f}%")
+            print(f"  Thermal: {somatic.thermal_state.value} | Fan: {somatic.fan_rpm} RPM")
+            print(f"  Network: {somatic.network_state.value} | Lid: {somatic.lid_state.value}")
 
-                # 6. Send to psyche
-                response = self._query_psyche(perception)
+            # 6. Print drive state
+            print(f"\n{colors.MAGENTA}[DRIVES]{colors.RESET}")
+            for line in self.drive_system.format_for_perception().split("\n")[1:]:
+                if line.strip():
+                    print(f"  {line}")
 
-                # 7. Parse response
-                parsed = parse_response(response)
+            # 7. Print events if any
+            if events:
+                print(f"\n{colors.CYAN}[EVENTS]{colors.RESET}")
+                for event in events:
+                    ts = event.timestamp.strftime("%H:%M:%S")
+                    print(f"  [{ts}] {event.type}: {event.description}")
 
-                # 8. Print raw response if no stream parsed
-                if not parsed.stream and not parsed.actions:
-                    print(f"\n{colors.RED}[RAW RESPONSE - PARSE FAILED]{colors.RESET}")
-                    print(response[:500] + ("..." if len(response) > 500 else ""))
+            # 8. Format full perception (including drives)
+            drive_perception = self.drive_system.format_for_perception()
+            perception = format_perception(
+                config=self.config,
+                somatic=somatic,
+                events=events,
+                action_results=self._last_action_results,
+                heartbeat_interval=self._current_interval,
+                heartbeat_mode=self._heartbeat_mode,
+                drives=drive_perception,
+            )
 
-                # 9. Log and speak stream
-                if self.config.log_stream:
-                    self._log_stream(parsed.stream)
+            # 9. Send to psyche
+            response = self._query_psyche(perception)
 
-                # Speak the internal monologue
-                self.voice.speak_stream(parsed.stream)
+            # 10. Parse response
+            parsed = parse_response(response)
 
-                # 10. Build final action list
-                final_actions: list[Action] = []
+            # 11. Print raw response if no stream parsed
+            if not parsed.stream and not parsed.actions:
+                print(f"\n{colors.RED}[RAW RESPONSE - PARSE FAILED]{colors.RESET}")
+                print(response[:500] + ("..." if len(response) > 500 else ""))
 
-                # Add compulsive actions first (survival override)
-                if compulsive:
-                    final_actions.extend(compulsive)
+            # 12. Log and speak stream
+            if self.config.log_stream:
+                self._log_stream(parsed.stream)
 
-                # Get primed actions for high-urgency drives
-                primed = self.drive_system.get_primed_actions()
-                proposed_types = {a.type for a in parsed.actions}
-                for action in primed:
-                    if action.type not in proposed_types:
-                        final_actions.append(action)
+            # Speak the internal monologue
+            self.voice.speak_stream(parsed.stream)
 
-                # Add LLM-proposed actions
-                final_actions.extend(parsed.actions)
+            # 13. Build final action list
+            final_actions: list[Action] = []
 
-                # Announce and execute actions
-                if final_actions:
-                    print(f"\n{colors.YELLOW}[ACTIONS]{colors.RESET}")
-                    for i, action in enumerate(final_actions, 1):
-                        # Mark source of action
-                        if action in compulsive:
-                            source = f" {colors.RED}(compulsive){colors.RESET}"
-                        elif action in primed:
-                            source = f" {colors.MAGENTA}(primed){colors.RESET}"
-                        else:
-                            source = ""
-                        params_str = ", ".join(f"{k}={v!r}" for k, v in action.params.items())
-                        if params_str:
-                            print(f"  {i}. {action.type}({params_str}){source}")
-                        else:
-                            print(f"  {i}. {action.type}(){source}")
-                    self.voice.announce_actions(final_actions)
-                else:
-                    print(f"\n{colors.YELLOW}[ACTIONS]{colors.RESET} (none)")
+            # Add compulsive actions first (survival override)
+            if compulsive:
+                final_actions.extend(compulsive)
 
-                self._last_action_results = self.executor.execute_all(final_actions)
+            # Get primed actions for high-urgency drives
+            primed = self.drive_system.get_primed_actions()
+            proposed_types = {a.type for a in parsed.actions}
+            for action in primed:
+                if action.type not in proposed_types:
+                    final_actions.append(action)
 
-                # Satisfy drives from action results
-                self.drive_system.satisfy_from_results(self._last_action_results)
+            # Add LLM-proposed actions
+            final_actions.extend(parsed.actions)
 
-                # Speak what was seen/heard
-                self.voice.speak_perceptions(self._last_action_results)
+            # 14. Announce and execute actions
+            if final_actions:
+                print(f"\n{colors.YELLOW}[ACTIONS]{colors.RESET}")
+                for i, action in enumerate(final_actions, 1):
+                    # Mark source of action
+                    if action in compulsive:
+                        source = f" {colors.RED}(compulsive){colors.RESET}"
+                    elif action in primed:
+                        source = f" {colors.MAGENTA}(primed){colors.RESET}"
+                    else:
+                        source = ""
+                    params_str = ", ".join(f"{k}={v!r}" for k, v in action.params.items())
+                    if params_str:
+                        print(f"  {i}. {action.type}({params_str}){source}")
+                    else:
+                        print(f"  {i}. {action.type}(){source}")
+                self.voice.announce_actions(final_actions)
+            else:
+                print(f"\n{colors.YELLOW}[ACTIONS]{colors.RESET} (none)")
 
-                # Log action results with full details
-                if self._last_action_results:
-                    print(f"\n{colors.GREEN}[RESULTS]{colors.RESET}")
-                    for result in self._last_action_results:
-                        status_color = colors.GREEN if result.success else colors.RED
-                        status = "✓" if result.success else "✗"
-                        print(f"  {status_color}{status} {result.action_type}{colors.RESET}")
-                        if result.success and isinstance(result.result, dict):
-                            # Print all result fields
-                            for key, value in result.result.items():
-                                if key != "full_data":  # Skip raw image data
-                                    if isinstance(value, str) and len(value) > 100:
-                                        value = value[:100] + "..."
-                                    print(f"      {colors.DIM}{key}: {value}{colors.RESET}")
-                        elif not result.success and result.error:
-                            print(f"      {colors.DIM}Error: {result.error}{colors.RESET}")
+            self._last_action_results = self.executor.execute_all(final_actions)
 
-                # 11. Log perception, drives, and state
-                self.logger.log_cycle(
-                    perception=perception,
-                    somatic=somatic,
-                    stream=parsed.stream,
-                    actions=[a.type for a in final_actions],
-                    action_results=self._last_action_results,
-                    heartbeat_interval=self._current_interval,
-                    heartbeat_mode=self._heartbeat_mode,
-                    drives=self.drive_system.get_state(),
-                )
+            # 15. Satisfy drives from action results
+            self.drive_system.satisfy_from_results(self._last_action_results)
 
-                # 9. Check for heartbeat override
-                override = self.executor.get_heartbeat_override()
-                if override is not None:
-                    self._current_interval = override
-                    self._heartbeat_mode = "override"
-                    print(f"  [HEARTBEAT] Set to {override}s by psyche")
-                else:
-                    # Adaptive heartbeat
-                    self._update_heartbeat(somatic)
+            # 16. Speak what was seen/heard
+            self.voice.speak_perceptions(self._last_action_results)
 
-            except Exception as e:
-                print(f"Error in loop: {e}")
-                import traceback
+            # 17. Log action results with full details
+            if self._last_action_results:
+                print(f"\n{colors.GREEN}[RESULTS]{colors.RESET}")
+                for result in self._last_action_results:
+                    status_color = colors.GREEN if result.success else colors.RED
+                    status = "✓" if result.success else "✗"
+                    print(f"  {status_color}{status} {result.action_type}{colors.RESET}")
+                    if result.success and isinstance(result.result, dict):
+                        # Print all result fields
+                        for key, value in result.result.items():
+                            if key != "full_data":  # Skip raw image data
+                                if isinstance(value, str) and len(value) > 100:
+                                    value = value[:100] + "..."
+                                print(f"      {colors.DIM}{key}: {value}{colors.RESET}")
+                    elif not result.success and result.error:
+                        print(f"      {colors.DIM}Error: {result.error}{colors.RESET}")
 
-                traceback.print_exc()
+            # 18. Log perception, drives, and state
+            self.logger.log_cycle(
+                perception=perception,
+                somatic=somatic,
+                stream=parsed.stream,
+                actions=[a.type for a in final_actions],
+                action_results=self._last_action_results,
+                heartbeat_interval=self._current_interval,
+                heartbeat_mode=self._heartbeat_mode,
+                drives=self.drive_system.get_state(),
+            )
 
-            # 9. Wait for next heartbeat while pumping run loop for voice callbacks
-            elapsed = time.time() - loop_start
-            wait_time = max(0, self._current_interval - elapsed)
+            # 19. Check for heartbeat override
+            override = self.executor.get_heartbeat_override()
+            if override is not None:
+                self._current_interval = override
+                self._heartbeat_mode = "override"
+                print(f"  [HEARTBEAT] Set to {override}s by psyche")
+            else:
+                # Adaptive heartbeat
+                self._update_heartbeat(somatic)
 
-            if wait_time > 0:
-                self._wait_with_runloop(wait_time)
+        except Exception as e:
+            print(f"Error in cycle: {e}")
+            import traceback
+
+            traceback.print_exc()
 
     def _query_psyche(self, perception: str) -> str:
         """Query the psyche model."""
@@ -412,19 +430,6 @@ class JungAgent:
         # Log if changed
         if old_interval != self._current_interval:
             print(f"  [HEARTBEAT] {old_mode} -> {self._heartbeat_mode} ({self._current_interval}s)")
-
-    def _wait_with_runloop(self, wait_time: float) -> None:
-        """Wait while pumping NSRunLoop for voice delegate callbacks."""
-        run_loop = NSRunLoop.currentRunLoop()
-        interval = 0.05  # 50ms chunks
-        remaining = wait_time
-
-        while remaining > 0 and not self._shutdown_event.is_set():
-            # Pump the run loop to process voice callbacks
-            run_loop.runMode_beforeDate_(
-                NSDefaultRunLoopMode, NSDate.dateWithTimeIntervalSinceNow_(min(interval, remaining))
-            )
-            remaining -= interval
 
 
 def run_single(config: AgentConfig | None = None, perception: str | None = None) -> str:
