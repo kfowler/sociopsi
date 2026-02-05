@@ -1,0 +1,91 @@
+[system]
+data_dir = "~/.sociopsi"
+log_level = "INFO"
+
+[perception.visual]
+adaptive_sampling = true
+min_fps = 1.0
+max_fps = 15.0
+idle_fps = 3.0
+
+[drives.affiliation]
+decay_rate = 0.01
+base_threshold = 0.4
+is_core = true
+
+[drives.nurturing]
+decay_rate = 0.008
+base_threshold = 0.3
+is_core = true
+
+[drives.individuation]
+decay_rate = 0.005
+base_threshold = 0.5
+is_core = true
+
+[llm]
+provider = "ollama"
+base_url = "http://localhost:11434"
+model = "jung-small:latest"
+temperature = 0.7
+max_tokens = 150
+
+[memory]
+max_memories = 100
+forget_threshold = 0.1
+# Sentence transformer model for semantic search
+embedding_model = "all-MiniLM-L6-v2"
+
+[metacognition]
+enabled = true
+max_thoughts = 5
+reflection_interval = 30.0  # seconds
+
+# Phase 5: Command Processing
+# Controls how commands are interpreted through archetypal consultation
+# - consultation_min_duration: Fastest response time (threat state)
+# - consultation_max_duration: Slowest, most contemplative (calm state)
+[commands]
+enabled = true
+consultation_min_duration = 0.5  # Threat state (seconds)
+consultation_max_duration = 4.0  # Calm state (seconds)
+
+# Phase 5: Audio Perception
+# Ambient sound monitoring and speech recognition
+# - whisper_model: Smaller = faster but less accurate (options: tiny.en, base.en, small.en, medium.en)
+# - push_to_talk_key: Key to activate voice recording
+[audio]
+enabled = true
+sample_rate = 16000
+chunk_size = 1024
+buffer_seconds = 6.0
+whisper_model = "base.en"
+push_to_talk_key = "space"
+
+# Phase 5: Archetypal Modulation
+# How acoustic environment affects archetype activation
+# - Boost values > 1.0 increase archetype influence
+# - Values < 1.0 decrease influence
+[archetypal_modulation]
+enabled = true
+weight_transition_speed = 0.1  # Interpolation alpha (0-1)
+silence_self_boost = 1.5
+silence_anima_boost = 1.2
+speech_anima_boost = 1.4
+speech_persona_boost = 1.3
+noise_shadow_boost = 1.6
+
+# Phase 4: Goal-Directed Behavior
+[goals]
+enabled = true
+max_active_goals = 3
+max_pending_goals = 5
+max_history = 20
+check_interval = 15.0  # seconds - how often to check for low drives
+
+[planning]
+enabled = true
+max_plan_length = 10
+
+[execution]
+enabled = true

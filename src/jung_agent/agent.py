@@ -1,4 +1,8 @@
-"""The main agent loop."""
+"""The main agent loop.
+
+Integrates all subsystems: drives, archetypes, memory, meta-cognition,
+perception, and action execution into a coherent agent loop.
+"""
 
 import signal
 import sys
@@ -6,15 +10,19 @@ import threading
 import time
 from datetime import datetime
 from types import FrameType
-from typing import Final, Literal, TypedDict
+from typing import Any, Final, Literal, TypedDict
 
 from Foundation import NSDate, NSDefaultRunLoopMode, NSOrderedAscending, NSRunLoop
 
 from jung_agent.actions.executor import ActionExecutor
 from jung_agent.config import AgentConfig, load_system_prompt
+from jung_agent.dialogue import ArchetypalDialogue
 from jung_agent.drives import DriveSystem
+from jung_agent.event_bus import EventBus, get_event_bus
 from jung_agent.llm import LLMError, chat_with_retry
 from jung_agent.logger import PsycheLogger
+from jung_agent.memory import SemanticMemory
+from jung_agent.metacognition import MetaCognition
 from jung_agent.parser import parse_response
 from jung_agent.perception import format_perception
 from jung_agent.sensors.events import EventCollector
@@ -39,16 +47,41 @@ HeartbeatMode = Literal["idle", "active", "stressed", "critical", "dormant", "ov
 
 
 class JungAgent:
-    """The Jungian psyche agent."""
+    """The Jungian psyche agent.
+
+    Integrates archetypal psychology, homeostatic drives, semantic memory,
+    and meta-cognition into a coherent conscious agent.
+    """
 
     def __init__(self, config: AgentConfig | None = None) -> None:
         self.config = config or AgentConfig()
+
+        # Initialize event bus
+        self.event_bus = get_event_bus()
+
+        # Core subsystems
         self.executor = ActionExecutor(self.config)
         self.event_collector = EventCollector()
         self.voice = Voice(self.config)
         self.logger = PsycheLogger(self.config)
         self.drive_system = DriveSystem(self.config)
 
+        # Archetypal dialogue system (LLM-powered internal voices)
+        self.dialogue = ArchetypalDialogue(
+            model=self.config.model,
+            event_bus=self.event_bus,
+        )
+
+        # Semantic memory with vector embeddings
+        self.memory = SemanticMemory(max_memories=100)
+
+        # Meta-cognition for self-reflection
+        self.metacognition = MetaCognition(
+            model=self.config.model,
+            event_bus=self.event_bus,
+        )
+
+        # State
         self._running: bool = False
         self._shutdown_event: threading.Event = threading.Event()
         self._last_action_results: list[ActionResult] = []
@@ -56,7 +89,18 @@ class JungAgent:
         self._heartbeat_mode: HeartbeatMode = "idle"
         self._last_update_time: float = time.time()
 
-        # Load system prompt and initialize conversation with few-shot examples
+        # Dialogue timing
+        self._last_dialogue_time: float = 0.0
+        self._dialogue_interval: float = 10.0  # Generate dialogue every 10s
+
+        # Reflection timing
+        self._last_reflection_time: float = 0.0
+        self._reflection_interval: float = 30.0  # Reflect every 30s
+
+        # Cycle counter
+        self._cycle_count: int = 0
+
+        # Load system prompt for action generation (still used for actions)
         self._system_prompt = load_system_prompt(self.config.model)
 
         # Few-shot examples as proper JSON
@@ -224,7 +268,50 @@ class JungAgent:
                     ts = event.timestamp.strftime("%H:%M:%S")
                     print(f"  [{ts}] {event.type}: {event.description}")
 
-            # 8. Format full perception (including drives)
+            # 8. Update memory system
+            self.memory.update(dt)
+
+            # 9. Build context for dialogue
+            drive_state = self._get_drive_state_dict()
+            context = self._build_dialogue_context(somatic, events)
+
+            # 10. Generate archetypal dialogue (internal monologue)
+            segments, mediated_thought, harmony = self.dialogue.generate_dialogue(
+                drive_state=drive_state,
+                context=context,
+            )
+
+            # Update individuation based on harmony
+            if "individuation" in self.drive_system.drives:
+                if harmony > 0.7:
+                    self.drive_system.drives["individuation"].satisfy(0.05, harmony)
+
+            # Store mediated thought in memory
+            if mediated_thought:
+                self.memory.add_memory(
+                    content=mediated_thought,
+                    intensity=min(1.0, 0.3 + harmony * 0.5),
+                    memory_type="thought",
+                )
+
+            # 11. Run meta-cognitive reflection periodically
+            if now - self._last_reflection_time >= self._reflection_interval:
+                reflection = self.metacognition.reflect(drive_state)
+                if reflection:
+                    print(f"\n{colors.DIM}[META] {reflection}{colors.RESET}")
+                self._last_reflection_time = now
+
+            # 12. Log and speak stream
+            if self.config.log_stream:
+                self._log_stream(segments)
+
+            # Speak the internal monologue
+            self.voice.speak_stream(segments)
+
+            # 13. Print harmony score
+            print(f"\n{colors.DIM}[HARMONY] {harmony:.2f} | Ego: {self.dialogue.ego.strength:.2f}{colors.RESET}")
+
+            # 14. Get actions from LLM (still using JSON approach for actions)
             drive_perception = self.drive_system.format_for_perception()
             perception = format_perception(
                 config=self.config,
@@ -235,26 +322,10 @@ class JungAgent:
                 heartbeat_mode=self._heartbeat_mode,
                 drives=drive_perception,
             )
-
-            # 9. Send to psyche
             response = self._query_psyche(perception)
-
-            # 10. Parse response
             parsed = parse_response(response)
 
-            # 11. Print raw response if no stream parsed
-            if not parsed.stream and not parsed.actions:
-                print(f"\n{colors.RED}[RAW RESPONSE - PARSE FAILED]{colors.RESET}")
-                print(response[:500] + ("..." if len(response) > 500 else ""))
-
-            # 12. Log and speak stream
-            if self.config.log_stream:
-                self._log_stream(parsed.stream)
-
-            # Speak the internal monologue
-            self.voice.speak_stream(parsed.stream)
-
-            # 13. Build final action list
+            # 15. Build final action list
             final_actions: list[Action] = []
 
             # Add compulsive actions first (survival override)
@@ -430,6 +501,58 @@ class JungAgent:
         # Log if changed
         if old_interval != self._current_interval:
             print(f"  [HEARTBEAT] {old_mode} -> {self._heartbeat_mode} ({self._current_interval}s)")
+
+    def _get_drive_state_dict(self) -> dict[str, dict[str, Any]]:
+        """Get drive states in format expected by dialogue system.
+
+        Returns:
+            Dictionary mapping drive names to their state dicts
+        """
+        result: dict[str, dict[str, Any]] = {}
+        for name, drive in self.drive_system.drives.items():
+            result[name] = {
+                "value": drive.demand,
+                "threshold": 0.5,  # Default threshold
+                "below_threshold": drive.demand > 0.5,  # High demand = needs attention
+            }
+        return result
+
+    def _build_dialogue_context(
+        self,
+        somatic: SomaticState,
+        events: list[Any],
+    ) -> str:
+        """Build context string for dialogue generation.
+
+        Args:
+            somatic: Current somatic state
+            events: Recent events
+
+        Returns:
+            Context string
+        """
+        context_parts = []
+
+        # Add somatic context
+        context_parts.append(f"Battery: {somatic.battery_percent}%")
+        if somatic.battery_percent < 20:
+            context_parts.append("(battery critically low)")
+        if somatic.thermal_state.value in ("hot", "critical"):
+            context_parts.append(f"Thermal: {somatic.thermal_state.value}")
+        if somatic.cpu_percent > 70:
+            context_parts.append(f"CPU: {somatic.cpu_percent:.0f}% (busy)")
+
+        # Add recent events
+        if events:
+            event_descs = [e.description for e in events[:3]]
+            context_parts.append(f"Recent: {'; '.join(event_descs)}")
+
+        # Add memory context
+        memory_context = self.memory.get_context(count=2)
+        if memory_context and "No" not in memory_context:
+            context_parts.append(memory_context)
+
+        return ". ".join(context_parts) if context_parts else "All systems normal"
 
 
 def run_single(config: AgentConfig | None = None, perception: str | None = None) -> str:

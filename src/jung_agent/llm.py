@@ -25,6 +25,7 @@ def chat_with_retry(
     model: str,
     messages: Sequence[Mapping[str, Any]],
     max_retries: int = MAX_RETRIES,
+    options: Mapping[str, Any] | None = None,
 ) -> Any:
     """Call ollama.chat with exponential backoff retry.
 
@@ -32,6 +33,7 @@ def chat_with_retry(
         model: The model name to use.
         messages: List of chat messages (supports ChatMessage TypedDict).
         max_retries: Maximum number of retry attempts.
+        options: Optional ollama options (temperature, etc.).
 
     Returns:
         The response from ollama.chat (ChatResponse type, dict-like).
@@ -42,9 +44,14 @@ def chat_with_retry(
     last_error: Exception | None = None
     backoff = INITIAL_BACKOFF
 
+    # Build kwargs for ollama.chat
+    kwargs: dict[str, Any] = {"model": model, "messages": messages}
+    if options:
+        kwargs["options"] = options
+
     for attempt in range(max_retries + 1):
         try:
-            response = ollama.chat(model=model, messages=messages)
+            response = ollama.chat(**kwargs)
             return response
         except ollama.ResponseError as e:
             last_error = e

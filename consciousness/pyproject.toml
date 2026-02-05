@@ -1,0 +1,47 @@
+[project]
+name = "sociopsi"
+version = "0.1.0"
+description = "Jungian cognitive architecture with homeostatic drives"
+requires-python = ">=3.11"
+dependencies = [
+    "opencv-python>=4.9.0",
+    "mediapipe>=0.10.9",
+    "textual>=0.48.0",
+    "rich>=13.7.0",
+    "psutil>=5.9.8",
+    "python-dotenv>=1.0.0",
+    "httpx>=0.26.0",
+    "pyttsx3>=2.90",
+    "sentence-transformers>=2.2.2",
+    "numpy>=1.24.0",
+    "faster-whisper>=1.2.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.1.14",
+    "pyright>=1.1.348",
+    "pytest>=7.4.4",
+    "pytest-asyncio>=0.23.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.pyright]
+pythonVersion = "3.11"
+typeCheckingMode = "strict"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+]
