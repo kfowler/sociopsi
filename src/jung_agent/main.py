@@ -28,7 +28,7 @@ def main() -> int:
 
     parser.add_argument(
         "--heartbeat",
-        type=int,
+        type=float,
         default=None,
         help="Override initial heartbeat interval (seconds)",
     )

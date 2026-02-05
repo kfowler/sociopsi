@@ -24,11 +24,11 @@ class TestAgentConfig:
         config = AgentConfig()
 
         assert config.model == "jung-mid"
-        assert config.heartbeat_idle == 8
-        assert config.heartbeat_active == 5
-        assert config.heartbeat_stressed == 3
-        assert config.heartbeat_critical == 2
-        assert config.heartbeat_dormant == 60
+        assert config.heartbeat_idle == 2.0
+        assert config.heartbeat_active == 1.0
+        assert config.heartbeat_stressed == 0.5
+        assert config.heartbeat_critical == 0.25
+        assert config.heartbeat_dormant == 30.0
         assert config.battery_critical == 10
         assert config.cpu_stressed == 80
         assert config.cpu_active == 50
@@ -202,8 +202,16 @@ class TestApplyConfigOverrides:
     def test_rejects_wrong_type_for_int(self) -> None:
         """Test that wrong type for int field is rejected."""
         config = AgentConfig(voice_enabled=False)
+        original_value = config.battery_critical
+        _apply_config_overrides(config, {"battery_critical": "not an int"})
+
+        assert config.battery_critical == original_value
+
+    def test_rejects_wrong_type_for_float(self) -> None:
+        """Test that wrong type for float field is rejected."""
+        config = AgentConfig(voice_enabled=False)
         original_value = config.heartbeat_idle
-        _apply_config_overrides(config, {"heartbeat_idle": "not an int"})
+        _apply_config_overrides(config, {"heartbeat_idle": "not a float"})
 
         assert config.heartbeat_idle == original_value
 
@@ -217,6 +225,14 @@ class TestApplyConfigOverrides:
 
     def test_rejects_bool_for_int_field(self) -> None:
         """Test that boolean is rejected for int field (since bool is subclass of int)."""
+        config = AgentConfig(voice_enabled=False)
+        original_value = config.battery_critical
+        _apply_config_overrides(config, {"battery_critical": True})
+
+        assert config.battery_critical == original_value
+
+    def test_rejects_bool_for_float_field(self) -> None:
+        """Test that boolean is rejected for float field."""
         config = AgentConfig(voice_enabled=False)
         original_value = config.heartbeat_idle
         _apply_config_overrides(config, {"heartbeat_idle": True})

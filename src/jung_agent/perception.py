@@ -11,7 +11,7 @@ def format_perception(
     somatic: SomaticState,
     events: list[Event],
     action_results: list[ActionResult],
-    heartbeat_interval: int,
+    heartbeat_interval: float,
     heartbeat_mode: str,
     drives: str | None = None,
 ) -> str:

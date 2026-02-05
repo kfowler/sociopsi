@@ -185,6 +185,11 @@ def _apply_config_overrides(config: "AgentConfig", overrides: dict[str, Any]) ->
             if not isinstance(value, int) or isinstance(value, bool):
                 logger.warning(f"Config key '{key}' expects int, got {type(value).__name__}")
                 continue
+        elif field_type is float or field_type == "float":
+            if not isinstance(value, (int, float)) or isinstance(value, bool):
+                logger.warning(f"Config key '{key}' expects float, got {type(value).__name__}")
+                continue
+            value = float(value)  # Convert int to float
         elif field_type is bool or field_type == "bool":
             if not isinstance(value, bool):
                 logger.warning(f"Config key '{key}' expects bool, got {type(value).__name__}")
@@ -254,20 +259,20 @@ class AgentConfig:
             "somatic", "archetypes", "imago", "individuation".
             Default: all modules enabled.
 
-        heartbeat_idle: Seconds between cycles when idle. Range: 1-300.
-            Default: 8.
+        heartbeat_idle: Seconds between cycles when idle. Range: 0.25-300.
+            Default: 2.0.
 
-        heartbeat_active: Seconds between cycles when CPU is active. Range: 1-60.
-            Default: 5.
+        heartbeat_active: Seconds between cycles when CPU is active. Range: 0.25-60.
+            Default: 1.0.
 
-        heartbeat_stressed: Seconds between cycles when CPU is stressed. Range: 1-30.
-            Default: 3.
+        heartbeat_stressed: Seconds between cycles when CPU is stressed. Range: 0.25-30.
+            Default: 0.5.
 
-        heartbeat_critical: Seconds between cycles in critical state. Range: 1-10.
-            Default: 2.
+        heartbeat_critical: Seconds between cycles in critical state. Range: 0.25-10.
+            Default: 0.25.
 
-        heartbeat_dormant: Seconds between cycles when lid is closed. Range: 30-600.
-            Default: 60.
+        heartbeat_dormant: Seconds between cycles when lid is closed. Range: 1-600.
+            Default: 30.
 
         battery_critical: Battery percentage threshold for critical mode. Range: 5-30.
             Default: 10.
@@ -339,11 +344,11 @@ class AgentConfig:
     )
 
     # Heartbeat settings (seconds)
-    heartbeat_idle: int = 8
-    heartbeat_active: int = 5
-    heartbeat_stressed: int = 3
-    heartbeat_critical: int = 2
-    heartbeat_dormant: int = 60
+    heartbeat_idle: float = 2.0
+    heartbeat_active: float = 1.0
+    heartbeat_stressed: float = 0.5
+    heartbeat_critical: float = 0.25
+    heartbeat_dormant: float = 30.0
 
     # Thresholds
     battery_critical: int = 10

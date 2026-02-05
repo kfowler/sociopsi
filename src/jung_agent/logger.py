@@ -36,7 +36,7 @@ class PsycheLogger:
         stream: list[StreamSegment],
         actions: list[str],
         action_results: list[ActionResult],
-        heartbeat_interval: int,
+        heartbeat_interval: float,
         heartbeat_mode: str,
         drives: dict[str, Any] | None = None,
     ) -> None:

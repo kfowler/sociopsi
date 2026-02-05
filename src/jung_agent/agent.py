@@ -50,7 +50,7 @@ class JungAgent:
         self._running: bool = False
         self._shutdown_event: threading.Event = threading.Event()
         self._last_action_results: list[ActionResult] = []
-        self._current_interval: int = self.config.heartbeat_idle
+        self._current_interval: float = self.config.heartbeat_idle
         self._heartbeat_mode: HeartbeatMode = "idle"
         self._last_update_time: float = time.time()
 

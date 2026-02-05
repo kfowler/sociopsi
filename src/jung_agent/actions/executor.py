@@ -23,7 +23,7 @@ class ActionExecutor:
 
     def __init__(self, config: AgentConfig) -> None:
         self.config = config
-        self._heartbeat_override: int | None = None
+        self._heartbeat_override: float | None = None
 
         # Initialize memory
         self._memory = memory.MemoryStore(config.memory_file)
@@ -146,13 +146,13 @@ class ActionExecutor:
         """Execute a list of actions."""
         return [self.execute(action) for action in actions]
 
-    def get_heartbeat_override(self) -> int | None:
+    def get_heartbeat_override(self) -> float | None:
         """Get any heartbeat override set by the psyche."""
         override = self._heartbeat_override
         self._heartbeat_override = None  # Clear after reading
         return override
 
-    def _set_heartbeat(self, interval: int) -> dict[str, Any]:
+    def _set_heartbeat(self, interval: float) -> dict[str, Any]:
         """Set heartbeat override."""
         self._heartbeat_override = interval
         return {"set_to": interval, "description": f"Rhythm set to {interval}s"}
