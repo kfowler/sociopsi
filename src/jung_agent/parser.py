@@ -64,10 +64,10 @@ def _repair_json(json_str: str) -> str:
     if '"' not in json_str and "'" in json_str:
         json_str = json_str.replace("'", '"')
 
-    # Remove any text after the final }
-    match = re.search(r"\}(?!.*\})", json_str)
-    if match:
-        json_str = json_str[: match.end()]
+    # Remove any text after the final } (use rfind to get last occurrence)
+    last_brace = json_str.rfind("}")
+    if last_brace != -1:
+        json_str = json_str[: last_brace + 1]
 
     return json_str
 
