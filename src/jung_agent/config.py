@@ -40,9 +40,16 @@ class AgentConfig:
 
     # Voice settings
     voice_enabled: bool = True
-    # Internal thoughts voice (stream)
-    voice_thoughts: str = "Ava (Premium)"
-    voice_thoughts_rate: int = 250  # Fast, internal monologue
+    voice_sequential: bool = False  # True = speak one component at a time
+    voice_rate: int = 250  # Speech rate for stream (words per minute)
+
+    # Voice per psyche component
+    voice_anima: str = "Ava (Premium)"  # Soul-bridge, feeling, intuition
+    voice_shadow: str = "Serena (Premium)"  # Repressed, denied, dangerous
+    voice_persona: str = "Matilda (Premium)"  # Social mask
+    voice_self: str = "Ava (Premium)"  # Numinous totality (rare)
+    voice_default: str = "Ava (Premium)"  # When components blend
+
     # Intentions/actions voice
     voice_actions: str = "Evan (Enhanced)"
     voice_actions_rate: int = 190  # Slower, deliberate announcements

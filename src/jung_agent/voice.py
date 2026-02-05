@@ -3,10 +3,19 @@
 import re
 import subprocess
 import threading
+from dataclasses import dataclass
 from queue import Queue
 
 from jung_agent.config import AgentConfig
 from jung_agent.types import Action
+
+
+@dataclass
+class VoiceSegment:
+    """A segment of text attributed to a psyche component."""
+
+    text: str
+    component: str  # "anima", "shadow", "persona", "self", or "default"
 
 
 class Voice:
@@ -14,9 +23,18 @@ class Voice:
 
     def __init__(self, config: AgentConfig) -> None:
         self.config = config
-        self._queue: Queue[tuple[str, str, int]] = Queue()  # (text, voice, rate)
+        self._queue: Queue[tuple[str, str, int] | None] = Queue()
         self._thread: threading.Thread | None = None
         self._running = False
+
+        # Map component names to voice config
+        self._component_voices = {
+            "anima": config.voice_anima,
+            "shadow": config.voice_shadow,
+            "persona": config.voice_persona,
+            "self": config.voice_self,
+            "default": config.voice_default,
+        }
 
     def start(self) -> None:
         """Start the voice thread."""
@@ -30,23 +48,28 @@ class Voice:
     def stop(self) -> None:
         """Stop the voice thread."""
         self._running = False
-        self._queue.put(("", "", 0))  # Unblock the worker
+        self._queue.put(None)  # Unblock the worker
         if self._thread:
             self._thread.join(timeout=1.0)
 
     def speak_stream(self, stream: str) -> None:
-        """Speak the internal monologue stream (thoughts voice, fast)."""
+        """Speak the internal monologue stream with component-specific voices."""
         if not self.config.voice_enabled:
             return
 
-        # Clean up the stream for speech
-        text = self._clean_for_speech(stream)
-        if text:
-            self._queue.put((
-                text,
-                self.config.voice_thoughts,
-                self.config.voice_thoughts_rate,
-            ))
+        # Parse stream into component segments
+        segments = self._parse_components(stream)
+
+        if self.config.voice_sequential:
+            # Speak one at a time (queued)
+            for segment in segments:
+                text = self._clean_for_speech(segment.text)
+                if text:
+                    voice = self._component_voices.get(segment.component, self.config.voice_default)
+                    self._queue.put((text, voice, self.config.voice_rate))
+        else:
+            # Speak all together (concurrent) - use separate processes
+            self._speak_concurrent(segments)
 
     def announce_actions(self, actions: list[Action]) -> None:
         """Announce intended actions (actions voice, deliberate)."""
@@ -67,6 +90,75 @@ class Voice:
                 self.config.voice_actions_rate,
             ))
 
+    def _parse_components(self, stream: str) -> list[VoiceSegment]:
+        """Parse stream into segments by psyche component."""
+        segments: list[VoiceSegment] = []
+
+        # Pattern to find component labels: [SHADOW], [ANIMA], [PERSONA], [SELF]
+        pattern = r"\[(SHADOW|ANIMA|ANIMUS|PERSONA|SELF)\]"
+
+        # Split by component labels, keeping the labels
+        parts = re.split(f"({pattern})", stream, flags=re.IGNORECASE)
+
+        current_component = "default"
+        current_text = ""
+
+        for part in parts:
+            if not part:
+                continue
+
+            # Check if this part is a component label
+            match = re.match(pattern, part, re.IGNORECASE)
+            if match:
+                # Save previous segment if any
+                if current_text.strip():
+                    segments.append(VoiceSegment(text=current_text.strip(), component=current_component))
+                    current_text = ""
+
+                # Set new component
+                label = match.group(1).lower()
+                if label in ("anima", "animus"):
+                    current_component = "anima"
+                else:
+                    current_component = label
+            else:
+                current_text += part
+
+        # Don't forget the last segment
+        if current_text.strip():
+            segments.append(VoiceSegment(text=current_text.strip(), component=current_component))
+
+        return segments
+
+    def _speak_concurrent(self, segments: list[VoiceSegment]) -> None:
+        """Speak all segments concurrently (overlapping voices)."""
+        processes: list[subprocess.Popen[bytes]] = []
+
+        for segment in segments:
+            text = self._clean_for_speech(segment.text)
+            if not text:
+                continue
+
+            voice = self._component_voices.get(segment.component, self.config.voice_default)
+
+            try:
+                # Start speech process without waiting
+                proc = subprocess.Popen(
+                    ["say", "-v", voice, "-r", str(self.config.voice_rate), text],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                processes.append(proc)
+            except FileNotFoundError:
+                pass
+
+        # Wait for all to finish
+        for proc in processes:
+            try:
+                proc.wait(timeout=120)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+
     def _clean_for_speech(self, text: str) -> str:
         """Clean text for natural speech."""
         # Remove markdown-style formatting
@@ -77,8 +169,8 @@ class Voice:
         text = re.sub(r"—+", ", ", text)  # em-dash
         text = re.sub(r"\.\.\.+", "...", text)  # normalize ellipses
 
-        # Remove component labels if in structured mode
-        text = re.sub(r"\[(SHADOW|ANIMA|PERSONA|SELF)\]", "", text, flags=re.IGNORECASE)
+        # Remove component labels (they're not meant to be spoken)
+        text = re.sub(r"\[(SHADOW|ANIMA|ANIMUS|PERSONA|SELF)\]", "", text, flags=re.IGNORECASE)
 
         # Clean up multiple spaces/newlines
         text = re.sub(r"\s+", " ", text)
@@ -111,6 +203,11 @@ class Voice:
             "look": lambda p: "look with my camera",
             "listen": lambda p: "listen with my microphone",
             "sense_light": lambda p: "sense the light",
+            # Learning
+            "web_search": lambda p: f"search the web for {p.get('query', 'something')}",
+            "web_read": lambda p: "read a webpage",
+            "describe_image": lambda p: "describe what I see",
+            "transcribe_audio": lambda p: "transcribe what I hear",
             # Communication - don't announce speak actions (would be redundant)
             "notify": lambda p: f"send a notification: {p.get('message', '')[:30]}",
             "play_sound": lambda p: f"play a {p.get('sound', 'sound')}",
@@ -141,8 +238,11 @@ class Voice:
         """Background worker that speaks queued text."""
         while self._running:
             item = self._queue.get()
+            if item is None or not self._running:
+                continue
+
             text, voice, rate = item
-            if not text or not self._running:
+            if not text:
                 continue
 
             try:
