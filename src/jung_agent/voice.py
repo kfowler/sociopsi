@@ -6,7 +6,7 @@ import threading
 from queue import Queue
 
 from jung_agent.config import AgentConfig
-from jung_agent.types import Action, StreamSegment
+from jung_agent.types import Action, ActionResult, StreamSegment
 
 
 class Voice:
@@ -72,6 +72,45 @@ class Voice:
                 self.config.voice_actions,
                 self.config.voice_actions_rate,
             ))
+
+    def speak_perceptions(self, results: list[ActionResult]) -> None:
+        """Speak what was seen or heard from perception actions."""
+        if not self.config.voice_enabled:
+            return
+
+        for result in results:
+            if not result.success:
+                continue
+
+            text = None
+
+            # Vision actions - say what was seen
+            if result.action_type in ("look", "look_for", "describe_image"):
+                if isinstance(result.result, dict):
+                    desc = result.result.get("description", "")
+                    if desc and "no vision model" not in desc.lower():
+                        text = f"I see: {desc}"
+
+            # Auditory actions - say what was heard
+            elif result.action_type in ("listen", "listen_for", "transcribe"):
+                if isinstance(result.result, dict):
+                    # Transcription result
+                    transcription = result.result.get("transcription")
+                    if transcription:
+                        text = f"I hear: {transcription}"
+                    else:
+                        # Audio description (silence, quiet sounds, etc.)
+                        audio_desc = result.result.get("description", "")
+                        if audio_desc and "install" not in audio_desc.lower():
+                            text = f"I hear: {audio_desc}"
+
+            if text:
+                # Use anima voice for perceptions (feeling/intuition)
+                self._queue.put((
+                    self._clean_for_speech(text),
+                    self.config.voice_anima,
+                    self.config.voice_rate,
+                ))
 
     def _clean_for_speech(self, text: str) -> str:
         """Clean text for natural speech."""

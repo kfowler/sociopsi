@@ -126,6 +126,9 @@ class JungAgent:
 
                 self._last_action_results = self.executor.execute_all(parsed.actions)
 
+                # Speak what was seen/heard
+                self.voice.speak_perceptions(self._last_action_results)
+
                 # Log action results
                 for result in self._last_action_results:
                     status = "OK" if result.success else "FAILED"

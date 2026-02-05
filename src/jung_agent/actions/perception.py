@@ -164,16 +164,79 @@ def sense_all() -> dict[str, Any]:
 
 
 def look(duration: float = 0.5) -> dict[str, Any]:
-    """Look with the camera."""
-    return external.capture_camera(duration)
+    """Look with the camera and describe what is seen."""
+    result = external.capture_camera(duration)
+    if result.get("status") != "captured":
+        return result
+
+    # Try to describe what we see using vision model
+    description = _describe_with_vision(result, "Describe what you see briefly in 1-2 sentences.")
+    if description:
+        result["description"] = description
+    return result
 
 
 def look_for(description: str, duration: float = 1.0) -> dict[str, Any]:
     """Look for something specific."""
     result = external.capture_camera(duration)
+    if result.get("status") != "captured":
+        return result
+
     result["looking_for"] = description
-    # Would need vision model to actually search
+
+    # Ask vision model if the thing is present
+    vision_result = _describe_with_vision(
+        result,
+        f"Is there {description} in this image? Describe briefly what you see related to this."
+    )
+    if vision_result:
+        result["description"] = vision_result
     return result
+
+
+def _describe_with_vision(capture: dict[str, Any], prompt: str) -> str | None:
+    """Use vision model to describe captured image."""
+    import base64
+    import subprocess
+    import tempfile
+    from pathlib import Path
+
+    full_data = capture.get("full_data")
+    if not full_data:
+        return None
+
+    try:
+        # Check if llava is available
+        check_result = subprocess.run(
+            ["ollama", "list"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if "llava" not in check_result.stdout.lower():
+            return None
+
+        # Save image to temp file
+        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as f:
+            temp_path = f.name
+            f.write(base64.b64decode(full_data))
+
+        # Query vision model
+        import ollama
+        response = ollama.chat(
+            model="llava",
+            messages=[{
+                "role": "user",
+                "content": prompt,
+                "images": [temp_path],
+            }],
+        )
+
+        Path(temp_path).unlink()
+        return response["message"]["content"]
+
+    except Exception:
+        return None
 
 
 def watch(duration: float, interval: float = 1.0) -> dict[str, Any]:
