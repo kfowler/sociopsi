@@ -1,11 +1,15 @@
 """External sensors: camera, microphone, Bluetooth, etc."""
 
+import json
+import logging
 import subprocess
 import tempfile
 from pathlib import Path
 from typing import Any
 
 from jung_agent.types import BluetoothDevice
+
+logger = logging.getLogger(__name__)
 
 
 def get_ambient_light() -> dict[str, Any]:
@@ -71,8 +75,12 @@ def get_bluetooth_devices() -> list[BluetoothDevice]:
                     )
                 )
 
-    except (subprocess.TimeoutExpired, ValueError, FileNotFoundError):
-        pass
+    except subprocess.TimeoutExpired:
+        logger.warning("Bluetooth scan timed out")
+    except ValueError as e:
+        logger.warning(f"Bluetooth data parse error: {e}")
+    except FileNotFoundError:
+        logger.warning("system_profiler not found")
 
     return devices
 
@@ -125,8 +133,14 @@ def get_location() -> dict[str, Any]:
                 "source": "ip",
                 "description": f"Approximately in {data.get('city', 'unknown')}, {data.get('region', '')}",
             }
-    except Exception:
-        pass
+    except subprocess.TimeoutExpired:
+        logger.warning("IP geolocation timed out")
+    except json.JSONDecodeError as e:
+        logger.warning(f"IP geolocation returned invalid JSON: {e}")
+    except FileNotFoundError:
+        logger.warning("curl not found")
+    except (ValueError, OSError) as e:
+        logger.warning(f"IP geolocation error: {e}")
 
     return {"status": "unavailable", "description": "Could not determine location"}
 
@@ -341,7 +355,14 @@ def get_disk_io() -> dict[str, Any]:
                 "description": _describe_disk_activity(counters.read_bytes, counters.write_bytes),
             }
         return {"status": "unavailable"}
-    except Exception:
+    except ImportError:
+        logger.warning("psutil not available for disk I/O")
+        return {"status": "unavailable"}
+    except PermissionError as e:
+        logger.warning(f"Disk I/O permission error: {e}")
+        return {"status": "unavailable"}
+    except OSError as e:
+        logger.warning(f"Disk I/O error: {e}")
         return {"status": "unavailable"}
 
 
@@ -372,10 +393,12 @@ def get_disks() -> list[dict[str, Any]]:
                         "percent_used": usage.percent,
                     }
                 )
-            except (PermissionError, OSError):
-                pass
-    except Exception:
-        pass
+            except (PermissionError, OSError) as e:
+                logger.debug(f"Could not access partition {partition.mountpoint}: {e}")
+    except ImportError:
+        logger.warning("psutil not available for disk info")
+    except OSError as e:
+        logger.warning(f"Disk info error: {e}")
     return disks
 
 
@@ -405,8 +428,12 @@ def get_displays() -> list[dict[str, Any]]:
                         "mirror": display.get("spdisplays_mirror", "Off"),
                     }
                 )
-    except (subprocess.TimeoutExpired, ValueError, FileNotFoundError):
-        pass
+    except subprocess.TimeoutExpired:
+        logger.warning("Display info timed out")
+    except ValueError as e:
+        logger.warning(f"Display info parse error: {e}")
+    except FileNotFoundError:
+        logger.warning("system_profiler not found")
     return displays
 
 
@@ -436,8 +463,12 @@ def get_thunderbolt_devices() -> list[dict[str, Any]]:
                         "speed": device.get("link_speed", "Unknown"),
                     }
                 )
-    except (subprocess.TimeoutExpired, ValueError, FileNotFoundError):
-        pass
+    except subprocess.TimeoutExpired:
+        logger.warning("Thunderbolt scan timed out")
+    except ValueError as e:
+        logger.warning(f"Thunderbolt data parse error: {e}")
+    except FileNotFoundError:
+        logger.warning("system_profiler not found")
     return devices
 
 

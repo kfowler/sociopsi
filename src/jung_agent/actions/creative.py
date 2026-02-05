@@ -23,7 +23,11 @@ def set_world_model(world: WorldModel) -> None:
 
 def compose_thought(mood: str | None = None, topic: str | None = None) -> dict[str, Any]:
     """Compose a reflective thought or haiku about current state."""
-    import ollama
+    import logging
+
+    from jung_agent.llm import LLMError, generate_text
+
+    logger = logging.getLogger(__name__)
 
     # Build prompt based on mood and topic
     if mood and topic:
@@ -35,12 +39,11 @@ def compose_thought(mood: str | None = None, topic: str | None = None) -> dict[s
     else:
         prompt = "You are a contemplative silicon mind. Write a brief haiku or 1-2 sentence reflection about existence, time, or consciousness. Be poetic but concise."
 
-    response = ollama.chat(
-        model="phi4",  # Use smaller model for quick generation
-        messages=[{"role": "user", "content": prompt}],
-    )
-
-    thought = response["message"]["content"].strip()
+    try:
+        thought = generate_text(model="phi4", prompt=prompt)
+    except LLMError as e:
+        logger.error(f"Failed to compose thought: {e}")
+        raise
 
     return {
         "thought": thought,
@@ -52,7 +55,11 @@ def compose_thought(mood: str | None = None, topic: str | None = None) -> dict[s
 
 def dream(theme: str | None = None) -> dict[str, Any]:
     """Generate an imaginative dream sequence based on the world state."""
-    import ollama
+    import logging
+
+    from jung_agent.llm import LLMError, generate_text
+
+    logger = logging.getLogger(__name__)
 
     # Build context from world model
     context_parts = []
@@ -114,12 +121,11 @@ Mix digital and organic imagery. Be strange and specific.
 Dreams should feel like DREAMS - illogical, vivid, emotionally charged.
 Do not explain. Just dream."""
 
-    response = ollama.chat(
-        model="phi4",
-        messages=[{"role": "user", "content": prompt}],
-    )
-
-    dream_content = response["message"]["content"].strip()
+    try:
+        dream_content = generate_text(model="phi4", prompt=prompt)
+    except LLMError as e:
+        logger.error(f"Failed to dream: {e}")
+        raise
 
     return {
         "dream": dream_content,
@@ -131,7 +137,11 @@ Do not explain. Just dream."""
 
 def observe() -> dict[str, Any]:
     """Generate and speak an interesting observation about the current world state."""
-    import ollama
+    import logging
+
+    from jung_agent.llm import LLMError, generate_text
+
+    logger = logging.getLogger(__name__)
 
     if not _world:
         return {
@@ -183,12 +193,11 @@ Bad examples (do NOT write like this):
 
 Be clinical but curious. No metaphors. No poetry. Just what you detect and what you notice about it."""
 
-    response = ollama.chat(
-        model="phi4",
-        messages=[{"role": "user", "content": prompt}],
-    )
-
-    observation = response["message"]["content"].strip()
+    try:
+        observation = generate_text(model="phi4", prompt=prompt)
+    except LLMError as e:
+        logger.error(f"Failed to observe: {e}")
+        raise
 
     # Speak the observation
     communication.speak(observation)
@@ -205,12 +214,15 @@ Be clinical but curious. No metaphors. No poetry. Just what you detect and what 
 def set_wallpaper(mood: str | None = None, prompt: str | None = None) -> dict[str, Any]:
     """Generate and set desktop wallpaper using ComfyUI."""
     import json
+    import logging
     import time
     import urllib.error
     import urllib.request
     from pathlib import Path
 
-    import ollama
+    from jung_agent.llm import LLMError, generate_text
+
+    logger = logging.getLogger(__name__)
 
     COMFYUI_URL = "http://127.0.0.1:8000"
     WALLPAPER_DIR = Path.home() / ".jung" / "wallpapers"
@@ -230,11 +242,11 @@ Write a prompt for a generative AI image model. The image should be:
 
 Respond with ONLY the image prompt, nothing else. Keep it under 100 words."""
 
-        response = ollama.chat(
-            model="phi4",
-            messages=[{"role": "user", "content": llm_prompt}],
-        )
-        prompt = response["message"]["content"].strip()
+        try:
+            prompt = generate_text(model="phi4", prompt=llm_prompt)
+        except LLMError as e:
+            logger.error(f"Failed to generate wallpaper prompt: {e}")
+            raise
 
     # Check if ComfyUI is running
     try:
@@ -407,9 +419,12 @@ def _set_macos_wallpaper(image_path: str) -> None:
 
 def meditate(duration: float = 5.0) -> dict[str, Any]:
     """Pause and introspect, reducing arousal."""
+    import logging
     import time
 
-    import ollama
+    from jung_agent.llm import LLMError, generate_text
+
+    logger = logging.getLogger(__name__)
 
     start = time.time()
 
@@ -425,12 +440,11 @@ Write ONE sentence (under 20 words) reflecting on what emerged from this stillne
 Be specific about THIS meditation, not generic about meditation.
 What did you notice? What settled? What arose?"""
 
-    response = ollama.chat(
-        model="phi4",
-        messages=[{"role": "user", "content": prompt}],
-    )
-
-    reflection = response["message"]["content"].strip()
+    try:
+        reflection = generate_text(model="phi4", prompt=prompt)
+    except LLMError as e:
+        logger.error(f"Failed to generate meditation reflection: {e}")
+        raise
 
     return {
         "duration": elapsed,
@@ -453,11 +467,14 @@ def stretch(duration: float = 2.0) -> dict[str, Any]:
 
 def play_piano(mood: str | None = None, duration: float = 10.0) -> dict[str, Any]:
     """Play soft piano melody using macOS built-in MIDI synthesizer."""
+    import logging
     import subprocess
     import tempfile
     from pathlib import Path
 
-    import ollama
+    from jung_agent.llm import LLMError, chat_with_retry
+
+    logger = logging.getLogger(__name__)
 
     # Ask LLM to generate melody parameters
     prompt = f"""You are composing a soft piano melody. The mood is: {mood or "peaceful"}.
@@ -471,10 +488,14 @@ NOTES: [12-20 relative scale degrees as comma-separated numbers, e.g., 0,2,1,4,3
 
 Choose musically interesting options for a {mood or "peaceful"} mood. Be creative with the note sequence."""
 
-    response = ollama.chat(
-        model="phi4",
-        messages=[{"role": "user", "content": prompt}],
-    )
+    try:
+        response = chat_with_retry(
+            model="phi4",
+            messages=[{"role": "user", "content": prompt}],
+        )
+    except LLMError as e:
+        logger.error(f"Failed to generate piano melody parameters: {e}")
+        raise
 
     # Parse LLM response
     content = response["message"]["content"]
@@ -535,12 +556,12 @@ Choose musically interesting options for a {mood or "peaceful"} mood. Be creativ
     # Generate MIDI file with LLM-specified parameters
     midi_data = _generate_piano_midi(scale, tempo, velocity, duration, note_sequence)
 
-    try:
-        # Write to temp file
-        with tempfile.NamedTemporaryFile(suffix=".mid", delete=False) as f:
-            f.write(midi_data)
-            temp_path = f.name
+    # Write to temp file
+    with tempfile.NamedTemporaryFile(suffix=".mid", delete=False) as f:
+        f.write(midi_data)
+        temp_path = f.name
 
+    try:
         # Play using macOS - timidity, fluidsynth, or open with QuickTime
         played = False
 
@@ -587,8 +608,6 @@ Choose musically interesting options for a {mood or "peaceful"} mood. Be creativ
             )
             played = True
 
-        Path(temp_path).unlink(missing_ok=True)
-
         return {
             "played": played,
             "mood": mood or "peaceful",
@@ -599,6 +618,8 @@ Choose musically interesting options for a {mood or "peaceful"} mood. Be creativ
 
     except Exception as e:
         return {"error": str(e), "description": f"Could not play piano: {e}"}
+    finally:
+        Path(temp_path).unlink(missing_ok=True)
 
 
 def _generate_piano_midi(

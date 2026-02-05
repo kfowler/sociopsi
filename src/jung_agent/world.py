@@ -237,7 +237,11 @@ class WorldModel:
 
     def _create_poetic_description(self) -> str:
         """Generate a machine-like description of what was seen."""
-        import ollama
+        import logging
+
+        from jung_agent.llm import LLMError, generate_text
+
+        logger = logging.getLogger(__name__)
 
         context_parts = []
         context_parts.append(f"Time: {self.time.period}")
@@ -258,16 +262,19 @@ Good: "Human facing away. Room illumination: dim. Objects: desk, chair."
 Bad: "The shadows dance..." (too poetic)
 Bad: "I sense their presence..." (too emotional)"""
 
-        response = ollama.chat(
-            model="phi4",
-            messages=[{"role": "user", "content": prompt}],
-        )
-
-        return response["message"]["content"].strip()
+        try:
+            return generate_text(model="phi4", prompt=prompt)
+        except LLMError as e:
+            logger.error(f"Failed to generate camera description: {e}")
+            raise
 
     def _create_absence_description(self) -> str:
         """Generate a machine-like description of empty space."""
-        import ollama
+        import logging
+
+        from jung_agent.llm import LLMError, generate_text
+
+        logger = logging.getLogger(__name__)
 
         prompt = f"""You are a computer process. Camera detects no humans.
 Time: {self.time.period}
@@ -279,12 +286,11 @@ Good: "Empty room. Chair visible. Light level: low. No motion detected."
 Good: "No human presence. Objects: desk, lamp. Ambient light from window."
 Bad: "The lonely room awaits..." (too poetic)"""
 
-        response = ollama.chat(
-            model="phi4",
-            messages=[{"role": "user", "content": prompt}],
-        )
-
-        return response["message"]["content"].strip()
+        try:
+            return generate_text(model="phi4", prompt=prompt)
+        except LLMError as e:
+            logger.error(f"Failed to generate absence description: {e}")
+            raise
 
     def update_from_screenshot(self, result: dict[str, Any]) -> None:
         """Update screen state from screenshot analysis."""

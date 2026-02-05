@@ -1,5 +1,6 @@
 """Voice output for the psyche."""
 
+import logging
 import re
 import threading
 from queue import Queue
@@ -7,6 +8,8 @@ from typing import TypeAlias
 
 from jung_agent.config import AgentConfig
 from jung_agent.types import Action, ActionResult, PsycheComponent, StreamSegment
+
+logger = logging.getLogger(__name__)
 
 # Type alias for voice queue items: (text, voice, rate) or None for shutdown
 VoiceQueueItem: TypeAlias = tuple[str, str, int] | None
@@ -33,6 +36,7 @@ class Voice:
         self._queue: Queue[VoiceQueueItem] = Queue()
         self._thread: threading.Thread | None = None
         self._running = False
+        self._running_lock = threading.Lock()
 
         # Map component names to voice config
         self._component_voices: dict[PsycheComponent, str] = {
@@ -48,16 +52,32 @@ class Voice:
         if not self.config.voice_enabled:
             return
 
-        self._running = True
+        with self._running_lock:
+            if self._running:
+                return  # Already running
+            self._running = True
+
         self._thread = threading.Thread(target=self._voice_worker, daemon=True)
         self._thread.start()
 
     def stop(self) -> None:
         """Stop the voice thread."""
-        self._running = False
+        with self._running_lock:
+            if not self._running:
+                return  # Already stopped
+            self._running = False
+
         self._queue.put(None)  # Unblock the worker
+
         if self._thread:
-            self._thread.join(timeout=1.0)
+            self._thread.join(timeout=5.0)
+            if self._thread.is_alive():
+                logger.warning("Voice thread did not stop within timeout")
+
+    def _is_running(self) -> bool:
+        """Thread-safe check of running state."""
+        with self._running_lock:
+            return self._running
 
     def speak_stream(self, segments: list[StreamSegment]) -> None:
         """Speak the internal monologue with component-specific voices."""
@@ -227,15 +247,24 @@ class Voice:
 
     def _voice_worker(self) -> None:
         """Background worker that speaks queued text using AVFoundation."""
-        import AVFoundation  # type: ignore[import-untyped]
+        try:
+            import AVFoundation  # type: ignore[import-untyped]
+        except ImportError as e:
+            logger.error(f"AVFoundation import failed: {e}")
+            return
 
         # Cache voice lookups
         voice_cache: dict[str, object] = {}
 
-        while self._running:
-            item = self._queue.get()
-            if item is None or not self._running:
+        while self._is_running():
+            try:
+                item = self._queue.get(timeout=1.0)
+            except Exception:
+                # Queue.get timeout - check if we should continue
                 continue
+
+            if item is None or not self._is_running():
+                break
 
             text, voice_name, rate_wpm = item
             if not text:
@@ -270,8 +299,11 @@ class Voice:
                 # Wait for completion
                 delegate.done_event.wait(timeout=120)
 
-            except Exception:
-                pass  # Continue with next item
+            except Exception as e:
+                logger.error(f"Voice synthesis error: {e}")
+                # Continue with next item
+
+        logger.debug("Voice worker thread exiting")
 
     def _get_voice_by_name(self, voice_name: str) -> object | None:
         """Get AVSpeechSynthesisVoice by display name."""

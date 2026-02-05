@@ -1,0 +1,28 @@
+{
+    "model": "jung-mid",
+    "modules": ["somatic", "archetypes", "imago", "individuation"],
+
+    "heartbeat_idle": 8,
+    "heartbeat_active": 5,
+    "heartbeat_stressed": 3,
+    "heartbeat_critical": 2,
+    "heartbeat_dormant": 60,
+
+    "battery_critical": 10,
+    "cpu_stressed": 80,
+    "cpu_active": 50,
+    "thermal_hot": 80,
+
+    "log_stream": true,
+    "log_level": "INFO",
+
+    "voice_enabled": true,
+    "voice_rate": 250,
+    "voice_anima": "Zoe (Premium)",
+    "voice_shadow": "Serena (Premium)",
+    "voice_persona": "Matilda (Premium)",
+    "voice_self": "Ava (Premium)",
+    "voice_default": "Zoe (Premium)",
+    "voice_actions": "Evan (Enhanced)",
+    "voice_actions_rate": 190
+}

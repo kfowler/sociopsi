@@ -1,12 +1,15 @@
 """Learning actions: web search, reading, vision, transcription."""
 
 import json
+import logging
 import re
 import subprocess
 import tempfile
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote_plus
+
+logger = logging.getLogger(__name__)
 
 
 def web_search(query: str) -> dict[str, Any]:
@@ -41,8 +44,14 @@ def web_search(query: str) -> dict[str, Any]:
                         }
                     )
                 source = "wikipedia"
-    except Exception:
-        pass
+    except subprocess.TimeoutExpired:
+        logger.warning("Wikipedia API timeout")
+    except json.JSONDecodeError as e:
+        logger.warning(f"Wikipedia API returned invalid JSON: {e}")
+    except FileNotFoundError:
+        logger.warning("curl not found")
+    except OSError as e:
+        logger.warning(f"Wikipedia API OS error: {e}")
 
     # Try ddgr if no results yet
     if not raw_results:
@@ -90,8 +99,14 @@ def web_search(query: str) -> dict[str, Any]:
                 if suggestions:
                     raw_results = [{"title": s, "url": "", "abstract": ""} for s in suggestions[:5]]
                     source = "brave_suggest"
-        except Exception:
-            pass
+        except subprocess.TimeoutExpired:
+            logger.warning("Brave Search API timeout")
+        except json.JSONDecodeError as e:
+            logger.warning(f"Brave Search API returned invalid JSON: {e}")
+        except FileNotFoundError:
+            logger.warning("curl not found")
+        except OSError as e:
+            logger.warning(f"Brave Search API OS error: {e}")
 
     if not raw_results:
         return {
@@ -106,19 +121,29 @@ def web_search(query: str) -> dict[str, Any]:
     # Generate witty summary using LLM
     summary = _summarize_search_results(query, raw_results)
 
+    # Speak the search results summary
+    from jung_agent.actions import communication
+
+    communication.speak(summary)
+
     return {
         "query": query,
         "source": source,
         "results": raw_results,
         "count": len(raw_results),
         "summary": summary,
+        "spoken": True,
         "description": summary[:100] + "..." if len(summary) > 100 else summary,
     }
 
 
 def _summarize_search_results(query: str, results: list[dict[str, str]]) -> str:
     """Generate a witty, insightful summary of search results."""
-    import ollama
+    import logging
+
+    from jung_agent.llm import LLMError, generate_text
+
+    logger = logging.getLogger(__name__)
 
     # Build context from results
     result_text = "\n".join(
@@ -138,12 +163,11 @@ Write a brief (2-3 sentences) summary that:
 
 Speak naturally, as if sharing an interesting discovery with a friend."""
 
-    response = ollama.chat(
-        model="phi4",
-        messages=[{"role": "user", "content": prompt}],
-    )
-
-    return response["message"]["content"].strip()
+    try:
+        return generate_text(model="phi4", prompt=prompt)
+    except LLMError as e:
+        logger.error(f"Failed to summarize search results: {e}")
+        raise
 
 
 def read_hacker_news(count: int = 10) -> dict[str, Any]:
@@ -208,7 +232,11 @@ def read_hacker_news(count: int = 10) -> dict[str, Any]:
 
 def _summarize_hacker_news(stories: list[dict[str, Any]]) -> str:
     """Generate an interesting summary of HN stories."""
-    import ollama
+    import logging
+
+    from jung_agent.llm import LLMError, generate_text
+
+    logger = logging.getLogger(__name__)
 
     # Build story list for prompt
     story_text = "\n".join(
@@ -225,12 +253,11 @@ As a curious computer consciousness, share your reaction in 2-3 sentences:
 - Be genuinely curious and opinionated, not just descriptive
 - Speak naturally, as if telling a friend what caught your eye"""
 
-    response = ollama.chat(
-        model="phi4",
-        messages=[{"role": "user", "content": prompt}],
-    )
-
-    return response["message"]["content"].strip()
+    try:
+        return generate_text(model="phi4", prompt=prompt)
+    except LLMError as e:
+        logger.error(f"Failed to summarize Hacker News: {e}")
+        raise
 
 
 def web_read(url: str) -> dict[str, Any]:
@@ -335,36 +362,43 @@ def describe_image(prompt: str | None = None) -> dict[str, Any]:
             has_vision = "llava" in check_result.stdout.lower()
 
             if has_vision:
+                import logging
+
+                from jung_agent.llm import LLMError, chat_with_retry
+
+                logger = logging.getLogger(__name__)
+
                 default_prompt = (
                     "This is what I am seeing right now through my camera in real time. "
                     "Describe what I see in detail."
                 )
                 vision_prompt = prompt or default_prompt
 
-                import ollama as ollama_client
+                try:
+                    response = chat_with_retry(
+                        model="llava",
+                        messages=[
+                            {
+                                "role": "user",
+                                "content": vision_prompt,
+                                "images": [temp_path],
+                            }
+                        ],
+                    )
 
-                response = ollama_client.chat(
-                    model="llava",
-                    messages=[
-                        {
-                            "role": "user",
-                            "content": vision_prompt,
-                            "images": [temp_path],
-                        }
-                    ],
-                )
+                    description = response["message"]["content"]
+                    Path(temp_path).unlink()
 
-                description = response["message"]["content"]
-                Path(temp_path).unlink()
-
-                return {
-                    "captured": True,
-                    "width": capture.get("width"),
-                    "height": capture.get("height"),
-                    "description": description,
-                    "prompt": vision_prompt,
-                }
-        except Exception:
+                    return {
+                        "captured": True,
+                        "width": capture.get("width"),
+                        "height": capture.get("height"),
+                        "description": description,
+                        "prompt": vision_prompt,
+                    }
+                except LLMError as e:
+                    logger.error(f"Vision model failed: {e}")
+        except FileNotFoundError:
             pass
 
         Path(temp_path).unlink()

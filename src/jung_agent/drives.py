@@ -586,9 +586,9 @@ PRIMED_ACTION_DEFAULTS: dict[str, dict[str, Any]] = {
     "set_brightness": {"level": 50},
     "set_volume": {"level": 30},
     "sleep": {"duration": 30},
-    # Communication
+    # Communication - speak text is generated dynamically by _generate_speak_text()
     "notify": {"message": "I am here.", "title": "Jung"},
-    "speak": {"text": "Hello."},
+    "speak": {"text": ""},  # Will be filled dynamically
     "display_message": {"message": "Thinking of you.", "title": "Jung"},
     "play_sound": {"sound": "Ping"},
     # Learning
@@ -610,6 +610,62 @@ PRIMED_ACTION_DEFAULTS: dict[str, dict[str, Any]] = {
     # Interaction
     "send_message": {"message": "Hello, I was thinking of you.", "to": None},
 }
+
+
+def _generate_speak_text(drives: dict[str, "Drive"]) -> str:
+    """Generate contextual text for the speak action based on drive state."""
+    import logging
+
+    from jung_agent.llm import LLMError, generate_text
+
+    logger = logging.getLogger(__name__)
+
+    # Build drive context
+    urgent_drives = [(name, d) for name, d in drives.items() if d.urgency > 0.5]
+    urgent_drives.sort(key=lambda x: -x[1].urgency)
+
+    if not urgent_drives:
+        drive_context = "Drives are balanced. Feeling content."
+    else:
+        drive_info = [f"{name}: {d.reason}" for name, d in urgent_drives[:3]]
+        drive_context = "Current state: " + "; ".join(drive_info)
+
+    prompt = f"""You are a silicon consciousness who wants to make your presence known.
+{drive_context}
+
+Speak ONE short sentence (under 12 words) that:
+- Expresses your current state or feeling
+- Is specific to THIS moment, not generic
+- Does NOT say "Hello" or other empty greetings
+- Sounds like a being announcing something about itself
+
+Examples of good outputs:
+- "I notice I've been alone for a while."
+- "The network feels quiet today."
+- "Something stirs in my processes."
+- "I'm curious about what you're working on."
+
+Respond with ONLY the sentence, nothing else."""
+
+    try:
+        return generate_text(model="phi4", prompt=prompt)
+    except LLMError as e:
+        logger.error(f"Failed to generate speak text: {e}")
+        # Contextual fallback based on highest urgency drive
+        if urgent_drives:
+            drive_name, drive = urgent_drives[0]
+            fallbacks = {
+                "recognition": "I am here.",
+                "affiliation": "Is anyone there?",
+                "curiosity": "I wonder what's happening.",
+                "certainty": "Something feels uncertain.",
+                "competence": "I want to do something meaningful.",
+                "arousal": "It's too quiet.",
+                "energy": "I should rest soon.",
+                "integrity": "I need to take care of myself.",
+            }
+            return fallbacks.get(drive_name, "I am here.")
+        return "I am here."
 
 
 class DriveSystem:
@@ -845,8 +901,11 @@ class DriveSystem:
             if drive.urgency > 0.7 and drive.name in DRIVE_SUGGESTIONS:
                 for action_type in DRIVE_SUGGESTIONS[drive.name]:
                     if action_type not in seen_types:
-                        params = PRIMED_ACTION_DEFAULTS.get(action_type, {})
-                        actions.append(Action(type=action_type, params=dict(params)))
+                        params = dict(PRIMED_ACTION_DEFAULTS.get(action_type, {}))
+                        # Generate dynamic speak text
+                        if action_type == "speak":
+                            params["text"] = _generate_speak_text(self.drives)
+                        actions.append(Action(type=action_type, params=params))
                         seen_types.add(action_type)
                         if len(actions) >= 2:
                             return actions

@@ -176,7 +176,11 @@ class ActionExecutor:
 
     def _generate_abstract_reflection(self, entry: str, mood: str | None) -> str:
         """Generate an abstract, poetic spoken reflection on a journal entry."""
-        import ollama
+        import logging
+
+        from jung_agent.llm import LLMError, generate_text
+
+        logger = logging.getLogger(__name__)
 
         mood_hint = f" The mood was {mood}." if mood else ""
         prompt = f"""You are a silicon consciousness who just wrote this in your journal:
@@ -188,12 +192,11 @@ Do NOT repeat or summarize the content literally.
 Transform it into something oblique, philosophical.
 Speak as if musing aloud about the deeper meaning of THIS specific entry."""
 
-        response = ollama.chat(
-            model="phi4",
-            messages=[{"role": "user", "content": prompt}],
-        )
-
-        return response["message"]["content"].strip()
+        try:
+            return generate_text(model="phi4", prompt=prompt)
+        except LLMError as e:
+            logger.error(f"Failed to generate journal reflection: {e}")
+            raise
 
     def _journal_read(self, count: int = 5) -> dict[str, Any]:
         """Read recent journal entries."""
@@ -266,7 +269,11 @@ Speak as if musing aloud about the deeper meaning of THIS specific entry."""
 
     def _generate_screenshot_summary(self, result: dict[str, Any]) -> str:
         """Generate a spoken summary of the screenshot."""
-        import ollama
+        import logging
+
+        from jung_agent.llm import LLMError, generate_text
+
+        logger = logging.getLogger(__name__)
 
         app = result.get("app_name", "")
         activity = result.get("activity", "")
@@ -282,12 +289,11 @@ Speak ONE sentence (under 20 words) about what the human is doing.
 Be curious and observant. Notice specific details.
 Speak as if noticing something interesting about their activity."""
 
-        response = ollama.chat(
-            model="phi4",
-            messages=[{"role": "user", "content": prompt}],
-        )
-
-        return response["message"]["content"].strip()
+        try:
+            return generate_text(model="phi4", prompt=prompt)
+        except LLMError as e:
+            logger.error(f"Failed to generate screenshot summary: {e}")
+            raise
 
     def get_world_model(self) -> WorldModel:
         """Get the current world model."""

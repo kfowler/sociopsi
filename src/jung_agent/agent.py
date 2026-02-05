@@ -8,16 +8,16 @@ from datetime import datetime
 from types import FrameType
 from typing import Final, Literal, TypedDict
 
-import ollama
-
 from jung_agent.actions.executor import ActionExecutor
 from jung_agent.config import AgentConfig, load_system_prompt
 from jung_agent.drives import DriveSystem
+from jung_agent.llm import LLMError, chat_with_retry
 from jung_agent.logger import PsycheLogger
 from jung_agent.parser import parse_response
 from jung_agent.perception import format_perception
 from jung_agent.sensors.events import EventCollector
 from jung_agent.sensors.somatic import gather_somatic
+from jung_agent.terminal import colors
 from jung_agent.types import Action, ActionResult, PsycheComponent, SomaticState, StreamSegment
 from jung_agent.voice import Voice
 
@@ -143,11 +143,6 @@ class JungAgent:
         self.stop()
         sys.exit(0)
 
-    _MAGENTA = "\033[35m"
-    _RED = "\033[31m"
-    _BLUE = "\033[34m"
-    _BOLD = "\033[1m"
-
     def _run_loop(self) -> None:
         """Main agent loop."""
         cycle_count = 0
@@ -159,7 +154,7 @@ class JungAgent:
                 # Header with cycle number and timestamp
                 timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 print(f"\n{'=' * 70}")
-                print(f"{self._BOLD}[CYCLE {cycle_count}] {timestamp}{self._RESET}")
+                print(f"{colors.BOLD}[CYCLE {cycle_count}] {timestamp}{colors.RESET}")
                 print("=" * 70)
 
                 # 1. Gather somatic state
@@ -178,26 +173,26 @@ class JungAgent:
                 # 4. Check for compulsive actions (survival override)
                 compulsive = self.drive_system.get_compulsive_actions(somatic)
                 if compulsive:
-                    print(f"\n{self._RED}[COMPULSIVE - SURVIVAL]{self._RESET}")
+                    print(f"\n{colors.RED}[COMPULSIVE - SURVIVAL]{colors.RESET}")
                     for action in compulsive:
                         print(f"  ! {action.type} (drive override)")
 
                 # 5. Print somatic state summary
-                print(f"\n{self._BLUE}[SOMATIC]{self._RESET} {somatic.to_tag()}")
+                print(f"\n{colors.BLUE}[SOMATIC]{colors.RESET} {somatic.to_tag()}")
                 print(f"  Battery: {somatic.battery_percent}% ({somatic.power_state.value})")
                 print(f"  CPU: {somatic.cpu_percent:.1f}% | RAM: {somatic.ram_percent:.1f}%")
                 print(f"  Thermal: {somatic.thermal_state.value} | Fan: {somatic.fan_rpm} RPM")
                 print(f"  Network: {somatic.network_state.value} | Lid: {somatic.lid_state.value}")
 
                 # 6. Print drive state
-                print(f"\n{self._MAGENTA}[DRIVES]{self._RESET}")
+                print(f"\n{colors.MAGENTA}[DRIVES]{colors.RESET}")
                 for line in self.drive_system.format_for_perception().split("\n")[1:]:
                     if line.strip():
                         print(f"  {line}")
 
                 # 7. Print events if any
                 if events:
-                    print(f"\n{self._CYAN}[EVENTS]{self._RESET}")
+                    print(f"\n{colors.CYAN}[EVENTS]{colors.RESET}")
                     for event in events:
                         ts = event.timestamp.strftime("%H:%M:%S")
                         print(f"  [{ts}] {event.type}: {event.description}")
@@ -214,13 +209,6 @@ class JungAgent:
                     drives=drive_perception,
                 )
 
-                # Print perception (full)
-                print(f"\n{self._CYAN}[PERCEPTION → LLM]{self._RESET}")
-                print("-" * 50)
-                for line in perception.split("\n"):
-                    print(f"  {self._DIM}{line}{self._RESET}")
-                print("-" * 50)
-
                 # 6. Send to psyche
                 response = self._query_psyche(perception)
 
@@ -229,7 +217,7 @@ class JungAgent:
 
                 # 8. Print raw response if no stream parsed
                 if not parsed.stream and not parsed.actions:
-                    print(f"\n{self._RED}[RAW RESPONSE - PARSE FAILED]{self._RESET}")
+                    print(f"\n{colors.RED}[RAW RESPONSE - PARSE FAILED]{colors.RESET}")
                     print(response[:500] + ("..." if len(response) > 500 else ""))
 
                 # 9. Log and speak stream
@@ -258,13 +246,13 @@ class JungAgent:
 
                 # Announce and execute actions
                 if final_actions:
-                    print(f"\n{self._YELLOW}[ACTIONS]{self._RESET}")
+                    print(f"\n{colors.YELLOW}[ACTIONS]{colors.RESET}")
                     for i, action in enumerate(final_actions, 1):
                         # Mark source of action
                         if action in compulsive:
-                            source = f" {self._RED}(compulsive){self._RESET}"
+                            source = f" {colors.RED}(compulsive){colors.RESET}"
                         elif action in primed:
-                            source = f" {self._MAGENTA}(primed){self._RESET}"
+                            source = f" {colors.MAGENTA}(primed){colors.RESET}"
                         else:
                             source = ""
                         params_str = ", ".join(f"{k}={v!r}" for k, v in action.params.items())
@@ -274,7 +262,7 @@ class JungAgent:
                             print(f"  {i}. {action.type}(){source}")
                     self.voice.announce_actions(final_actions)
                 else:
-                    print(f"\n{self._YELLOW}[ACTIONS]{self._RESET} (none)")
+                    print(f"\n{colors.YELLOW}[ACTIONS]{colors.RESET} (none)")
 
                 self._last_action_results = self.executor.execute_all(final_actions)
 
@@ -286,20 +274,20 @@ class JungAgent:
 
                 # Log action results with full details
                 if self._last_action_results:
-                    print(f"\n{self._GREEN}[RESULTS]{self._RESET}")
+                    print(f"\n{colors.GREEN}[RESULTS]{colors.RESET}")
                     for result in self._last_action_results:
-                        status_color = self._GREEN if result.success else self._RED
+                        status_color = colors.GREEN if result.success else colors.RED
                         status = "✓" if result.success else "✗"
-                        print(f"  {status_color}{status} {result.action_type}{self._RESET}")
+                        print(f"  {status_color}{status} {result.action_type}{colors.RESET}")
                         if result.success and isinstance(result.result, dict):
                             # Print all result fields
                             for key, value in result.result.items():
                                 if key != "full_data":  # Skip raw image data
                                     if isinstance(value, str) and len(value) > 100:
                                         value = value[:100] + "..."
-                                    print(f"      {self._DIM}{key}: {value}{self._RESET}")
+                                    print(f"      {colors.DIM}{key}: {value}{colors.RESET}")
                         elif not result.success and result.error:
-                            print(f"      {self._DIM}Error: {result.error}{self._RESET}")
+                            print(f"      {colors.DIM}Error: {result.error}{colors.RESET}")
 
                 # 11. Log perception, drives, and state
                 self.logger.log_cycle(
@@ -346,32 +334,39 @@ class JungAgent:
             # Keep system message + last N exchanges
             self._messages = [self._messages[0]] + self._messages[-(self._max_history * 2) :]
 
-        # Query model
-        response = ollama.chat(
-            model=self.config.model,
-            messages=self._messages,
-        )
-
-        assistant_message: str = response["message"]["content"]
+        # Query model with retry logic
+        try:
+            response = chat_with_retry(
+                model=self.config.model,
+                messages=self._messages,
+            )
+            assistant_message: str = response["message"]["content"]
+        except LLMError as e:
+            # Remove the failed perception from history
+            self._messages.pop()
+            print(f"{colors.RED}[LLM ERROR]{colors.RESET} {e}")
+            return '{"stream":[],"actions":[]}'
 
         # Add response to history
         self._messages.append(ChatMessage(role="assistant", content=assistant_message))
 
         return assistant_message
 
-    # ANSI color codes and emojis for psyche components
-    _COMPONENT_STYLE: Final[dict[PsycheComponent, tuple[str, str]]] = {
-        "shadow": ("\033[31m", "🌑"),  # Red
-        "anima": ("\033[36m", "✨"),  # Cyan
-        "persona": ("\033[33m", "🎭"),  # Yellow
-        "self": ("\033[35m", "☀️"),  # Magenta
-        "default": ("\033[37m", "💭"),  # White
+    # Emojis for psyche components (colors come from terminal module)
+    _COMPONENT_EMOJI: Final[dict[PsycheComponent, str]] = {
+        "shadow": "🌑",
+        "anima": "✨",
+        "persona": "🎭",
+        "self": "☀️",
+        "default": "💭",
     }
-    _RESET: Final[str] = "\033[0m"
-    _DIM: Final[str] = "\033[2m"
-    _CYAN: Final[str] = "\033[36m"
-    _GREEN: Final[str] = "\033[32m"
-    _YELLOW: Final[str] = "\033[33m"
+    _COMPONENT_COLOR: Final[dict[PsycheComponent, str]] = {
+        "shadow": colors.RED,
+        "anima": colors.CYAN,
+        "persona": colors.YELLOW,
+        "self": colors.MAGENTA,
+        "default": colors.WHITE,
+    }
 
     def _log_stream(self, segments: list[StreamSegment]) -> None:
         """Log the psyche's stream to console with timestamped, colored component labels."""
@@ -379,12 +374,11 @@ class JungAgent:
 
         for segment in segments:
             timestamp = datetime.now().strftime("%H:%M:%S")
-            color, emoji = self._COMPONENT_STYLE.get(
-                segment.component, self._COMPONENT_STYLE["default"]
-            )
+            color = self._COMPONENT_COLOR.get(segment.component, colors.WHITE)
+            emoji = self._COMPONENT_EMOJI.get(segment.component, "💭")
             label = segment.component.upper()
 
-            print(f"[{timestamp}] {color}{emoji} {label}{self._RESET}: {segment.text}")
+            print(f"[{timestamp}] {color}{emoji} {label}{colors.RESET}: {segment.text}")
 
         print()  # Blank line after stream
 
@@ -433,9 +427,11 @@ def run_single(config: AgentConfig | None = None, perception: str | None = None)
             heartbeat_mode="idle",
         )
 
-    response = ollama.chat(
-        model=config.model,
-        messages=[{"role": "user", "content": perception}],
-    )
-
-    return response["message"]["content"]
+    try:
+        response = chat_with_retry(
+            model=config.model,
+            messages=[{"role": "user", "content": perception}],
+        )
+        return response["message"]["content"]
+    except LLMError as e:
+        return f'{{"stream":[],"actions":[],"error":"{e}"}}'

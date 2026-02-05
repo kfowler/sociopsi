@@ -4,7 +4,7 @@ import argparse
 import sys
 
 from jung_agent.agent import JungAgent, run_single
-from jung_agent.config import AgentConfig
+from jung_agent.config import AgentConfig, setup_logging
 
 
 def main() -> int:
@@ -58,6 +58,19 @@ def main() -> int:
         help="Disable voice output",
     )
 
+    parser.add_argument(
+        "-v", "--verbose",
+        action="store_true",
+        help="Enable verbose (DEBUG) logging",
+    )
+
+    parser.add_argument(
+        "--log-file",
+        type=str,
+        default=None,
+        help="Path to log file (enables file logging)",
+    )
+
     args = parser.parse_args()
 
     # Build config
@@ -70,6 +83,16 @@ def main() -> int:
 
     if args.heartbeat:
         config.heartbeat_idle = args.heartbeat
+
+    if args.verbose:
+        config.log_level = "DEBUG"
+
+    if args.log_file:
+        from pathlib import Path
+        config.log_file = Path(args.log_file)
+
+    # Set up logging
+    setup_logging(config)
 
     # Run
     if args.single:
