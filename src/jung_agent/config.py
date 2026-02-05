@@ -40,7 +40,7 @@ class AgentConfig:
 
     # Voice settings
     voice_enabled: bool = True
-    voice_name: str = "Daniel"  # High-quality UK male voice
+    voice_name: str = "Ava (Premium)"  # High-quality female voice
     voice_rate: int = 180  # Words per minute (default ~180-200)
 
     def __post_init__(self) -> None:

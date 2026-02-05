@@ -61,8 +61,8 @@ def main() -> int:
     parser.add_argument(
         "--voice",
         type=str,
-        default="Daniel",
-        help="Voice name for TTS (default: Daniel)",
+        default=None,
+        help="Voice name for TTS (default: Ava (Premium))",
     )
 
     parser.add_argument(
@@ -80,9 +80,12 @@ def main() -> int:
         modules=args.modules,
         log_stream=not args.quiet,
         voice_enabled=not args.no_voice,
-        voice_name=args.voice,
         voice_rate=args.voice_rate,
     )
+
+    # Override voice name if specified
+    if args.voice:
+        config.voice_name = args.voice
 
     if args.heartbeat:
         config.heartbeat_idle = args.heartbeat
