@@ -173,11 +173,19 @@ class JungAgent:
 
         return assistant_message
 
+    # ANSI color codes and emojis for psyche components
+    _COMPONENT_STYLE = {
+        "shadow": ("\033[31m", "🌑"),    # Red
+        "anima": ("\033[36m", "✨"),      # Cyan
+        "persona": ("\033[33m", "🎭"),   # Yellow
+        "self": ("\033[35m", "☀️"),       # Magenta
+        "default": ("\033[37m", "💭"),   # White
+    }
+    _RESET = "\033[0m"
+
     def _log_stream(self, stream: str) -> None:
-        """Log the psyche's stream to console with component labels."""
-        timestamp = datetime.now().strftime("%H:%M:%S")
-        print(f"\n[{timestamp}] STREAM:")
-        print("-" * 40)
+        """Log the psyche's stream to console with timestamped, colored component labels."""
+        print()  # Blank line before stream
 
         # Parse into segments by component
         segments = self._parse_stream_components(stream)
@@ -188,17 +196,22 @@ class JungAgent:
             if not text:
                 continue
 
-            # Format component label
-            if component != "default":
-                label = component.upper()
-                print(f"  [{label}]")
+            # Timestamp for this segment
+            timestamp = datetime.now().strftime("%H:%M:%S")
 
-            # Print text with indent
-            for line in text.split("\n"):
-                if line.strip():
-                    print(f"    {line.strip()}")
+            # Get color and emoji for component
+            color, emoji = self._COMPONENT_STYLE.get(component, self._COMPONENT_STYLE["default"])
+            label = component.upper() if component != "default" else "PSYCHE"
 
-        print("-" * 40)
+            # Print each line with colored label
+            lines = [line.strip() for line in text.split("\n") if line.strip()]
+            if lines:
+                print(f"[{timestamp}] {color}{emoji} {label}{self._RESET}: {lines[0]}")
+                indent = " " * (13 + len(label) + 3)  # align with text after label
+                for line in lines[1:]:
+                    print(f"{indent}{line}")
+
+        print()  # Blank line after stream
 
     def _parse_stream_components(self, stream: str) -> list[tuple[str, str]]:
         """Parse stream into (component, text) pairs."""

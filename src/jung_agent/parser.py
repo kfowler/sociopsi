@@ -12,8 +12,8 @@ def parse_response(response: str) -> PsycheResponse:
     actions: list[Action] = []
 
     # First, find and remove the actions section entirely
-    # Match [ACTIONS] followed by JSON (handles multiline)
-    actions_pattern = r"\[ACTIONS\]\s*(\{[\s\S]*?\})\s*$"
+    # Match [ACTIONS] followed by JSON (handles multiline, greedy to get full JSON)
+    actions_pattern = r"\[ACTIONS\]\s*(\{[\s\S]*\})"
     actions_match = re.search(actions_pattern, response, re.IGNORECASE)
 
     if actions_match:
@@ -51,31 +51,36 @@ def parse_response(response: str) -> PsycheResponse:
 
 
 def _remove_json_blocks(text: str) -> str:
-    """Remove any JSON-like blocks from text."""
-    # Remove lines that look like JSON objects or arrays
+    """Remove any JSON-like blocks from text, preserving component labels."""
     lines = []
     in_json = False
     brace_count = 0
 
+    # Pattern for psyche component labels - these should NOT be removed
+    component_pattern = re.compile(r"^\[(SHADOW|ANIMA|ANIMUS|PERSONA|SELF|STREAM|ACTIONS)\]", re.IGNORECASE)
+
     for line in text.split("\n"):
         stripped = line.strip()
 
-        # Detect start of JSON
-        if stripped.startswith("{") or stripped.startswith("["):
+        # Always keep component labels
+        if component_pattern.match(stripped):
+            lines.append(line)
+            continue
+
+        # Detect start of JSON (only { not [ which could be component label)
+        if stripped.startswith("{"):
             in_json = True
-            brace_count = stripped.count("{") + stripped.count("[")
-            brace_count -= stripped.count("}") + stripped.count("]")
+            brace_count = stripped.count("{") - stripped.count("}")
             continue
 
         if in_json:
-            brace_count += stripped.count("{") + stripped.count("[")
-            brace_count -= stripped.count("}") + stripped.count("]")
+            brace_count += stripped.count("{") - stripped.count("}")
             if brace_count <= 0:
                 in_json = False
             continue
 
-        # Skip lines that look like JSON properties
-        if re.match(r'^[\s]*["\']?\w+["\']?\s*:', stripped):
+        # Skip lines that look like JSON properties ("key": value)
+        if re.match(r'^[\s]*"[^"]+"\s*:', stripped):
             continue
 
         lines.append(line)
