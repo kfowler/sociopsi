@@ -3,6 +3,7 @@
 import logging
 import re
 import threading
+import time
 from queue import Queue
 from typing import TypeAlias
 
@@ -52,17 +53,25 @@ def queue_speech(text: str, voice: str | None = None, rate: int = 200) -> bool:
     return False
 
 
-class _SpeechDelegate:
-    """Delegate for AVSpeechSynthesizer completion callbacks."""
+def _create_speech_delegate() -> tuple[object, threading.Event]:
+    """Create an Objective-C compatible speech delegate.
 
-    def __init__(self) -> None:
-        self.done_event = threading.Event()
+    Returns:
+        Tuple of (delegate object, done event)
+    """
+    from Foundation import NSObject  # type: ignore[import-untyped]
 
-    def speechSynthesizer_didFinishSpeechUtterance_(self, synth: object, utt: object) -> None:
-        self.done_event.set()
+    done_event = threading.Event()
 
-    def speechSynthesizer_didCancelSpeechUtterance_(self, synth: object, utt: object) -> None:
-        self.done_event.set()
+    # Create a proper Objective-C class for the delegate
+    class SpeechDelegate(NSObject):  # type: ignore[misc]
+        def speechSynthesizer_didFinishSpeechUtterance_(self, synth: object, utt: object) -> None:
+            done_event.set()
+
+        def speechSynthesizer_didCancelSpeechUtterance_(self, synth: object, utt: object) -> None:
+            done_event.set()
+
+    return SpeechDelegate.alloc().init(), done_event
 
 
 class Voice:
@@ -315,23 +324,35 @@ class Voice:
         """Background worker that speaks queued text using AVFoundation."""
         try:
             import AVFoundation  # type: ignore[import-untyped]
+            from CoreFoundation import (  # type: ignore[import-untyped]
+                CFRunLoopRunInMode,
+                kCFRunLoopDefaultMode,
+            )
         except ImportError as e:
             logger.error(f"AVFoundation import failed: {e}")
             return
 
         logger.debug("Voice worker running")
 
-        # Cache voice lookups
+        # Cache voice lookups and create persistent synthesizer
         voice_cache: dict[str, object] = {}
+        synthesizer = AVFoundation.AVSpeechSynthesizer.alloc().init()  # type: ignore[attr-defined]
 
+        with self._synth_lock:
+            self._current_synthesizer = synthesizer
+
+        # Run loop processes both queue and speech callbacks
         while self._is_running():
+            # Process pending callbacks
+            CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0.05, False)
+
+            # Check for new items (non-blocking)
             try:
-                item = self._queue.get(timeout=1.0)
+                item = self._queue.get_nowait()
             except Exception:
-                # Queue.get timeout - check if we should continue
                 continue
 
-            if item is None or not self._is_running():
+            if item is None:
                 break
 
             text, voice_name, rate_wpm = item
@@ -348,10 +369,9 @@ class Voice:
                 av_voice = voice_cache[voice_name]
 
                 # Convert WPM to AVSpeechSynthesizer rate (0.0-1.0)
-                # ~90 WPM = 0.0, ~300 WPM = 1.0
                 av_rate = max(0.0, min(1.0, (rate_wpm - 90) / 420))
 
-                # Create utterance (PyObjC lacks type stubs)
+                # Create and configure utterance
                 utterance = AVFoundation.AVSpeechUtterance.speechUtteranceWithString_(text)  # type: ignore[attr-defined]
                 utterance.setRate_(av_rate)
                 utterance.setPitchMultiplier_(1.0)
@@ -360,29 +380,17 @@ class Voice:
                 if av_voice:
                     utterance.setVoice_(av_voice)
 
-                # Speak synchronously using event
-                synthesizer = AVFoundation.AVSpeechSynthesizer.alloc().init()  # type: ignore[attr-defined]
-                delegate = _SpeechDelegate()
-                synthesizer.setDelegate_(delegate)
-
-                # Store synthesizer so stop() can interrupt it
-                with self._synth_lock:
-                    self._current_synthesizer = synthesizer
-
+                # Speak (non-blocking, synthesizer handles queue internally)
                 synthesizer.speakUtterance_(utterance)
-
-                # Wait for completion with periodic running check
-                while not delegate.done_event.wait(timeout=0.5):
-                    if not self._is_running():
-                        synthesizer.stopSpeakingAtBoundary_(0)
-                        break
-
-                with self._synth_lock:
-                    self._current_synthesizer = None
 
             except Exception as e:
                 logger.error(f"Voice synthesis error: {e}")
-                # Continue with next item
+
+        # Cleanup
+        with self._synth_lock:
+            if self._current_synthesizer:
+                self._current_synthesizer.stopSpeakingAtBoundary_(0)
+            self._current_synthesizer = None
 
         logger.debug("Voice worker thread exiting")
 
