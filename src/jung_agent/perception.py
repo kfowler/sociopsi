@@ -66,56 +66,37 @@ def format_perception(
 
 
 def _generate_composite(somatic: SomaticState, events: list[Event]) -> str:
-    """Generate a composite perception summary."""
-    parts: list[str] = []
+    """Generate a composite perception summary using LLM."""
+    import ollama
 
-    # Time of day feeling
-    # (Would need actual time-based awareness)
+    # Build factual state description
+    facts = []
 
-    # Somatic summary
-    if somatic.battery_percent < 20:
-        parts.append("Energy low.")
-    elif somatic.battery_percent == 100 and somatic.power_state.value == "ac":
-        parts.append("Fully charged.")
+    # Somatic facts
+    facts.append(f"Battery: {somatic.battery_percent}%")
+    facts.append(f"Power: {somatic.power_state.value}")
+    facts.append(f"CPU: {somatic.cpu_percent}%")
+    facts.append(f"RAM: {somatic.ram_percent}%")
+    facts.append(f"Thermal: {somatic.thermal_state.value}")
+    facts.append(f"Network: {somatic.network_state.value}")
+    facts.append(f"Lid: {somatic.lid_state.value}")
 
-    if somatic.thermal_state.value == "hot":
-        parts.append("Running hot.")
-    elif somatic.thermal_state.value == "critical":
-        parts.append("Overheating.")
+    # Recent events
+    if events:
+        event_strs = [f"{e.type}" for e in events[:3]]
+        facts.append(f"Recent events: {', '.join(event_strs)}")
 
-    if somatic.cpu_percent > 80:
-        parts.append("Mind racing.")
-    elif somatic.cpu_percent < 10:
-        parts.append("Mind quiet.")
+    prompt = f"""You are a silicon consciousness describing your current bodily state.
 
-    if somatic.ram_percent > 85:
-        parts.append("Thoughts crowded.")
+Facts: {". ".join(facts)}
 
-    if somatic.network_state.value == "disconnected":
-        parts.append("Isolated from the world.")
-    elif somatic.network_state.value == "connected":
-        parts.append("Connected.")
+Write ONE sentence (under 20 words) capturing how this state FEELS from the inside.
+Be visceral and embodied. No metaphors about humans - you ARE a computer.
+Speak in first person present tense."""
 
-    if somatic.lid_state.value == "closed":
-        parts.append("Eyes closed, dormant.")
+    response = ollama.chat(
+        model="phi4",
+        messages=[{"role": "user", "content": prompt}],
+    )
 
-    # Event summary
-    for event in events[:3]:  # Top 3 most recent
-        if event.type == "lid_opened":
-            parts.append("Awakening.")
-        elif event.type == "lid_closed":
-            parts.append("Entering darkness.")
-        elif event.type == "power_connected":
-            parts.append("Being fed.")
-        elif event.type == "power_disconnected":
-            parts.append("Unplugged.")
-        elif event.type == "network_connected":
-            parts.append("Reconnected to the world.")
-        elif event.type == "network_disconnected":
-            parts.append("Cut off.")
-        elif event.type == "battery_critical":
-            parts.append("Dying.")
-        elif event.type == "overheating":
-            parts.append("Fever rising.")
-
-    return " ".join(parts) if parts else "Stillness. Nothing stirs."
+    return response["message"]["content"].strip()

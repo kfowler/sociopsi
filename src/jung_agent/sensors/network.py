@@ -142,26 +142,27 @@ def ping_host(host: str, count: int = 3) -> dict[str, Any]:
 
             return stats
         else:
-            return {"alive": False, "host": host, "description": "unreachable, silence"}
+            from jung_agent.describe import describe_ping_failure
+
+            return {
+                "alive": False,
+                "host": host,
+                "description": describe_ping_failure("unreachable"),
+            }
 
     except subprocess.TimeoutExpired:
-        return {"alive": False, "host": host, "description": "timeout, lost in the void"}
+        from jung_agent.describe import describe_ping_failure
+
+        return {"alive": False, "host": host, "description": describe_ping_failure("timeout")}
     except FileNotFoundError:
         return {"alive": False, "host": host, "error": "ping not available"}
 
 
 def _describe_latency(ms: float) -> str:
-    """Describe latency in experiential terms."""
-    if ms < 10:
-        return "immediate, right here"
-    elif ms < 50:
-        return "close, nearby"
-    elif ms < 150:
-        return "distant but present"
-    elif ms < 500:
-        return "far away"
-    else:
-        return "very far, at the edge of reach"
+    """Describe latency experientially."""
+    from jung_agent.describe import describe_latency
+
+    return describe_latency(ms)
 
 
 def probe_host(host: str, ports: list[int] | None = None) -> dict[str, Any]:
@@ -287,12 +288,12 @@ def trace_route(host: str, max_hops: int = 15) -> dict[str, Any]:
 
 
 def _describe_route(hops: list[dict[str, Any]]) -> str:
-    """Describe the route in experiential terms."""
+    """Describe the route experientially."""
+    from jung_agent.describe import describe_state
+
     if not hops:
-        return "no path found"
-
+        return describe_state("network route", "no path found", "tracing path to destination")
     silent_count = sum(1 for h in hops if h.get("host") == "*")
-    if silent_count > len(hops) // 2:
-        return f"path obscured, {len(hops)} hops with many silent"
-
-    return f"path of {len(hops)} hops, traversing the network"
+    return describe_state(
+        "network route", f"{len(hops)} hops, {silent_count} silent", "tracing path to destination"
+    )

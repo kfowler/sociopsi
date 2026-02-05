@@ -35,21 +35,102 @@ def notify(message: str, title: str | None = None, duration: int = 30) -> dict[s
         return {"error": str(e), "description": "could not notify"}
 
 
-def speak(text: str, voice: str | None = None) -> dict[str, Any]:
-    """Speak text aloud using text-to-speech."""
-    try:
-        cmd = ["say"]
-        if voice:
-            cmd.extend(["-v", voice])
-        cmd.append(text)
+def _get_best_voice(language: str = "en-US") -> tuple[str | None, str]:
+    """Get the highest quality voice available for a language.
 
-        subprocess.run(cmd, capture_output=True, timeout=30)
+    Returns (voice_identifier, voice_name) or (None, "default") if no premium voice found.
+    Priority: Premium (quality 3) > Enhanced (quality 2)
+    """
+    try:
+        import AVFoundation  # type: ignore[import-untyped]
+
+        voices = AVFoundation.AVSpeechSynthesisVoice.speechVoices()  # type: ignore[attr-defined]
+        best_voice = None
+        best_quality = 0
+        best_name = "default"
+
+        for v in voices:
+            lang = v.language()
+            if not lang.startswith(language.split("-")[0]):  # Match language family
+                continue
+
+            quality = v.quality()
+            if quality > best_quality:
+                best_quality = quality
+                best_voice = v.identifier()
+                best_name = v.name()
+
+        return (best_voice, best_name)
+    except ImportError:
+        return (None, "default")
+
+
+def speak(text: str, voice: str | None = None, rate: float = 0.4) -> dict[str, Any]:
+    """Speak text aloud using macOS AVSpeechSynthesizer with premium voices.
+
+    Args:
+        text: The text to speak
+        voice: Optional voice identifier (e.g., "com.apple.voice.premium.en-US.Ava")
+               If not specified, automatically selects highest quality available voice.
+        rate: Speech rate 0.0-1.0 (default 0.4 for contemplative pace, 0.5 is normal)
+    """
+    try:
+        import threading
+
+        import AVFoundation  # type: ignore[import-untyped]
+
+        # Select best voice if not specified
+        voice_name = "default"
+        if not voice:
+            voice, voice_name = _get_best_voice("en-US")
+
+        # Create utterance (PyObjC lacks type stubs)
+        utterance = AVFoundation.AVSpeechUtterance.speechUtteranceWithString_(text)  # type: ignore[attr-defined]
+        utterance.setRate_(rate)
+        utterance.setPitchMultiplier_(1.0)
+        utterance.setVolume_(1.0)
+
+        # Set voice
+        if voice:
+            av_voice = AVFoundation.AVSpeechSynthesisVoice.voiceWithIdentifier_(voice)  # type: ignore[attr-defined]
+            if av_voice:
+                utterance.setVoice_(av_voice)
+                voice_name = av_voice.name()
+
+        # Create synthesizer and speak
+        synthesizer = AVFoundation.AVSpeechSynthesizer.alloc().init()  # type: ignore[attr-defined]
+
+        # Use threading event to wait for completion
+        done_event = threading.Event()
+
+        class SpeechDelegate:
+            def speechSynthesizer_didFinishSpeechUtterance_(self, synth, utterance):
+                done_event.set()
+
+            def speechSynthesizer_didCancelSpeechUtterance_(self, synth, utterance):
+                done_event.set()
+
+        delegate = SpeechDelegate()
+        synthesizer.setDelegate_(delegate)
+        synthesizer.speakUtterance_(utterance)
+
+        # Wait for speech to complete (max 60 seconds)
+        done_event.wait(timeout=60)
+
         return {
             "spoken": True,
             "text": text,
-            "voice": voice or "default",
+            "voice": voice_name,
+            "rate": rate,
             "description": "words spoken aloud",
         }
+
+    except ImportError:
+        return {
+            "error": "AVFoundation not available - install pyobjc-framework-AVFoundation",
+            "description": "could not speak",
+        }
+
     except Exception as e:
         return {"error": str(e), "description": "could not speak"}
 

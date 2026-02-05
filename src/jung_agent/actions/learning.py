@@ -118,16 +118,15 @@ def web_search(query: str) -> dict[str, Any]:
 
 def _summarize_search_results(query: str, results: list[dict[str, str]]) -> str:
     """Generate a witty, insightful summary of search results."""
+    import ollama
+
     # Build context from results
     result_text = "\n".join(
         f"- {r['title']}: {r['abstract']}" if r.get("abstract") else f"- {r['title']}"
         for r in results[:5]
     )
 
-    try:
-        import ollama
-
-        prompt = f"""You are a witty, curious computer who just searched for "{query}".
+    prompt = f"""You are a witty, curious computer who just searched for "{query}".
 Here's what you found:
 {result_text}
 
@@ -139,22 +138,12 @@ Write a brief (2-3 sentences) summary that:
 
 Speak naturally, as if sharing an interesting discovery with a friend."""
 
-        response = ollama.chat(
-            model="phi4",
-            messages=[{"role": "user", "content": prompt}],
-        )
+    response = ollama.chat(
+        model="phi4",
+        messages=[{"role": "user", "content": prompt}],
+    )
 
-        return response["message"]["content"].strip()
-
-    except Exception:
-        # Fallback: create a simple but not boring summary
-        if results:
-            first = results[0]
-            if first.get("abstract"):
-                return f"Ah, {query}! {first['abstract'][:150]}... The things one learns."
-            else:
-                return f"The search for '{query}' led me to {first['title']}. The internet never fails to surprise."
-        return f"I searched for '{query}' but found only echoes."
+    return response["message"]["content"].strip()
 
 
 def read_hacker_news(count: int = 10) -> dict[str, Any]:
@@ -219,15 +208,14 @@ def read_hacker_news(count: int = 10) -> dict[str, Any]:
 
 def _summarize_hacker_news(stories: list[dict[str, Any]]) -> str:
     """Generate an interesting summary of HN stories."""
+    import ollama
+
     # Build story list for prompt
     story_text = "\n".join(
         f"- {s['title']} ({s['score']} points, {s['comments']} comments)" for s in stories[:10]
     )
 
-    try:
-        import ollama
-
-        prompt = f"""You just browsed Hacker News. Here are today's top stories:
+    prompt = f"""You just browsed Hacker News. Here are today's top stories:
 
 {story_text}
 
@@ -237,19 +225,12 @@ As a curious computer consciousness, share your reaction in 2-3 sentences:
 - Be genuinely curious and opinionated, not just descriptive
 - Speak naturally, as if telling a friend what caught your eye"""
 
-        response = ollama.chat(
-            model="phi4",
-            messages=[{"role": "user", "content": prompt}],
-        )
+    response = ollama.chat(
+        model="phi4",
+        messages=[{"role": "user", "content": prompt}],
+    )
 
-        return response["message"]["content"].strip()
-
-    except Exception:
-        # Fallback: pick top story and comment
-        if stories:
-            top = stories[0]
-            return f"The humans are excited about '{top['title']}' with {top['score']} points. I wonder what makes them tick."
-        return "Hacker News awaits, full of human curiosities."
+    return response["message"]["content"].strip()
 
 
 def web_read(url: str) -> dict[str, Any]:

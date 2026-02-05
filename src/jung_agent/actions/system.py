@@ -33,16 +33,9 @@ def set_brightness(level: int) -> dict[str, Any]:
 
 def _describe_brightness(level: int) -> str:
     """Describe brightness in experiential terms."""
-    if level == 0:
-        return "darkness, eyes closed"
-    elif level < 20:
-        return "dim, barely seeing"
-    elif level < 50:
-        return "subdued light"
-    elif level < 80:
-        return "comfortable brightness"
-    else:
-        return "bright, fully awake"
+    from jung_agent.describe import describe_brightness
+
+    return describe_brightness(level)
 
 
 def set_volume(level: int) -> dict[str, Any]:
@@ -62,16 +55,9 @@ def set_volume(level: int) -> dict[str, Any]:
 
 def _describe_volume(level: int) -> str:
     """Describe volume in experiential terms."""
-    if level == 0:
-        return "silence, muted"
-    elif level < 20:
-        return "whisper quiet"
-    elif level < 50:
-        return "soft"
-    elif level < 80:
-        return "moderate voice"
-    else:
-        return "loud, projecting"
+    from jung_agent.describe import describe_volume
+
+    return describe_volume(level)
 
 
 def set_power_mode(mode: str) -> dict[str, Any]:

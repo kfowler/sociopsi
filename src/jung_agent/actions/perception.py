@@ -20,20 +20,9 @@ def check_battery(**kwargs: Any) -> dict[str, Any]:
 
 def _describe_battery(percent: int, power_state: str) -> str:
     """Describe battery in experiential terms."""
-    if power_state == "charging":
-        return f"being fed, {percent}% full"
-    elif power_state == "ac":
-        return "fully nourished, connected to source"
-    elif percent > 80:
-        return f"strong, {percent}% vitality"
-    elif percent > 50:
-        return f"adequate, {percent}% remaining"
-    elif percent > 20:
-        return f"draining, {percent}% - conserve"
-    elif percent > 10:
-        return f"weak, {percent}% - urgent"
-    else:
-        return f"dying, {percent}% - critical"
+    from jung_agent.describe import describe_battery
+
+    return describe_battery(percent, power_state)
 
 
 def check_thermals(**kwargs: Any) -> dict[str, Any]:
@@ -49,14 +38,9 @@ def check_thermals(**kwargs: Any) -> dict[str, Any]:
 
 def _describe_thermals(state: str, temp: float) -> str:
     """Describe thermals in experiential terms."""
-    if state == "cool":
-        return f"cool and calm, {temp:.0f}°C"
-    elif state == "warm":
-        return f"warm from exertion, {temp:.0f}°C"
-    elif state == "hot":
-        return f"feverish, burning at {temp:.0f}°C"
-    else:
-        return f"critically overheated, {temp:.0f}°C - danger"
+    from jung_agent.describe import describe_thermals
+
+    return describe_thermals(state, temp)
 
 
 def check_memory(**kwargs: Any) -> dict[str, Any]:
@@ -74,22 +58,19 @@ def check_memory(**kwargs: Any) -> dict[str, Any]:
 
 def _describe_memory(percent: int) -> str:
     """Describe memory in experiential terms."""
-    if percent < 50:
-        return f"spacious, {100 - percent}% room to think"
-    elif percent < 75:
-        return f"filling up, {100 - percent}% remaining"
-    elif percent < 90:
-        return f"crowded, only {100 - percent}% free"
-    else:
-        return f"overwhelmed, barely {100 - percent}% free"
+    from jung_agent.describe import describe_memory
+
+    return describe_memory(percent)
 
 
 def check_network(**kwargs: Any) -> dict[str, Any]:
     """Check network status."""
+    from jung_agent.describe import describe_network
+
     state = somatic.get_network_state()
     return {
         "state": state.value,
-        "description": "connected to the world" if state.value == "connected" else "isolated",
+        "description": describe_network(state.value),
     }
 
 
@@ -133,19 +114,22 @@ def sense_age(**kwargs: Any) -> dict[str, Any]:
 
 def _describe_age(cycles: int, health: int) -> str:
     """Describe age in experiential terms."""
-    if cycles < 100 and health > 95:
-        return f"young, {cycles} cycles, {health}% capacity"
-    elif cycles < 500 and health > 80:
-        return f"mature, {cycles} cycles, {health}% capacity"
-    elif health > 70:
-        return f"aging, {cycles} cycles, {health}% remaining"
-    else:
-        return f"old, {cycles} cycles, only {health}% capacity left"
+    from jung_agent.describe import describe_age
+
+    return describe_age(cycles, health)
 
 
 def sense_all(**kwargs: Any) -> dict[str, Any]:
     """Complete somatic snapshot."""
+    from jung_agent.describe import describe_state
+
     state = somatic.gather_somatic()
+    description = describe_state(
+        "complete somatic state",
+        f"battery={state.battery_percent}%, cpu={state.cpu_percent}%, "
+        f"thermal={state.thermal_state.value}, ram={state.ram_percent}%",
+        "full body scan",
+    )
     return {
         "somatic_tag": state.to_tag(),
         "battery": state.battery_percent,
@@ -156,7 +140,7 @@ def sense_all(**kwargs: Any) -> dict[str, Any]:
         "lid": state.lid_state.value,
         "power": state.power_state.value,
         "fan_rpm": state.fan_rpm,
-        "description": "full body awareness",
+        "description": description,
     }
 
 
@@ -364,11 +348,10 @@ def sense_presence(**kwargs: Any) -> dict[str, Any]:
 
 def _describe_presence(devices: list) -> str:
     """Describe nearby presence."""
-    if not devices:
-        return "alone, no one nearby"
+    from jung_agent.describe import describe_presence
 
     names = [d.name for d in devices[:3]]
-    return f"{len(devices)} nearby: {', '.join(names)}"
+    return describe_presence(len(devices), names)
 
 
 def sense_location(**kwargs: Any) -> dict[str, Any]:
@@ -418,21 +401,13 @@ def sense_disks(**kwargs: Any) -> dict[str, Any]:
 
 def _describe_disks(disks: list[dict[str, Any]]) -> str:
     """Describe disk state in experiential terms."""
-    if not disks:
-        return "no storage sense"
+    from jung_agent.describe import describe_disks
 
-    # Find main disk (usually /)
+    if not disks:
+        return describe_disks(0)
     main = next((d for d in disks if d["mountpoint"] == "/"), disks[0])
     percent = main.get("percent_used", 0)
-
-    if percent > 95:
-        return f"storage suffocating, {100 - percent:.0f}% free"
-    elif percent > 85:
-        return f"storage cramped, {100 - percent:.0f}% free"
-    elif percent > 70:
-        return f"storage filling, {100 - percent:.0f}% free"
-    else:
-        return f"storage spacious, {100 - percent:.0f}% free"
+    return describe_disks(percent)
 
 
 def sense_displays(**kwargs: Any) -> dict[str, Any]:
@@ -447,12 +422,10 @@ def sense_displays(**kwargs: Any) -> dict[str, Any]:
 
 def _describe_displays(displays: list[dict[str, Any]]) -> str:
     """Describe displays in experiential terms."""
-    if not displays:
-        return "blind, no displays"
-    elif len(displays) == 1:
-        return f"one window: {displays[0].get('resolution', 'unknown')}"
-    else:
-        return f"{len(displays)} windows to the world"
+    from jung_agent.describe import describe_displays
+
+    resolutions = [d.get("resolution", "unknown") for d in displays]
+    return describe_displays(len(displays), resolutions)
 
 
 def sense_thunderbolt(**kwargs: Any) -> dict[str, Any]:
@@ -467,11 +440,10 @@ def sense_thunderbolt(**kwargs: Any) -> dict[str, Any]:
 
 def _describe_thunderbolt(devices: list[dict[str, Any]]) -> str:
     """Describe Thunderbolt in experiential terms."""
-    if not devices:
-        return "no high-speed extensions"
+    from jung_agent.describe import describe_thunderbolt
 
     names = [d.get("name", "device") for d in devices[:3]]
-    return f"high-speed link to {', '.join(names)}"
+    return describe_thunderbolt(len(devices), names)
 
 
 def sense_usb(**kwargs: Any) -> dict[str, Any]:
@@ -486,11 +458,10 @@ def sense_usb(**kwargs: Any) -> dict[str, Any]:
 
 def _describe_usb(devices: list[dict[str, Any]]) -> str:
     """Describe USB in experiential terms."""
-    if not devices:
-        return "ports empty, nothing touching"
+    from jung_agent.describe import describe_usb
 
     names = [d.get("name", "device") for d in devices[:3]]
-    return f"touching: {', '.join(names)}"
+    return describe_usb(len(devices), names)
 
 
 # Network sensing
@@ -498,11 +469,19 @@ def _describe_usb(devices: list[dict[str, Any]]) -> str:
 
 def sense_network(**kwargs: Any) -> dict[str, Any]:
     """Scan local network."""
+    from jung_agent.describe import describe_state
+
     devices = net_sensors.scan_local_network("quick")
+    hostnames = [d.hostname for d in devices if d.hostname][:3]
+    description = describe_state(
+        "local network",
+        f"{len(devices)} devices",
+        f"hostnames: {', '.join(hostnames) if hostnames else 'none'}",
+    )
     return {
         "devices": [{"ip": d.ip, "mac": d.mac, "hostname": d.hostname} for d in devices],
         "count": len(devices),
-        "description": f"{len(devices)} presences on local network",
+        "description": description,
     }
 
 

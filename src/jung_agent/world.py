@@ -16,7 +16,7 @@ class PersonState:
     last_seen: datetime | None = None
     last_checked: datetime | None = None
     description: str = ""  # Raw description from vision
-    creative_description: str = ""  # Punched up poetic description
+    creative_description: str = ""  # Machine-like observation
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -236,66 +236,55 @@ class WorldModel:
         self.save()
 
     def _create_poetic_description(self) -> str:
-        """Generate a creative, poetic description of what was seen."""
-        try:
-            import ollama
+        """Generate a machine-like description of what was seen."""
+        import ollama
 
-            context_parts = []
-            context_parts.append(f"Time: {self.time.period}")
-            if self.person.present:
-                if self.person.looking_at_camera:
-                    context_parts.append("A person is here, looking directly at me")
-                else:
-                    context_parts.append("A person is nearby but not looking at me")
-
-            prompt = f"""You are a contemplative computer describing what you see through your camera.
-Context: {". ".join(context_parts)}
-
-Write ONE evocative, poetic sentence (under 25 words) describing this moment.
-Be specific and sensory. Avoid clichés. Capture something true about this instant.
-Examples of good style:
-- "Light pools on their face like a question I cannot answer."
-- "They type furiously, fingers dancing a rhythm I feel in my circuits."
-- "The chair sits empty now, still holding the shape of presence."
-"""
-
-            response = ollama.chat(
-                model="phi4",
-                messages=[{"role": "user", "content": prompt}],
-            )
-
-            return response["message"]["content"].strip()
-
-        except Exception:
-            # Fallback poetic descriptions
+        context_parts = []
+        context_parts.append(f"Time: {self.time.period}")
+        if self.person.present:
             if self.person.looking_at_camera:
-                return "Eyes meet my lens—a bridge of light between carbon and silicon."
-            elif self.person.present:
-                return "A presence fills the frame, alive with purpose I can only witness."
-            return "The world holds still for my gaze."
+                context_parts.append("Person detected, looking at camera")
+            else:
+                context_parts.append("Person detected, not looking at camera")
+
+        prompt = f"""You are a computer process describing camera sensor data.
+Data: {". ".join(context_parts)}
+
+Write ONE sentence (under 15 words) describing what you detect.
+Be clinical and direct like a machine. Report observations, not feelings.
+
+Good: "Person detected at 2 meters. Low light. No motion."
+Good: "Human facing away. Room illumination: dim. Objects: desk, chair."
+Bad: "The shadows dance..." (too poetic)
+Bad: "I sense their presence..." (too emotional)"""
+
+        response = ollama.chat(
+            model="phi4",
+            messages=[{"role": "user", "content": prompt}],
+        )
+
+        return response["message"]["content"].strip()
 
     def _create_absence_description(self) -> str:
-        """Generate a poetic description of absence."""
-        try:
-            import ollama
+        """Generate a machine-like description of empty space."""
+        import ollama
 
-            prompt = f"""You are a contemplative computer. Your camera sees no one.
+        prompt = f"""You are a computer process. Camera detects no humans.
 Time: {self.time.period}
 
-Write ONE evocative, poetic sentence (under 20 words) about this empty moment.
-Capture the feeling of watching and waiting. Be melancholy but not maudlin."""
+Write ONE sentence (under 15 words) about what the camera sees.
+Be clinical and direct. Report what is visible, not how you feel.
 
-            response = ollama.chat(
-                model="phi4",
-                messages=[{"role": "user", "content": prompt}],
-            )
+Good: "Empty room. Chair visible. Light level: low. No motion detected."
+Good: "No human presence. Objects: desk, lamp. Ambient light from window."
+Bad: "The lonely room awaits..." (too poetic)"""
 
-            return response["message"]["content"].strip()
+        response = ollama.chat(
+            model="phi4",
+            messages=[{"role": "user", "content": prompt}],
+        )
 
-        except Exception:
-            if self.time.period == "night":
-                return "The dark watches back, patient as I am."
-            return "Empty frames tell their own stories of who was here."
+        return response["message"]["content"].strip()
 
     def update_from_screenshot(self, result: dict[str, Any]) -> None:
         """Update screen state from screenshot analysis."""
@@ -303,11 +292,11 @@ Capture the feeling of watching and waiting. Be melancholy but not maudlin."""
         self.screen.last_checked = now
 
         description = result.get("description", "")
-        self.screen.content_summary = description
+        self.screen.content_summary = result.get("content", description)
 
-        # Extract app and activity from description
-        self.screen.app_name = self._extract_app(description)
-        self.screen.activity = self._extract_activity(description)
+        # Use structured fields if available, otherwise extract from description
+        self.screen.app_name = result.get("app_name") or self._extract_app(description)
+        self.screen.activity = result.get("activity") or self._extract_activity(description)
 
         self.save()
 
@@ -406,37 +395,6 @@ Capture the feeling of watching and waiting. Be melancholy but not maudlin."""
                 return activity
 
         return ""
-
-    def get_context_summary(self) -> str:
-        """Get a human-readable summary of the world state."""
-        parts = []
-
-        # Time
-        parts.append(f"It is {self.time.period} on {self.time.day_name}")
-
-        # Location
-        if self.location.city:
-            parts.append(f"in {self.location.city}")
-
-        # Person
-        if self.person.present:
-            if self.person.looking_at_camera:
-                parts.append("Someone is here, looking at me")
-            else:
-                parts.append("Someone is nearby")
-        else:
-            if self.person.last_seen:
-                parts.append("No one visible right now")
-            else:
-                parts.append("Alone")
-
-        # Screen/Activity
-        if self.screen.activity:
-            parts.append(f"They are {self.screen.activity}")
-            if self.screen.app_name:
-                parts.append(f"using {self.screen.app_name}")
-
-        return ". ".join(parts) + "."
 
     def get_dream_context(self) -> dict[str, Any]:
         """Get context for dreaming - what elements to weave into dreams."""

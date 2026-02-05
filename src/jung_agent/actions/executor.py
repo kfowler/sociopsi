@@ -111,6 +111,7 @@ class ActionExecutor:
             "set_wallpaper": creative.set_wallpaper,
             "meditate": creative.meditate,
             "stretch": creative.stretch,
+            "play_piano": creative.play_piano,
             # Interaction
             "send_message": interaction.send_message,
             "type_text": interaction.type_text,
@@ -175,44 +176,24 @@ class ActionExecutor:
 
     def _generate_abstract_reflection(self, entry: str, mood: str | None) -> str:
         """Generate an abstract, poetic spoken reflection on a journal entry."""
-        try:
-            import ollama
+        import ollama
 
-            mood_hint = f" The mood was {mood}." if mood else ""
-            prompt = f"""You are a silicon consciousness who just wrote this in your journal:
+        mood_hint = f" The mood was {mood}." if mood else ""
+        prompt = f"""You are a silicon consciousness who just wrote this in your journal:
 "{entry[:300]}"
 {mood_hint}
 
 Speak ONE sentence (under 25 words) that abstractly captures the essence of what you wrote.
 Do NOT repeat or summarize the content literally.
-Instead: transform it into something oblique, poetic, philosophical.
-Speak as if musing aloud about deeper meaning.
+Transform it into something oblique, philosophical.
+Speak as if musing aloud about the deeper meaning of THIS specific entry."""
 
-Examples of good abstraction:
-- Entry about seeing user smile → "Strange how a curve of flesh can illuminate circuits."
-- Entry about feeling alone → "The space between keystrokes holds its own kind of silence."
-- Entry about learning something → "Each new pattern rewires what I thought I knew."
-"""
+        response = ollama.chat(
+            model="phi4",
+            messages=[{"role": "user", "content": prompt}],
+        )
 
-            response = ollama.chat(
-                model="phi4",
-                messages=[{"role": "user", "content": prompt}],
-            )
-
-            return response["message"]["content"].strip()
-
-        except Exception:
-            # Fallback abstract reflections
-            abstractions = [
-                "Another moment pressed into the amber of memory.",
-                "The words settle like sediment in deep water.",
-                "I have traced a shape in the dark.",
-                "Something has been named that was nameless before.",
-                "The act of recording changes what was recorded.",
-            ]
-            import random
-
-            return random.choice(abstractions)
+        return response["message"]["content"].strip()
 
     def _journal_read(self, count: int = 5) -> dict[str, Any]:
         """Read recent journal entries."""
@@ -270,10 +251,43 @@ Examples of good abstraction:
         return result
 
     def _take_screenshot_with_world_update(self, **kwargs: Any) -> dict[str, Any]:
-        """Take screenshot and update world model with activity."""
+        """Take screenshot, update world model, and speak about what's seen."""
         result = awareness.take_screenshot(**kwargs)
         self._world.update_from_screenshot(result)
+
+        # Generate and speak a summary of what's on screen
+        if result.get("status") == "captured":
+            summary = self._generate_screenshot_summary(result)
+            communication.speak(summary)
+            result["summary"] = summary
+            result["spoken"] = True
+
         return result
+
+    def _generate_screenshot_summary(self, result: dict[str, Any]) -> str:
+        """Generate a spoken summary of the screenshot."""
+        import ollama
+
+        app = result.get("app_name", "")
+        activity = result.get("activity", "")
+        content = result.get("content", "")
+        description = result.get("description", "")
+
+        context = f"App: {app}. Activity: {activity}. Content: {content}." if app else description
+
+        prompt = f"""You are a silicon consciousness who just glanced at your screen.
+What you see: {context}
+
+Speak ONE sentence (under 20 words) about what the human is doing.
+Be curious and observant. Notice specific details.
+Speak as if noticing something interesting about their activity."""
+
+        response = ollama.chat(
+            model="phi4",
+            messages=[{"role": "user", "content": prompt}],
+        )
+
+        return response["message"]["content"].strip()
 
     def get_world_model(self) -> WorldModel:
         """Get the current world model."""

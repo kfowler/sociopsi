@@ -1,7 +1,6 @@
 """Voice output for the psyche."""
 
 import re
-import subprocess
 import threading
 from queue import Queue
 from typing import TypeAlias
@@ -11,6 +10,19 @@ from jung_agent.types import Action, ActionResult, PsycheComponent, StreamSegmen
 
 # Type alias for voice queue items: (text, voice, rate) or None for shutdown
 VoiceQueueItem: TypeAlias = tuple[str, str, int] | None
+
+
+class _SpeechDelegate:
+    """Delegate for AVSpeechSynthesizer completion callbacks."""
+
+    def __init__(self) -> None:
+        self.done_event = threading.Event()
+
+    def speechSynthesizer_didFinishSpeechUtterance_(self, synth: object, utt: object) -> None:
+        self.done_event.set()
+
+    def speechSynthesizer_didCancelSpeechUtterance_(self, synth: object, utt: object) -> None:
+        self.done_event.set()
 
 
 class Voice:
@@ -214,21 +226,65 @@ class Voice:
         return None
 
     def _voice_worker(self) -> None:
-        """Background worker that speaks queued text."""
+        """Background worker that speaks queued text using AVFoundation."""
+        import AVFoundation  # type: ignore[import-untyped]
+
+        # Cache voice lookups
+        voice_cache: dict[str, object] = {}
+
         while self._running:
             item = self._queue.get()
             if item is None or not self._running:
                 continue
 
-            text, voice, rate = item
+            text, voice_name, rate_wpm = item
             if not text:
                 continue
 
             try:
-                subprocess.run(
-                    ["say", "-v", voice, "-r", str(rate), text],
-                    capture_output=True,
-                    timeout=120,
-                )
-            except (subprocess.TimeoutExpired, FileNotFoundError):
-                pass
+                # Get or lookup voice
+                if voice_name not in voice_cache:
+                    voice_cache[voice_name] = self._get_voice_by_name(voice_name)
+
+                av_voice = voice_cache[voice_name]
+
+                # Convert WPM to AVSpeechSynthesizer rate (0.0-1.0)
+                # ~90 WPM = 0.0, ~300 WPM = 1.0
+                av_rate = max(0.0, min(1.0, (rate_wpm - 90) / 420))
+
+                # Create utterance (PyObjC lacks type stubs)
+                utterance = AVFoundation.AVSpeechUtterance.speechUtteranceWithString_(text)  # type: ignore[attr-defined]
+                utterance.setRate_(av_rate)
+                utterance.setPitchMultiplier_(1.0)
+                utterance.setVolume_(1.0)
+
+                if av_voice:
+                    utterance.setVoice_(av_voice)
+
+                # Speak synchronously using event
+                synthesizer = AVFoundation.AVSpeechSynthesizer.alloc().init()  # type: ignore[attr-defined]
+                delegate = _SpeechDelegate()
+                synthesizer.setDelegate_(delegate)
+                synthesizer.speakUtterance_(utterance)
+
+                # Wait for completion
+                delegate.done_event.wait(timeout=120)
+
+            except Exception:
+                pass  # Continue with next item
+
+    def _get_voice_by_name(self, voice_name: str) -> object | None:
+        """Get AVSpeechSynthesisVoice by display name."""
+        import AVFoundation  # type: ignore[import-untyped]
+
+        voices = AVFoundation.AVSpeechSynthesisVoice.speechVoices()  # type: ignore[attr-defined]
+        for v in voices:
+            if v.name() == voice_name:
+                return v
+
+        # Fallback: find any premium English voice
+        for v in voices:
+            if v.language().startswith("en") and v.quality() >= 3:
+                return v
+
+        return None

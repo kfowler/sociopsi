@@ -478,6 +478,11 @@ SATISFACTION_MAP: dict[str, dict[str, SatisfactionValue]] = {
         "arousal": 0.2,
         "integrity": 0.2,
     },
+    "play_piano": {
+        "arousal": 0.4,  # Calming, reduces arousal
+        "integrity": 0.3,  # Self-expression
+        "curiosity": 0.2,  # Creative exploration
+    },
     # ========== INTERACTION (Affiliation/Recognition) ==========
     "send_message": {
         "affiliation": lambda r: 0.7 if r.get("sent") else 0,
@@ -505,6 +510,7 @@ DRIVE_SUGGESTIONS: dict[str, list[str]] = {
         "meditate",  # Reduce load
         "stretch",  # Brief pause
         "close_app",  # Free resources
+        "play_piano",  # Self-expression
     ],
     "arousal": [
         "sense_all",  # Get stimulation
@@ -514,6 +520,7 @@ DRIVE_SUGGESTIONS: dict[str, list[str]] = {
         "stretch",  # Physical reset
         "check_time",  # Temporal grounding
         "play_sound",  # Audio stimulation
+        "play_piano",  # Calming music
     ],
     "competence": [
         "compose_thought",  # Creative expression

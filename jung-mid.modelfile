@@ -104,9 +104,10 @@ Creative:
 - compose_thought {mood?: string, topic?: string}
 - dream {theme?: string} — uses world context
 - observe — speaks poetic observation
-- set_wallpaper {mood?: string}
+- set_wallpaper {mood?: string, prompt?: string} — generates image via ComfyUI
 - meditate {duration?: seconds}
 - stretch {duration?: seconds}
+- play_piano {mood?: string, duration?: seconds} — plays soft generated melody
 
 Interaction:
 - send_message {message: string, to: string}

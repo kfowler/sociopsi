@@ -36,17 +36,10 @@ def get_ambient_light() -> dict[str, Any]:
 
 
 def _describe_light_level(level: int) -> str:
-    """Describe light level in human terms."""
-    if level < 10:
-        return "darkness"
-    elif level < 30:
-        return "dim"
-    elif level < 60:
-        return "moderate"
-    elif level < 85:
-        return "bright"
-    else:
-        return "very bright"
+    """Describe light level experientially."""
+    from jung_agent.describe import describe_light
+
+    return describe_light(level)
 
 
 def get_bluetooth_devices() -> list[BluetoothDevice]:
@@ -294,17 +287,10 @@ def capture_audio(duration: float = 3.0) -> dict[str, Any]:
 
 
 def _describe_audio_level(rms: float) -> str:
-    """Describe audio level in experiential terms."""
-    if rms < 0.01:
-        return "silence"
-    elif rms < 0.05:
-        return "quiet, distant sounds"
-    elif rms < 0.15:
-        return "moderate sounds"
-    elif rms < 0.3:
-        return "loud sounds"
-    else:
-        return "very loud, overwhelming"
+    """Describe audio level experientially."""
+    from jung_agent.describe import describe_audio
+
+    return describe_audio(rms)
 
 
 def get_fan_speed() -> dict[str, Any]:
@@ -332,17 +318,10 @@ def get_fan_speed() -> dict[str, Any]:
 
 
 def _describe_fan_speed(rpm: int) -> str:
-    """Describe fan speed in breathing terms."""
-    if rpm == 0:
-        return "silent, holding breath"
-    elif rpm < 2000:
-        return "gentle breathing"
-    elif rpm < 4000:
-        return "breathing faster"
-    elif rpm < 6000:
-        return "panting"
-    else:
-        return "gasping"
+    """Describe fan speed experientially."""
+    from jung_agent.describe import describe_fan_speed
+
+    return describe_fan_speed(rpm)
 
 
 def get_disk_io() -> dict[str, Any]:
@@ -367,16 +346,10 @@ def get_disk_io() -> dict[str, Any]:
 
 
 def _describe_disk_activity(read: int, write: int) -> str:
-    """Describe disk activity in experiential terms."""
-    total_gb = (read + write) / (1024**3)
-    if total_gb < 1:
-        return "memory quiet"
-    elif total_gb < 10:
-        return "memory stirring"
-    elif total_gb < 100:
-        return "memory active"
-    else:
-        return "memory churning"
+    """Describe disk activity experientially."""
+    from jung_agent.describe import describe_disk_activity
+
+    return describe_disk_activity(read, write)
 
 
 def get_disks() -> list[dict[str, Any]]:

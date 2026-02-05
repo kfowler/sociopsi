@@ -7,26 +7,27 @@ from typing import Any
 
 def check_time(**kwargs: Any) -> dict[str, Any]:
     """Check current time and temporal context."""
+    from jung_agent.describe import describe_time_feeling
+
     now = datetime.now()
     hour = now.hour
 
     # Determine time of day
     if 5 <= hour < 12:
         period = "morning"
-        feeling = "awakening"
     elif 12 <= hour < 17:
         period = "afternoon"
-        feeling = "active"
     elif 17 <= hour < 21:
         period = "evening"
-        feeling = "winding down"
     else:
         period = "night"
-        feeling = "quiet, should rest"
 
     # Day of week context
     day_name = now.strftime("%A")
     is_weekend = now.weekday() >= 5
+
+    # Generate experiential feeling via LLM
+    feeling = describe_time_feeling(hour, period)
 
     return {
         "time": now.strftime("%H:%M:%S"),
@@ -175,7 +176,7 @@ MOOD: [work/leisure/communication]"""
             elif line_lower.startswith("activity:"):
                 result["activity"] = line.split(":", 1)[1].strip()
             elif line_lower.startswith("content:"):
-                result["content_summary"] = line.split(":", 1)[1].strip()
+                result["content"] = line.split(":", 1)[1].strip()
             elif line_lower.startswith("mood:"):
                 result["mood"] = line.split(":", 1)[1].strip()
 
