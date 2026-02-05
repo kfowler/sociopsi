@@ -37,6 +37,8 @@ class Voice:
         self._thread: threading.Thread | None = None
         self._running = False
         self._running_lock = threading.Lock()
+        self._current_synthesizer: object | None = None
+        self._synth_lock = threading.Lock()
 
         # Map component names to voice config
         self._component_voices: dict[PsycheComponent, str] = {
@@ -67,10 +69,18 @@ class Voice:
                 return  # Already stopped
             self._running = False
 
+        # Stop any current speech
+        with self._synth_lock:
+            if self._current_synthesizer:
+                try:
+                    self._current_synthesizer.stopSpeakingAtBoundary_(0)  # type: ignore[attr-defined]
+                except Exception:
+                    pass
+
         self._queue.put(None)  # Unblock the worker
 
         if self._thread:
-            self._thread.join(timeout=5.0)
+            self._thread.join(timeout=2.0)
             if self._thread.is_alive():
                 logger.warning("Voice thread did not stop within timeout")
 
@@ -294,10 +304,21 @@ class Voice:
                 synthesizer = AVFoundation.AVSpeechSynthesizer.alloc().init()  # type: ignore[attr-defined]
                 delegate = _SpeechDelegate()
                 synthesizer.setDelegate_(delegate)
+
+                # Store synthesizer so stop() can interrupt it
+                with self._synth_lock:
+                    self._current_synthesizer = synthesizer
+
                 synthesizer.speakUtterance_(utterance)
 
-                # Wait for completion
-                delegate.done_event.wait(timeout=120)
+                # Wait for completion with periodic running check
+                while not delegate.done_event.wait(timeout=0.5):
+                    if not self._is_running():
+                        synthesizer.stopSpeakingAtBoundary_(0)
+                        break
+
+                with self._synth_lock:
+                    self._current_synthesizer = None
 
             except Exception as e:
                 logger.error(f"Voice synthesis error: {e}")
