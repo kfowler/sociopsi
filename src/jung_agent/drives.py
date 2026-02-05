@@ -249,7 +249,7 @@ DRIVE_SUGGESTIONS: dict[str, list[str]] = {
     "arousal": ["sense_all", "check_processes"],
     "competence": [],  # satisfied by any successful action
     "certainty": ["sense_all", "journal_read"],  # removed recall_memory (needs key)
-    "curiosity": ["look", "journal_read"],  # removed web_search (needs query)
+    "curiosity": ["look", "web_search", "journal_read"],
     "affiliation": ["look", "listen", "sense_presence"],
     "recognition": ["notify"],  # removed speak (needs text)
 }
@@ -259,6 +259,7 @@ PRIMED_ACTION_DEFAULTS: dict[str, dict[str, Any]] = {
     "listen": {"duration": 3.0},
     "set_power_mode": {"mode": "low"},
     "notify": {"message": "I am here.", "title": "Jung"},
+    "web_search": {"query": "interesting facts today"},
 }
 
 
