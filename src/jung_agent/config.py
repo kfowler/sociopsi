@@ -38,6 +38,11 @@ class AgentConfig:
     log_stream: bool = True  # Print stream to console
     log_file: Path | None = None
 
+    # Voice settings
+    voice_enabled: bool = True
+    voice_name: str = "Daniel"  # High-quality UK male voice
+    voice_rate: int = 180  # Words per minute (default ~180-200)
+
     def __post_init__(self) -> None:
         """Ensure data directory exists."""
         self.data_dir.mkdir(parents=True, exist_ok=True)

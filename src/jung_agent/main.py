@@ -52,6 +52,26 @@ def main() -> int:
         help="Don't log stream to console",
     )
 
+    parser.add_argument(
+        "--no-voice",
+        action="store_true",
+        help="Disable voice output",
+    )
+
+    parser.add_argument(
+        "--voice",
+        type=str,
+        default="Daniel",
+        help="Voice name for TTS (default: Daniel)",
+    )
+
+    parser.add_argument(
+        "--voice-rate",
+        type=int,
+        default=180,
+        help="Voice speed in words per minute (default: 180)",
+    )
+
     args = parser.parse_args()
 
     # Build config
@@ -59,6 +79,9 @@ def main() -> int:
         model=args.model,
         modules=args.modules,
         log_stream=not args.quiet,
+        voice_enabled=not args.no_voice,
+        voice_name=args.voice,
+        voice_rate=args.voice_rate,
     )
 
     if args.heartbeat:

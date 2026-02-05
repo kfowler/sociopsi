@@ -15,6 +15,7 @@ from jung_agent.perception import format_perception
 from jung_agent.sensors.events import EventCollector
 from jung_agent.sensors.somatic import gather_somatic
 from jung_agent.types import ActionResult, SomaticState
+from jung_agent.voice import Voice
 
 
 class JungAgent:
@@ -24,6 +25,7 @@ class JungAgent:
         self.config = config or AgentConfig()
         self.executor = ActionExecutor(self.config)
         self.event_collector = EventCollector()
+        self.voice = Voice(self.config)
 
         self._running = False
         self._shutdown_event = threading.Event()
@@ -39,6 +41,7 @@ class JungAgent:
         """Start the agent loop."""
         self._running = True
         self.event_collector.start()
+        self.voice.start()
 
         # Set up signal handlers
         signal.signal(signal.SIGINT, self._handle_shutdown)
@@ -46,6 +49,7 @@ class JungAgent:
 
         print(f"Jung Agent starting with model: {self.config.model}")
         print(f"Modules enabled: {', '.join(self.config.modules)}")
+        print(f"Voice: {self.config.voice_name if self.config.voice_enabled else 'disabled'}")
         print(f"Initial heartbeat: {self._current_interval}s")
         print("-" * 60)
 
@@ -61,6 +65,7 @@ class JungAgent:
         self._running = False
         self._shutdown_event.set()
         self.event_collector.stop()
+        self.voice.stop()
         print("\nJung Agent stopped.")
 
     def _handle_shutdown(self, signum: int, frame: object) -> None:
@@ -97,11 +102,17 @@ class JungAgent:
                 # 5. Parse response
                 parsed = parse_response(response)
 
-                # 6. Log stream
+                # 6. Log and speak stream
                 if self.config.log_stream:
                     self._log_stream(parsed.stream)
 
-                # 7. Execute actions
+                # Speak the internal monologue
+                self.voice.speak_stream(parsed.stream)
+
+                # 7. Announce and execute actions
+                if parsed.actions:
+                    self.voice.announce_actions(parsed.actions)
+
                 self._last_action_results = self.executor.execute_all(parsed.actions)
 
                 # Log action results
