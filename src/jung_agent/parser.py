@@ -46,7 +46,7 @@ def parse_response(response: str) -> PsycheResponse:
 
     except json.JSONDecodeError as e:
         print(f"Warning: Could not parse JSON: {e}")
-        _log_json_error(response, e)
+        _log_json_error(response, json_str, e)
 
     return PsycheResponse(stream=stream, actions=actions, raw=response)
 
@@ -56,19 +56,11 @@ def _repair_json(json_str: str) -> str:
     # Remove any trailing commas before } or ]
     json_str = re.sub(r",(\s*[}\]])", r"\1", json_str)
 
-    # Fix unescaped newlines in strings (common LLM issue)
-    # This is tricky - we need to be inside a string
-    # Simple approach: replace literal newlines that aren't \n
-    lines = json_str.split("\n")
-    if len(lines) > 1:
-        # Rejoin, escaping newlines that appear mid-string
-        json_str = json_str.replace("\n", "\\n")
-        # But fix the ones that should be real (between elements)
-        json_str = re.sub(r"\\n(\s*[\"}\]])", r"\n\1", json_str)
-        json_str = re.sub(r"([\[{,])\\n(\s*)", r"\1\n\2", json_str)
+    # Fix missing colon after "actions" (seen in logs: "actions [" instead of "actions": [)
+    json_str = re.sub(r'"actions"\s*\[', '"actions": [', json_str)
+    json_str = re.sub(r'"stream"\s*\[', '"stream": [', json_str)
 
-    # Fix single quotes used as string delimiters (less common but possible)
-    # Only do this if there are no double quotes (to avoid breaking valid JSON)
+    # Fix single quotes used as string delimiters (only if no double quotes present)
     if '"' not in json_str and "'" in json_str:
         json_str = json_str.replace("'", '"')
 
@@ -80,7 +72,7 @@ def _repair_json(json_str: str) -> str:
     return json_str
 
 
-def _log_json_error(response: str, error: json.JSONDecodeError) -> None:
+def _log_json_error(raw_response: str, json_str: str, error: json.JSONDecodeError) -> None:
     """Log JSON parsing errors for debugging."""
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     error_file = _ERROR_LOG_DIR / f"error_{timestamp}.txt"
@@ -89,16 +81,19 @@ def _log_json_error(response: str, error: json.JSONDecodeError) -> None:
         f.write(f"Error: {error}\n")
         f.write(f"Position: line {error.lineno}, column {error.colno}, char {error.pos}\n")
         f.write("-" * 60 + "\n")
-        f.write("Raw response:\n")
-        f.write(response)
+        f.write("Raw response (before extraction):\n")
+        f.write(raw_response)
+        f.write("\n" + "-" * 60 + "\n")
+        f.write("JSON string (after extraction and repair):\n")
+        f.write(json_str)
         f.write("\n" + "-" * 60 + "\n")
 
-        # Try to show context around the error
-        if error.pos < len(response):
+        # Try to show context around the error in the JSON string
+        if error.pos < len(json_str):
             start = max(0, error.pos - 50)
-            end = min(len(response), error.pos + 50)
+            end = min(len(json_str), error.pos + 50)
             f.write(f"Context around error (char {error.pos}):\n")
-            f.write(response[start:error.pos] + " <<ERROR>> " + response[error.pos:end])
+            f.write(json_str[start:error.pos] + " <<ERROR>> " + json_str[error.pos:end])
             f.write("\n")
 
     print(f"  JSON error logged to: {error_file}")
