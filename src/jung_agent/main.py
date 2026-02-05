@@ -15,8 +15,8 @@ def main() -> int:
 
     parser.add_argument(
         "--model",
-        default="jung-small",
-        help="Ollama model to use (default: jung-small)",
+        default="jung-mid",
+        help="Ollama model to use (default: jung-mid)",
     )
 
     parser.add_argument(

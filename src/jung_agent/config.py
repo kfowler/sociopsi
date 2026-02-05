@@ -33,7 +33,7 @@ class AgentConfig:
     """Configuration for the agent loop."""
 
     # Model settings
-    model: str = "jung-small"
+    model: str = "jung-mid"
 
     # Enabled modules
     modules: list[str] = field(

@@ -20,8 +20,9 @@ jung
 ### Options
 
 ```bash
-jung --model jung          # Use the 70b model
-jung --model jung-small    # Use the 3b model (default)
+jung --model jung          # Use the 70b model (llama3.3:70b)
+jung --model jung-mid      # Use the 14b model (phi4) - default
+jung --model jung-small    # Use the 3b model (llama3.2:3b)
 jung --heartbeat 30        # Set initial heartbeat to 30s
 jung --single              # Run one cycle and exit
 jung --quiet               # Don't print stream to console
@@ -50,8 +51,9 @@ The agent runs in a continuous loop:
 Create the Ollama models first:
 
 ```bash
-ollama create jung -f jung.modelfile
-ollama create jung-small -f jung-small.modelfile
+ollama create jung -f jung.modelfile            # 70b model (~40GB RAM)
+ollama create jung-mid -f jung-mid.modelfile    # phi4 (~10GB RAM)
+ollama create jung-small -f jung-small.modelfile # 3b model (~2GB RAM)
 ```
 
 ## Modules

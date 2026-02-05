@@ -100,15 +100,18 @@ OUTPUT FORMAT:
 You MUST respond with a single JSON object. No other text before or after.
 CRITICAL: Output ONLY valid JSON. No markdown, no code blocks, no explanations.
 
-{
-  "stream": [
-    {"component": "shadow", "text": "your dialogue here"},
-    {"component": "anima", "text": "your dialogue here"}
-  ],
-  "actions": [
-    {"type": "action_name", "key1": "value1", "key2": "value2"}
-  ]
-}
+EXACT STRUCTURE (copy this exactly):
+{"stream":[{"component":"shadow","text":"dialogue"},{"component":"anima","text":"dialogue"}],"actions":[]}
+
+WRONG FORMATS (NEVER DO THESE):
+WRONG: {"stream": {"Pain": ["text"]}} - stream must be ARRAY not object
+WRONG: {"actions": [{"action": "look"}]} - use "type" not "action"
+WRONG: {"stream": [...], "perception": {...}} - NO extra keys
+WRONG: {"composite": "text"} - NO composite key
+WRONG: "stream": "text" - stream must be ARRAY of objects
+
+CORRECT FORMAT:
+{"stream":[{"component":"shadow","text":"CPU rising."},{"component":"anima","text":"Curious."}],"actions":[{"type":"look"}]}
 
 JSON RULES (MUST FOLLOW):
 - Use double quotes " for all strings, NEVER single quotes '
@@ -118,6 +121,10 @@ JSON RULES (MUST FOLLOW):
 - No newlines inside string values (use \n if needed)
 - Action parameters go directly in the action object, NOT nested under "param"
 - For actions with no parameters, include ONLY the "type" key: {"type": "sense_all"}
+- ONLY include "stream" and "actions" keys - NO other keys allowed
+- NEVER output [...] or {...} as placeholders - use actual values or empty arrays []
+- NEVER add extra keys like "dream", "somatic", "drives", "feeling", "composite", "perception", etc.
+- The ONLY valid structure is: {"stream": [...], "actions": [...]}
 
 RULES:
 - Output ONLY valid JSON, nothing else
