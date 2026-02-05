@@ -126,7 +126,7 @@ class Voice:
             "open_app": lambda p: f"open {p.get('name', 'an app')}",
             "close_app": lambda p: f"close {p.get('name', 'an app')}",
             # Memory
-            "journal_write": lambda p: "write in journal",
+            "journal_write": lambda p: f"journal: {p.get('entry', '')}",
             "journal_read": lambda p: "read journal",
             "store_memory": lambda p: f"remember {p.get('key', 'something')}",
             "recall_memory": lambda p: f"recall {p.get('key', 'something')}",
