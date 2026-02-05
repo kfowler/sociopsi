@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from jung_agent.actions import communication, environment, memory, perception, system
+from jung_agent.actions import communication, environment, learning, memory, perception, system
 from jung_agent.config import AgentConfig
 from jung_agent.types import Action, ActionResult
 
@@ -71,6 +71,11 @@ class ActionExecutor:
             "journal_read": self._journal_read,
             "store_memory": self._store_memory,
             "recall_memory": self._recall_memory,
+            # Learning
+            "web_search": learning.web_search,
+            "web_read": learning.web_read,
+            "describe_image": learning.describe_image,
+            "transcribe_audio": learning.transcribe_audio,
         }
 
     def execute(self, action: Action) -> ActionResult:
