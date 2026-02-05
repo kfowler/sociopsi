@@ -2,7 +2,17 @@
 
 from typing import Any
 
-from jung_agent.actions import communication, environment, learning, memory, perception, system
+from jung_agent.actions import (
+    awareness,
+    communication,
+    creative,
+    environment,
+    interaction,
+    learning,
+    memory,
+    perception,
+    system,
+)
 from jung_agent.config import AgentConfig
 from jung_agent.types import Action, ActionResult
 
@@ -83,6 +93,24 @@ class ActionExecutor:
             "web_read": learning.web_read,
             "describe_image": learning.describe_image,
             "transcribe_audio": learning.transcribe_audio,
+            # Awareness
+            "check_time": awareness.check_time,
+            "check_weather": awareness.check_weather,
+            "take_screenshot": awareness.take_screenshot,
+            "read_clipboard": awareness.read_clipboard,
+            "check_calendar": awareness.check_calendar,
+            # Creative
+            "compose_thought": creative.compose_thought,
+            "dream": creative.dream,
+            "set_wallpaper": creative.set_wallpaper,
+            "meditate": creative.meditate,
+            "stretch": creative.stretch,
+            # Interaction
+            "send_message": interaction.send_message,
+            "type_text": interaction.type_text,
+            "click": interaction.click,
+            "move_mouse": interaction.move_mouse,
+            "press_key": interaction.press_key,
         }
 
     def execute(self, action: Action) -> ActionResult:

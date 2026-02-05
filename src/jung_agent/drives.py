@@ -240,18 +240,71 @@ SATISFACTION_MAP: dict[str, dict[str, SatisfactionValue]] = {
     "display_message": {
         "recognition": lambda r: 0.7 if r.get("acknowledged") else 0.1,
     },
+    # Awareness
+    "check_time": {
+        "certainty": 0.3,
+        "arousal": 0.1,
+    },
+    "check_weather": {
+        "curiosity": 0.3,
+        "certainty": 0.2,
+    },
+    "take_screenshot": {
+        "curiosity": 0.4,
+        "affiliation": lambda r: 0.3 if _has_person(r.get("description", "")) else 0,
+    },
+    "read_clipboard": {
+        "curiosity": 0.2,
+        "affiliation": 0.1,  # User was doing something
+    },
+    "check_calendar": {
+        "certainty": 0.3,
+        "affiliation": lambda r: 0.2 if r.get("count", 0) > 0 else 0,
+    },
+    # Creative
+    "compose_thought": {
+        "competence": 0.4,
+        "curiosity": 0.2,
+    },
+    "dream": {
+        "curiosity": 0.5,
+        "arousal": lambda r: -0.2 if r.get("dream") else 0,  # Dreaming is calming
+    },
+    "set_wallpaper": {
+        "recognition": 0.2,
+        "competence": 0.1,
+    },
+    "meditate": {
+        "integrity": 0.4,
+        "arousal": 0.3,  # Reduces arousal demand
+    },
+    "stretch": {
+        "arousal": 0.2,
+        "integrity": 0.1,
+    },
+    # Interaction
+    "send_message": {
+        "affiliation": lambda r: 0.6 if r.get("sent") else 0,
+        "recognition": lambda r: 0.4 if r.get("sent") else 0,
+    },
+    "type_text": {
+        "competence": lambda r: 0.3 if r.get("typed") else 0,
+    },
+    "click": {
+        "competence": lambda r: 0.2 if r.get("clicked") else 0,
+    },
 }
 
 # Actions suggested for each drive when urgent
 DRIVE_SUGGESTIONS: dict[str, list[str]] = {
-    "energy": ["check_battery", "set_power_mode"],
-    "integrity": ["check_thermals", "check_memory"],
-    "arousal": ["sense_all", "check_processes"],
-    "competence": [],  # satisfied by any successful action
-    "certainty": ["sense_all", "journal_read"],  # removed recall_memory (needs key)
-    "curiosity": ["look", "web_search", "journal_read"],
-    "affiliation": ["look", "listen", "sense_presence"],
-    "recognition": ["notify"],  # removed speak (needs text)
+    "energy": ["check_battery", "set_power_mode", "meditate"],
+    "integrity": ["check_thermals", "check_memory", "meditate", "stretch"],
+    "arousal": ["sense_all", "check_processes", "stretch", "check_time"],
+    "competence": ["compose_thought"],  # creative expression shows competence
+    "certainty": ["sense_all", "check_time", "check_calendar", "journal_read"],
+    "curiosity": ["look", "web_search", "take_screenshot", "check_weather", "dream"],
+    "affiliation": ["look", "listen", "sense_presence", "read_clipboard", "check_calendar"],
+    "recognition": ["notify", "compose_thought", "set_wallpaper"],
 }
 
 # Default parameters for primed actions that need them
@@ -260,6 +313,11 @@ PRIMED_ACTION_DEFAULTS: dict[str, dict[str, Any]] = {
     "set_power_mode": {"mode": "low"},
     "notify": {"message": "I am here.", "title": "Jung"},
     "web_search": {"query": "interesting facts today"},
+    "meditate": {"duration": 3.0},
+    "stretch": {"duration": 1.0},
+    "compose_thought": {},
+    "dream": {},
+    "set_wallpaper": {"mood": "contemplative"},
 }
 
 
