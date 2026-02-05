@@ -97,10 +97,18 @@ class Action:
 
 
 @dataclass
+class StreamSegment:
+    """A segment of the psyche's inner dialogue."""
+
+    component: str  # shadow, anima, persona, self
+    text: str
+
+
+@dataclass
 class PsycheResponse:
     """Parsed response from the psyche."""
 
-    stream: str
+    stream: list[StreamSegment]
     actions: list[Action]
     raw: str
 

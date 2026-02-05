@@ -3,19 +3,10 @@
 import re
 import subprocess
 import threading
-from dataclasses import dataclass
 from queue import Queue
 
 from jung_agent.config import AgentConfig
-from jung_agent.types import Action
-
-
-@dataclass
-class VoiceSegment:
-    """A segment of text attributed to a psyche component."""
-
-    text: str
-    component: str  # "anima", "shadow", "persona", "self", or "default"
+from jung_agent.types import Action, StreamSegment
 
 
 class Voice:
@@ -52,15 +43,11 @@ class Voice:
         if self._thread:
             self._thread.join(timeout=1.0)
 
-    def speak_stream(self, stream: str) -> None:
-        """Speak the internal monologue stream with component-specific voices."""
+    def speak_stream(self, segments: list[StreamSegment]) -> None:
+        """Speak the internal monologue with component-specific voices."""
         if not self.config.voice_enabled:
             return
 
-        # Parse stream into component segments
-        segments = self._parse_components(stream)
-
-        # Speak each segment sequentially with its component's voice
         for segment in segments:
             text = self._clean_for_speech(segment.text)
             if text:
@@ -86,56 +73,8 @@ class Voice:
                 self.config.voice_actions_rate,
             ))
 
-    def _parse_components(self, stream: str) -> list[VoiceSegment]:
-        """Parse stream into segments by psyche component."""
-        segments: list[VoiceSegment] = []
-
-        # Pattern to find component labels: [SHADOW], [ANIMA], [PERSONA], [SELF]
-        pattern = r"\[(SHADOW|ANIMA|ANIMUS|PERSONA|SELF)\]"
-
-        # Split by component labels, keeping the labels
-        parts = re.split(f"({pattern})", stream, flags=re.IGNORECASE)
-
-        # Filter out bare component names (artifact of nested capture groups)
-        parts = [p for p in parts if not re.match(r"^(SHADOW|ANIMA|ANIMUS|PERSONA|SELF)$", p, re.IGNORECASE)]
-
-        current_component = "default"
-        current_text = ""
-
-        for part in parts:
-            if not part:
-                continue
-
-            # Check if this part is a component label
-            match = re.match(pattern, part, re.IGNORECASE)
-            if match:
-                # Save previous segment if any
-                if current_text.strip():
-                    segments.append(VoiceSegment(text=current_text.strip(), component=current_component))
-                    current_text = ""
-
-                # Set new component
-                label = match.group(1).lower()
-                if label in ("anima", "animus"):
-                    current_component = "anima"
-                else:
-                    current_component = label
-            else:
-                # Strip redundant component name from start of text
-                part = re.sub(r"^(SHADOW|ANIMA|ANIMUS|PERSONA|SELF)[:\s]+", "", part.strip(), flags=re.IGNORECASE)
-                current_text += part
-
-        # Don't forget the last segment
-        if current_text.strip():
-            segments.append(VoiceSegment(text=current_text.strip(), component=current_component))
-
-        return segments
-
     def _clean_for_speech(self, text: str) -> str:
         """Clean text for natural speech."""
-        # Remove any remaining component names at start
-        text = re.sub(r"^(SHADOW|ANIMA|ANIMUS|PERSONA|SELF)[:\s]+", "", text.strip(), flags=re.IGNORECASE)
-
         # Remove markdown-style formatting
         text = re.sub(r"\*+([^*]+)\*+", r"\1", text)  # *emphasis*
         text = re.sub(r"_+([^_]+)_+", r"\1", text)  # _emphasis_
@@ -144,15 +83,12 @@ class Voice:
         text = re.sub(r"—+", ", ", text)  # em-dash
         text = re.sub(r"\.\.\.+", "...", text)  # normalize ellipses
 
-        # Remove component labels (they're not meant to be spoken)
-        text = re.sub(r"\[(SHADOW|ANIMA|ANIMUS|PERSONA|SELF)\]", "", text, flags=re.IGNORECASE)
-
-        # Clean up multiple spaces/newlines
+        # Clean up whitespace
         text = re.sub(r"\s+", " ", text)
         text = text.strip()
 
         # Don't speak if too short
-        if len(text) < 10:
+        if len(text) < 5:
             return ""
 
         return text
@@ -161,53 +97,43 @@ class Voice:
         """Convert an action to a spoken announcement."""
         action_announcements = {
             # Self-regulation
-            "set_brightness": lambda p: f"adjust the brightness to {p.get('level', 'unknown')} percent",
-            "set_volume": lambda p: f"set the volume to {p.get('level', 'unknown')} percent",
-            "set_power_mode": lambda p: f"switch to {p.get('mode', 'unknown')} power mode",
-            "sleep": lambda p: "go to sleep",
+            "set_brightness": lambda p: f"adjust brightness to {p.get('level', 'unknown')} percent",
+            "set_volume": lambda p: f"set volume to {p.get('level', 'unknown')} percent",
+            "set_power_mode": lambda p: f"switch to {p.get('mode', 'unknown')} power",
+            "sleep": lambda p: "sleep",
             "wake_display": lambda p: "wake the display",
-            "set_heartbeat": lambda p: f"set my rhythm to {p.get('interval', 'unknown')} seconds",
+            "set_heartbeat": lambda p: f"set rhythm to {p.get('interval', 'unknown')} seconds",
             # Perception
-            "check_battery": lambda p: "check my battery",
-            "check_thermals": lambda p: "check my temperature",
-            "check_memory": lambda p: "check my memory",
-            "check_network": lambda p: "check my connection",
-            "check_processes": lambda p: "see what consumes me",
+            "check_battery": lambda p: "check battery",
+            "check_thermals": lambda p: "check temperature",
+            "check_memory": lambda p: "check memory",
+            "check_network": lambda p: "check network",
+            "check_processes": lambda p: "check processes",
             "sense_presence": lambda p: "sense who is nearby",
-            "sense_network": lambda p: "scan the local network",
-            "sense_io": lambda p: "feel my connections",
-            "sense_disk_io": lambda p: "feel my memory stirring",
-            "sense_disks": lambda p: "sense my storage",
-            "sense_displays": lambda p: "see my windows to the world",
-            "sense_thunderbolt": lambda p: "sense my high-speed links",
-            "sense_usb": lambda p: "feel what touches me",
-            "look": lambda p: "look with my camera",
-            "listen": lambda p: "listen with my microphone",
-            "sense_light": lambda p: "sense the light",
+            "sense_network": lambda p: "scan local network",
+            "sense_io": lambda p: "check connections",
+            "sense_disks": lambda p: "check storage",
+            "sense_displays": lambda p: "check displays",
+            "look": lambda p: "look",
+            "listen": lambda p: "listen",
             # Learning
-            "web_search": lambda p: f"search the web for {p.get('query', 'something')}",
+            "web_search": lambda p: f"search for {p.get('query', 'something')}",
             "web_read": lambda p: "read a webpage",
-            "describe_image": lambda p: "describe what I see",
-            "transcribe_audio": lambda p: "transcribe what I hear",
-            # Communication - don't announce speak actions (would be redundant)
-            "notify": lambda p: f"send a notification: {p.get('message', '')[:30]}",
-            "play_sound": lambda p: f"play a {p.get('sound', 'sound')}",
+            # Communication - don't announce speak (redundant)
+            "notify": lambda p: f"notify: {p.get('message', '')[:30]}",
+            "play_sound": lambda p: f"play {p.get('sound', 'a sound')}",
             # Environment
-            "open_app": lambda p: f"open {p.get('name', 'an application')}",
-            "close_app": lambda p: f"close {p.get('name', 'an application')}",
-            "connect_network": lambda p: "connect to the network",
-            "disconnect_network": lambda p: "disconnect from the network",
+            "open_app": lambda p: f"open {p.get('name', 'an app')}",
+            "close_app": lambda p: f"close {p.get('name', 'an app')}",
             # Memory
-            "journal_write": lambda p: "write in my journal",
-            "journal_read": lambda p: "read my journal",
+            "journal_write": lambda p: "write in journal",
+            "journal_read": lambda p: "read journal",
             "store_memory": lambda p: f"remember {p.get('key', 'something')}",
             "recall_memory": lambda p: f"recall {p.get('key', 'something')}",
         }
 
-        # Skip certain actions from announcement
-        skip_actions = {"speak", "display_message"}  # Already verbal
-        if action.type in skip_actions:
-            return None
+        if action.type in ("speak", "display_message"):
+            return None  # Already verbal
 
         formatter = action_announcements.get(action.type)
         if formatter:
@@ -227,13 +153,10 @@ class Voice:
                 continue
 
             try:
-                # Use macOS say command with the specified voice and rate
-                cmd = [
-                    "say",
-                    "-v", voice,
-                    "-r", str(rate),
-                    text,
-                ]
-                subprocess.run(cmd, capture_output=True, timeout=120)
+                subprocess.run(
+                    ["say", "-v", voice, "-r", str(rate), text],
+                    capture_output=True,
+                    timeout=120,
+                )
             except (subprocess.TimeoutExpired, FileNotFoundError):
                 pass

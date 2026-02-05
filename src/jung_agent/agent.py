@@ -1,6 +1,5 @@
 """The main agent loop."""
 
-import re
 import signal
 import sys
 import threading
@@ -15,7 +14,7 @@ from jung_agent.parser import parse_response
 from jung_agent.perception import format_perception
 from jung_agent.sensors.events import EventCollector
 from jung_agent.sensors.somatic import gather_somatic
-from jung_agent.types import ActionResult, SomaticState
+from jung_agent.types import ActionResult, SomaticState, StreamSegment
 from jung_agent.voice import Voice
 
 
@@ -183,79 +182,18 @@ class JungAgent:
     }
     _RESET = "\033[0m"
 
-    def _log_stream(self, stream: str) -> None:
+    def _log_stream(self, segments: list[StreamSegment]) -> None:
         """Log the psyche's stream to console with timestamped, colored component labels."""
         print()  # Blank line before stream
 
-        # Parse into segments by component
-        segments = self._parse_stream_components(stream)
-
-        for component, text in segments:
-            # Clean up text for display
-            text = text.strip()
-            if not text:
-                continue
-
-            # Timestamp for this segment
+        for segment in segments:
             timestamp = datetime.now().strftime("%H:%M:%S")
+            color, emoji = self._COMPONENT_STYLE.get(segment.component, self._COMPONENT_STYLE["default"])
+            label = segment.component.upper()
 
-            # Get color and emoji for component
-            color, emoji = self._COMPONENT_STYLE.get(component, self._COMPONENT_STYLE["default"])
-            label = component.upper() if component != "default" else "PSYCHE"
-
-            # Print each line with colored label
-            lines = [line.strip() for line in text.split("\n") if line.strip()]
-            if lines:
-                print(f"[{timestamp}] {color}{emoji} {label}{self._RESET}: {lines[0]}")
-                indent = " " * (13 + len(label) + 3)  # align with text after label
-                for line in lines[1:]:
-                    print(f"{indent}{line}")
+            print(f"[{timestamp}] {color}{emoji} {label}{self._RESET}: {segment.text}")
 
         print()  # Blank line after stream
-
-    def _parse_stream_components(self, stream: str) -> list[tuple[str, str]]:
-        """Parse stream into (component, text) pairs."""
-        segments: list[tuple[str, str]] = []
-
-        # Pattern to find component labels (non-capturing inner group)
-        pattern = r"\[(SHADOW|ANIMA|ANIMUS|PERSONA|SELF)\]"
-
-        # Split by component labels, keeping the labels
-        # Use non-capturing wrapper to avoid double-capture
-        parts = re.split(f"({pattern})", stream, flags=re.IGNORECASE)
-
-        # Filter out the bare component names (artifact of nested capture groups)
-        parts = [p for p in parts if not re.match(r"^(SHADOW|ANIMA|ANIMUS|PERSONA|SELF)$", p, re.IGNORECASE)]
-
-        current_component = "default"
-        current_text = ""
-
-        for part in parts:
-            if not part:
-                continue
-
-            match = re.match(pattern, part, re.IGNORECASE)
-            if match:
-                # Save previous segment
-                if current_text.strip():
-                    segments.append((current_component, current_text))
-                    current_text = ""
-
-                # Set new component
-                label = match.group(1).lower()
-                current_component = "anima" if label in ("anima", "animus") else label
-            else:
-                # Strip redundant component name from start of text
-                # (model sometimes outputs "[SHADOW] SHADOW: text")
-                text = part.strip()
-                text = re.sub(r"^(SHADOW|ANIMA|ANIMUS|PERSONA|SELF)[:\s]+", "", text, flags=re.IGNORECASE)
-                current_text += text
-
-        # Don't forget last segment
-        if current_text.strip():
-            segments.append((current_component, current_text))
-
-        return segments
 
     def _update_heartbeat(self, somatic: SomaticState) -> None:
         """Update heartbeat interval based on somatic state."""
