@@ -74,7 +74,7 @@ def check_weather(location: str | None = None) -> dict[str, Any]:
 
 
 def take_screenshot(**kwargs: Any) -> dict[str, Any]:
-    """Capture screenshot of current screen."""
+    """Capture screenshot of current screen and analyze what user is doing."""
     import base64
     import tempfile
     from pathlib import Path
@@ -102,24 +102,30 @@ def take_screenshot(**kwargs: Any) -> dict[str, Any]:
         size = Path(temp_path).stat().st_size
 
         # Try to describe with vision model if available
-        description = _describe_screenshot(temp_path)
+        analysis = _analyze_screenshot(temp_path)
 
         Path(temp_path).unlink()
 
-        return {
+        result_dict: dict[str, Any] = {
             "status": "captured",
             "size_bytes": size,
             "data": image_data[:100] + "...",
             "full_data": image_data,
-            "description": description or "Screen captured",
         }
+
+        if analysis:
+            result_dict.update(analysis)
+        else:
+            result_dict["description"] = "Screen captured"
+
+        return result_dict
 
     except Exception as e:
         return {"error": str(e), "description": f"Screenshot failed: {e}"}
 
 
-def _describe_screenshot(image_path: str) -> str | None:
-    """Use vision model to describe screenshot."""
+def _analyze_screenshot(image_path: str) -> dict[str, Any] | None:
+    """Use vision model to analyze screenshot and extract structured info."""
     try:
         check_result = subprocess.run(
             ["ollama", "list"],
@@ -132,18 +138,48 @@ def _describe_screenshot(image_path: str) -> str | None:
 
         import ollama
 
+        # Structured prompt for better extraction
+        prompt = """Analyze this screenshot and answer:
+1. APP: What application is in focus? (e.g., Terminal, VS Code, Safari, Chrome, Slack)
+2. ACTIVITY: What is the user doing? (e.g., coding, browsing, writing, chatting, watching video)
+3. CONTENT: Brief description of what's on screen (1 sentence)
+4. MOOD: Does the screen suggest focused work, leisure, or communication?
+
+Format your response exactly like:
+APP: [app name]
+ACTIVITY: [activity]
+CONTENT: [description]
+MOOD: [work/leisure/communication]"""
+
         response = ollama.chat(
             model="llava",
             messages=[
                 {
                     "role": "user",
-                    "content": "Briefly describe what's on this screen (1-2 sentences). What app or content is visible?",
+                    "content": prompt,
                     "images": [image_path],
                 }
             ],
         )
 
-        return response["message"]["content"]
+        content = response["message"]["content"]
+
+        # Parse structured response
+        result: dict[str, Any] = {"description": content}
+
+        lines = content.split("\n")
+        for line in lines:
+            line_lower = line.lower()
+            if line_lower.startswith("app:"):
+                result["app_name"] = line.split(":", 1)[1].strip()
+            elif line_lower.startswith("activity:"):
+                result["activity"] = line.split(":", 1)[1].strip()
+            elif line_lower.startswith("content:"):
+                result["content_summary"] = line.split(":", 1)[1].strip()
+            elif line_lower.startswith("mood:"):
+                result["mood"] = line.split(":", 1)[1].strip()
+
+        return result
 
     except Exception:
         return None

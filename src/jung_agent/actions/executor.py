@@ -15,6 +15,7 @@ from jung_agent.actions import (
 )
 from jung_agent.config import AgentConfig
 from jung_agent.types import Action, ActionResult
+from jung_agent.world import WorldModel
 
 
 class ActionExecutor:
@@ -27,6 +28,10 @@ class ActionExecutor:
         # Initialize memory
         self._memory = memory.MemoryStore(config.memory_file)
         self._journal = memory.Journal(config.journal_file)
+
+        # Initialize world model
+        self._world = WorldModel.load(config.world_file)
+        creative.set_world_model(self._world)
 
         # Map action types to handlers
         self._handlers: dict[str, Any] = {
@@ -45,9 +50,9 @@ class ActionExecutor:
             "check_processes": perception.check_processes,
             "sense_age": perception.sense_age,
             "sense_all": perception.sense_all,
-            # External senses
-            "look": perception.look,
-            "look_for": perception.look_for,
+            # External senses (with world model updates)
+            "look": self._look_with_world_update,
+            "look_for": self._look_for_with_world_update,
             "watch": perception.watch,
             "listen": perception.listen,
             "listen_for": perception.listen_for,
@@ -56,7 +61,7 @@ class ActionExecutor:
             "sense_motion": perception.sense_motion,
             "sense_touch": perception.sense_touch,
             "sense_presence": perception.sense_presence,
-            "sense_location": perception.sense_location,
+            "sense_location": self._sense_location_with_world_update,
             "sense_connections": perception.sense_connections,
             "sense_breath": perception.sense_breath,
             # I/O sensing
@@ -92,15 +97,16 @@ class ActionExecutor:
             "web_read": learning.web_read,
             "describe_image": learning.describe_image,
             "transcribe_audio": learning.transcribe_audio,
-            # Awareness
-            "check_time": awareness.check_time,
+            # Awareness (with world model updates)
+            "check_time": self._check_time_with_world_update,
             "check_weather": awareness.check_weather,
-            "take_screenshot": awareness.take_screenshot,
+            "take_screenshot": self._take_screenshot_with_world_update,
             "read_clipboard": awareness.read_clipboard,
             "check_calendar": awareness.check_calendar,
             # Creative
             "compose_thought": creative.compose_thought,
             "dream": creative.dream,
+            "observe": creative.observe,
             "set_wallpaper": creative.set_wallpaper,
             "meditate": creative.meditate,
             "stretch": creative.stretch,
@@ -182,3 +188,45 @@ class ActionExecutor:
         if value is None:
             return {"found": False, "key": key, "description": "no memory of this"}
         return {"found": True, "key": key, "value": value}
+
+    # World model update wrappers
+
+    def _look_with_world_update(self, duration: float = 0.5) -> dict[str, Any]:
+        """Look and update world model with person presence."""
+        result = perception.look(duration)
+        self._world.update_from_look(result)
+        return result
+
+    def _look_for_with_world_update(
+        self, description: str, duration: float = 1.0
+    ) -> dict[str, Any]:
+        """Look for something and update world model."""
+        result = perception.look_for(description, duration)
+        self._world.update_from_look(result)
+        return result
+
+    def _sense_location_with_world_update(self, **kwargs: Any) -> dict[str, Any]:
+        """Sense location and update world model."""
+        result = perception.sense_location(**kwargs)
+        self._world.update_from_location(result)
+        return result
+
+    def _check_time_with_world_update(self, **kwargs: Any) -> dict[str, Any]:
+        """Check time and update world model."""
+        result = awareness.check_time(**kwargs)
+        self._world.update_time()
+        return result
+
+    def _take_screenshot_with_world_update(self, **kwargs: Any) -> dict[str, Any]:
+        """Take screenshot and update world model with activity."""
+        result = awareness.take_screenshot(**kwargs)
+        self._world.update_from_screenshot(result)
+        return result
+
+    def get_world_model(self) -> WorldModel:
+        """Get the current world model."""
+        return self._world
+
+    def get_world_summary(self) -> str:
+        """Get formatted world state for perception."""
+        return self._world.format_for_perception()

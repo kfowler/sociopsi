@@ -61,6 +61,7 @@ class AgentConfig:
     data_dir: Path = field(default_factory=lambda: Path.home() / ".jung")
     journal_file: Path = field(default_factory=lambda: Path.home() / ".jung" / "journal.jsonl")
     memory_file: Path = field(default_factory=lambda: Path.home() / ".jung" / "memory.json")
+    world_file: Path = field(default_factory=lambda: Path.home() / ".jung" / "world.json")
 
     # Logging
     log_stream: bool = True  # Print stream to console

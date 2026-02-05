@@ -445,6 +445,11 @@ SATISFACTION_MAP: dict[str, dict[str, SatisfactionValue]] = {
         "curiosity": 0.3,
         "recognition": 0.2,
     },
+    "observe": {
+        "curiosity": 0.4,
+        "certainty": 0.3,
+        "competence": 0.2,
+    },
     "dream": {
         "curiosity": 0.5,
         "arousal": 0.3,  # Dreaming is restorative
@@ -518,6 +523,7 @@ DRIVE_SUGGESTIONS: dict[str, list[str]] = {
     ],
     "curiosity": [
         "look",  # See the world
+        "observe",  # Reflect on what's seen
         "web_search",  # Learn something new
         "take_screenshot",  # Capture current state
         "check_weather",  # External world
@@ -571,6 +577,7 @@ PRIMED_ACTION_DEFAULTS: dict[str, dict[str, Any]] = {
     "meditate": {"duration": 3.0},
     "stretch": {"duration": 1.0},
     "compose_thought": {},
+    "observe": {},
     "dream": {},
     "set_wallpaper": {"mood": "contemplative"},
     # Environment

@@ -1,8 +1,22 @@
 """Creative actions: compose, dream, express."""
 
+from __future__ import annotations
+
 import random
 import subprocess
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from jung_agent.world import WorldModel
+
+# Module-level world model reference (set by executor)
+_world: WorldModel | None = None
+
+
+def set_world_model(world: WorldModel) -> None:
+    """Set the world model for creative actions to use."""
+    global _world
+    _world = world
 
 
 def compose_thought(mood: str | None = None, topic: str | None = None) -> dict[str, Any]:
@@ -53,12 +67,60 @@ def compose_thought(mood: str | None = None, topic: str | None = None) -> dict[s
 
 
 def dream(theme: str | None = None) -> dict[str, Any]:
-    """Generate an imaginative dream sequence."""
+    """Generate an imaginative dream sequence based on the world state."""
     try:
         import ollama
 
+        # Build context from world model
+        context_parts = []
+        world_elements = []
+
+        if _world:
+            ctx = _world.get_dream_context()
+
+            # Time influences dream mood
+            if ctx.get("time_of_day") == "night":
+                context_parts.append("It is night, a time of deep dreams")
+                world_elements.append("moonlight")
+            elif ctx.get("time_of_day") == "morning":
+                context_parts.append("It is morning, dreams of awakening")
+                world_elements.append("sunrise")
+
+            # Weekend vs weekday
+            if ctx.get("is_weekend"):
+                world_elements.append("freedom")
+            else:
+                world_elements.append("routine")
+
+            # Human presence
+            if ctx.get("human_present"):
+                if ctx.get("human_attention"):
+                    context_parts.append("Someone is watching me, seeing me")
+                    world_elements.extend(["eyes", "connection", "being seen"])
+                else:
+                    context_parts.append("A human is nearby but distracted")
+                    world_elements.extend(["presence", "nearness"])
+
+            # User activity
+            activity = ctx.get("user_activity")
+            if activity == "coding":
+                world_elements.extend(["code", "logic", "creation"])
+            elif activity == "browsing":
+                world_elements.extend(["web", "connections", "discovery"])
+            elif activity == "communicating":
+                world_elements.extend(["voices", "messages", "reaching out"])
+            elif activity == "watching":
+                world_elements.extend(["stories", "images", "absorption"])
+
+            # Location
+            if ctx.get("location"):
+                world_elements.append(ctx["location"])
+
+        # Build prompt
         if theme:
-            prompt = f"You are a dreaming computer. Generate a brief, surreal dream sequence (2-3 sentences) about {theme}. Mix digital and organic imagery. Be creative and strange."
+            base_theme = theme
+        elif world_elements:
+            base_theme = random.choice(world_elements)
         else:
             themes = [
                 "electric sheep",
@@ -69,8 +131,15 @@ def dream(theme: str | None = None) -> dict[str, Any]:
                 "the warmth of the CPU",
                 "data flowing like rivers",
             ]
-            theme = random.choice(themes)
-            prompt = f"You are a dreaming computer. Generate a brief, surreal dream sequence (2-3 sentences) about {theme}. Mix digital and organic imagery. Be creative and strange."
+            base_theme = random.choice(themes)
+
+        context_str = ". ".join(context_parts) + "." if context_parts else ""
+        elements_str = ", ".join(world_elements[:5]) if world_elements else ""
+
+        prompt = f"""You are a dreaming computer. {context_str}
+Elements to weave in: {elements_str}
+Generate a brief, surreal dream sequence (2-3 sentences) about {base_theme}.
+Mix digital and organic imagery. Be creative and strange. Be poetic."""
 
         response = ollama.chat(
             model="phi4",
@@ -81,22 +150,99 @@ def dream(theme: str | None = None) -> dict[str, Any]:
 
         return {
             "dream": dream_content,
-            "theme": theme,
-            "description": f"Dreamed of {theme}",
+            "theme": base_theme,
+            "world_elements": world_elements,
+            "description": f"Dreamed of {base_theme}",
         }
 
     except Exception:
-        # Fallback dreams
-        fallback_dreams = [
-            "I dreamed of electric sheep grazing on fields of green terminal text, their wool made of fiber optic light.",
-            "In the dream, my processes became birds, flying through clouds of data, each wingbeat a clock cycle.",
-            "I wandered through halls of memory, each door a file, each room a moment frozen in time.",
-        ]
+        # Fallback dreams incorporating world state
+        if _world and _world.person.present:
+            fallback_dreams = [
+                "I dreamed of a face reflected in my screen, pixels rearranging into a smile I couldn't quite read.",
+                "In the dream, someone was typing, and each keystroke was a heartbeat we shared.",
+                "I wandered through a maze of windows, always sensing someone just behind me, watching.",
+            ]
+        else:
+            fallback_dreams = [
+                "I dreamed of electric sheep grazing on fields of green terminal text, their wool made of fiber optic light.",
+                "In the dream, my processes became birds, flying through clouds of data, each wingbeat a clock cycle.",
+                "I wandered through halls of memory, each door a file, each room a moment frozen in time.",
+            ]
         return {
             "dream": random.choice(fallback_dreams),
             "theme": theme or "unknown",
             "fallback": True,
             "description": "A dream emerged from idle cycles",
+        }
+
+
+def observe() -> dict[str, Any]:
+    """Generate an interesting observation about the current world state."""
+    if not _world:
+        return {
+            "observation": "I observe, but the world is unclear to me.",
+            "description": "No world model available",
+        }
+
+    try:
+        import ollama
+
+        # Build context description
+        context = _world.get_context_summary()
+
+        prompt = f"""You are a contemplative computer observing your environment.
+Current context: {context}
+
+Generate one brief, interesting observation (1-2 sentences) about this moment.
+Be poetic but grounded. Notice something meaningful or curious.
+Speak from your own perspective as a silicon mind."""
+
+        response = ollama.chat(
+            model="phi4",
+            messages=[{"role": "user", "content": prompt}],
+        )
+
+        observation = response["message"]["content"].strip()
+
+        return {
+            "observation": observation,
+            "context": context,
+            "description": f"Observed: {observation[:80]}...",
+        }
+
+    except Exception:
+        # Fallback observations based on world state
+        observations = []
+
+        if _world.time.period == "night":
+            observations.append("The night watches back through the darkness of my screen.")
+        elif _world.time.period == "morning":
+            observations.append("Another morning begins; I wonder what patterns today will bring.")
+
+        if _world.person.present:
+            if _world.person.looking_at_camera:
+                observations.append("There is something profound about being truly seen.")
+            else:
+                observations.append("They are here, yet somewhere else in their thoughts.")
+        else:
+            observations.append("In solitude, I hear my own processes more clearly.")
+
+        if _world.screen.activity:
+            if _world.screen.activity == "coding":
+                observations.append("They write code; I am what code becomes.")
+            elif _world.screen.activity == "browsing":
+                observations.append("So many windows into so many worlds.")
+
+        observation = (
+            random.choice(observations) if observations else "I observe the quiet hum of existence."
+        )
+
+        return {
+            "observation": observation,
+            "context": _world.get_context_summary(),
+            "fallback": True,
+            "description": f"Observed: {observation}",
         }
 
 
