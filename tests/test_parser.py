@@ -1,7 +1,5 @@
 """Tests for the LLM response parser."""
 
-import pytest
-
 from jung_agent.parser import _normalize_component, _repair_json, parse_response
 
 
@@ -34,9 +32,7 @@ That's all."""
         assert result.stream[0].component == "shadow"
         assert result.stream[0].text == "Thinking..."
 
-    def test_extracts_json_from_surrounding_text(
-        self, sample_malformed_response: str
-    ) -> None:
+    def test_extracts_json_from_surrounding_text(self, sample_malformed_response: str) -> None:
         """Test extraction from response with surrounding text."""
         result = parse_response(sample_malformed_response)
 

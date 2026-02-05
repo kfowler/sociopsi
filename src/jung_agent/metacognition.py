@@ -4,8 +4,6 @@ Tracks thoughts, analyzes harmony trends, and generates reflections
 on the agent's psychological state and processes.
 """
 
-from __future__ import annotations
-
 import logging
 from collections import deque
 from typing import Any
@@ -105,9 +103,11 @@ class MetaCognition:
             Reflection text
         """
         # Build context for reflection
-        thoughts_text = "\n".join(
-            f"- {thought}" for thought in list(self.recent_thoughts)[-5:]
-        ) if self.recent_thoughts else "No recent thoughts"
+        thoughts_text = (
+            "\n".join(f"- {thought}" for thought in list(self.recent_thoughts)[-5:])
+            if self.recent_thoughts
+            else "No recent thoughts"
+        )
 
         harmony_trend = self.calculate_harmony_trend()
         avg_harmony = self.get_average_harmony()

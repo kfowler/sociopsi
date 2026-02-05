@@ -1,11 +1,8 @@
 """Tests for agent configuration."""
 
-from pathlib import Path
-
-import pytest
-
 import logging
 import logging.handlers
+from pathlib import Path
 
 from jung_agent.config import (
     AgentConfig,
@@ -54,7 +51,7 @@ class TestAgentConfig:
     def test_data_directory_created(self, tmp_path: Path) -> None:
         """Test that data directory is created on init."""
         data_dir = tmp_path / "test_jung_data"
-        config = AgentConfig(data_dir=data_dir, voice_enabled=False)
+        AgentConfig(data_dir=data_dir, voice_enabled=False)  # Side effect creates dir
 
         assert data_dir.exists()
         assert data_dir.is_dir()
@@ -193,7 +190,6 @@ class TestApplyConfigOverrides:
     def test_ignores_unknown_keys(self) -> None:
         """Test that unknown config keys are ignored."""
         config = AgentConfig(voice_enabled=False)
-        original_model = config.model
         _apply_config_overrides(config, {"unknown_key": "value", "model": "jung"})
 
         # Model should be updated, unknown key should be ignored
@@ -274,9 +270,9 @@ class TestSetupLogging:
 
         root_logger = logging.getLogger()
         stream_handlers = [
-            h for h in root_logger.handlers
-            if isinstance(h, logging.StreamHandler)
-            and not isinstance(h, logging.FileHandler)
+            h
+            for h in root_logger.handlers
+            if isinstance(h, logging.StreamHandler) and not isinstance(h, logging.FileHandler)
         ]
         assert len(stream_handlers) >= 1
 
@@ -288,8 +284,7 @@ class TestSetupLogging:
 
         root_logger = logging.getLogger()
         file_handlers = [
-            h for h in root_logger.handlers
-            if isinstance(h, logging.handlers.RotatingFileHandler)
+            h for h in root_logger.handlers if isinstance(h, logging.handlers.RotatingFileHandler)
         ]
         assert len(file_handlers) >= 1
 

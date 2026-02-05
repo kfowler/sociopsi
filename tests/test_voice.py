@@ -1,13 +1,9 @@
 """Tests for voice output module."""
 
-import threading
-from queue import Queue
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import patch
 
 from jung_agent.config import AgentConfig
-from jung_agent.types import Action, ActionResult, StreamSegment
+from jung_agent.types import Action, StreamSegment
 from jung_agent.voice import Voice
 
 
@@ -20,7 +16,7 @@ class TestVoiceInit:
         voice = Voice(config)
 
         assert voice.config == config
-        assert voice._thread is None
+        assert voice._delegate is None
         assert voice._running is False
 
     def test_initializes_component_voices(self) -> None:
@@ -52,7 +48,7 @@ class TestVoiceStartStop:
 
         voice.start()
 
-        assert voice._thread is None
+        assert voice._delegate is None
         assert voice._running is False
 
     def test_stop_does_nothing_when_not_running(self) -> None:
@@ -93,50 +89,57 @@ class TestSpeakStream:
         segments = [StreamSegment(component="anima", text="Hello")]
         voice.speak_stream(segments)
 
-        assert voice._queue.empty()
+        assert len(voice._queue) == 0
 
     def test_speak_stream_queues_segments(self) -> None:
-        """Test that speak_stream queues segments when enabled."""
+        """Test that speak_stream queues segments when enabled and running."""
         config = AgentConfig(voice_enabled=True, voice_rate=200)
         voice = Voice(config)
+        # Simulate running state without actually starting (which needs PyObjC)
+        voice._running = True
 
         segments = [
             StreamSegment(component="anima", text="Hello world"),
             StreamSegment(component="shadow", text="Darkness"),
         ]
-        voice.speak_stream(segments)
+
+        # Mock _any_speaking to prevent immediate consumption
+        with patch.object(voice, "_any_speaking", return_value=True):
+            voice.speak_stream(segments)
 
         # Should have 2 items in queue
-        assert voice._queue.qsize() == 2
+        assert len(voice._queue) == 2
 
         # Check first item
-        item1 = voice._queue.get_nowait()
+        item1 = voice._queue.popleft()
         assert item1 is not None
-        text1, voice1, rate1 = item1
-        assert text1 == "Hello world"
-        assert voice1 == config.voice_anima
-        assert rate1 == 200
+        assert item1.text == "Hello world"
+        assert item1.voice_name == config.voice_anima
+        assert item1.rate_wpm == 200
 
         # Check second item
-        item2 = voice._queue.get_nowait()
+        item2 = voice._queue.popleft()
         assert item2 is not None
-        text2, voice2, rate2 = item2
-        assert text2 == "Darkness"
-        assert voice2 == config.voice_shadow
+        assert item2.text == "Darkness"
+        assert item2.voice_name == config.voice_shadow
 
     def test_speak_stream_skips_short_text(self) -> None:
         """Test that speak_stream skips text that's too short after cleaning."""
         config = AgentConfig(voice_enabled=True)
         voice = Voice(config)
+        voice._running = True  # Simulate running state
 
         segments = [
             StreamSegment(component="anima", text="Hi"),  # Too short (< 5 chars)
             StreamSegment(component="shadow", text="Hello there"),  # OK
         ]
-        voice.speak_stream(segments)
+
+        # Mock _any_speaking to prevent immediate consumption
+        with patch.object(voice, "_any_speaking", return_value=True):
+            voice.speak_stream(segments)
 
         # Should only have 1 item (skipped short text)
-        assert voice._queue.qsize() == 1
+        assert len(voice._queue) == 1
 
 
 class TestAnnounceActions:
@@ -150,7 +153,7 @@ class TestAnnounceActions:
         actions = [Action(type="check_battery", params={})]
         voice.announce_actions(actions)
 
-        assert voice._queue.empty()
+        assert len(voice._queue) == 0
 
     def test_announce_does_nothing_for_empty_list(self) -> None:
         """Test that announce_actions handles empty list."""
@@ -159,39 +162,45 @@ class TestAnnounceActions:
 
         voice.announce_actions([])
 
-        assert voice._queue.empty()
+        assert len(voice._queue) == 0
 
     def test_announce_queues_announcement(self) -> None:
         """Test that announce_actions queues announcement."""
         config = AgentConfig(voice_enabled=True)
         voice = Voice(config)
+        voice._running = True  # Simulate running state
 
         actions = [Action(type="check_battery", params={})]
-        voice.announce_actions(actions)
 
-        assert voice._queue.qsize() == 1
-        item = voice._queue.get_nowait()
+        # Mock _any_speaking to prevent immediate consumption
+        with patch.object(voice, "_any_speaking", return_value=True):
+            voice.announce_actions(actions)
+
+        assert len(voice._queue) == 1
+        item = voice._queue.popleft()
         assert item is not None
-        text, voice_name, rate = item
-        assert "check battery" in text.lower()
-        assert voice_name == config.voice_actions
+        assert "check battery" in item.text.lower()
+        assert item.voice_name == config.voice_actions
 
     def test_announce_joins_multiple_actions(self) -> None:
         """Test that multiple actions are joined in announcement."""
         config = AgentConfig(voice_enabled=True)
         voice = Voice(config)
+        voice._running = True  # Simulate running state
 
         actions = [
             Action(type="check_battery", params={}),
             Action(type="check_thermals", params={}),
         ]
-        voice.announce_actions(actions)
 
-        assert voice._queue.qsize() == 1
-        item = voice._queue.get_nowait()
+        # Mock _any_speaking to prevent immediate consumption
+        with patch.object(voice, "_any_speaking", return_value=True):
+            voice.announce_actions(actions)
+
+        assert len(voice._queue) == 1
+        item = voice._queue.popleft()
         assert item is not None
-        text, _, _ = item
-        assert "and" in text
+        assert "and" in item.text
 
     def test_announce_skips_speak_action(self) -> None:
         """Test that speak action is not announced (redundant)."""
@@ -202,7 +211,7 @@ class TestAnnounceActions:
         voice.announce_actions(actions)
 
         # Should be empty since speak is skipped
-        assert voice._queue.empty()
+        assert len(voice._queue) == 0
 
 
 class TestCleanForSpeech:
@@ -250,15 +259,19 @@ class TestActionToSpeech:
         config = AgentConfig(voice_enabled=False)
         voice = Voice(config)
 
-        assert "brightness" in voice._action_to_speech(
-            Action(type="set_brightness", params={"level": 50})
-        ) or ""
-        assert "volume" in voice._action_to_speech(
-            Action(type="set_volume", params={"level": 30})
-        ) or ""
-        assert "search" in voice._action_to_speech(
-            Action(type="web_search", params={"query": "test"})
-        ) or ""
+        assert (
+            "brightness"
+            in voice._action_to_speech(Action(type="set_brightness", params={"level": 50}))
+            or ""
+        )
+        assert (
+            "volume" in voice._action_to_speech(Action(type="set_volume", params={"level": 30}))
+            or ""
+        )
+        assert (
+            "search" in voice._action_to_speech(Action(type="web_search", params={"query": "test"}))
+            or ""
+        )
 
     def test_returns_none_for_speak_action(self) -> None:
         """Test that speak action returns None."""

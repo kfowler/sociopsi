@@ -174,9 +174,7 @@ class TestDriveSystem:
         # (satisfaction was high during update)
         assert drive_system.drives["energy"].demand <= initial_energy_demand + 0.1
 
-    def test_satisfy_from_results_applies_satisfaction(
-        self, drive_system: DriveSystem
-    ) -> None:
+    def test_satisfy_from_results_applies_satisfaction(self, drive_system: DriveSystem) -> None:
         """Test that action results satisfy relevant drives."""
         # Simulate successful web_search result
         results = [
@@ -187,7 +185,6 @@ class TestDriveSystem:
             )
         ]
 
-        initial_curiosity = drive_system.drives["curiosity"].demand
         drive_system.satisfy_from_results(results)
 
         # Curiosity should have been satisfied
@@ -221,9 +218,7 @@ class TestDriveSystem:
         # Should have at least one primed action
         assert len(primed) > 0
 
-    def test_get_compulsive_actions_for_critical_energy(
-        self, drive_system: DriveSystem
-    ) -> None:
+    def test_get_compulsive_actions_for_critical_energy(self, drive_system: DriveSystem) -> None:
         """Test compulsive actions when energy is critical."""
         # Set up critical energy state
         drive_system.drives["energy"].demand = 0.95
@@ -261,15 +256,15 @@ class TestSatisfactionMap:
     def test_all_actions_have_satisfaction_mapping(self) -> None:
         """Test that all actions in PRIMED_ACTION_DEFAULTS have satisfaction mappings."""
         # Every primed action should have some satisfaction mapping
-        for action_type in PRIMED_ACTION_DEFAULTS:
+        for _action_type in PRIMED_ACTION_DEFAULTS:
             # Most actions should be in SATISFACTION_MAP
             # (some creative/internal ones might not satisfy drives directly)
             pass  # This is informational, not strictly required
 
     def test_satisfaction_values_are_valid(self) -> None:
         """Test that all satisfaction values are in valid range or callable."""
-        for action_type, drive_map in SATISFACTION_MAP.items():
-            for drive_name, value in drive_map.items():
+        for _action_type, drive_map in SATISFACTION_MAP.items():
+            for _drive_name, value in drive_map.items():
                 if callable(value):
                     # Test with empty result dict - should not raise
                     result = value({})

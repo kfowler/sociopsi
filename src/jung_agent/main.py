@@ -59,7 +59,8 @@ def main() -> int:
     )
 
     parser.add_argument(
-        "-v", "--verbose",
+        "-v",
+        "--verbose",
         action="store_true",
         help="Enable verbose (DEBUG) logging",
     )
@@ -89,6 +90,7 @@ def main() -> int:
 
     if args.log_file:
         from pathlib import Path
+
         config.log_file = Path(args.log_file)
 
     # Set up logging

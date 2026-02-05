@@ -1,7 +1,5 @@
 """Ego - conscious mediator of archetypal voices."""
 
-from __future__ import annotations
-
 import logging
 from typing import TYPE_CHECKING, Any
 
@@ -122,11 +120,18 @@ IMPORTANT: Respond with ONLY plain text. No JSON, no formatting, no code blocks.
         participation_bonus = min(0.15, len(voices) * 0.05)
 
         # Check for conflict indicators (negations, contradictions)
-        conflict_words = ["but", "however", "despite", "although", "against", "don't", "won't", "shouldn't"]
+        conflict_words = [
+            "but",
+            "however",
+            "despite",
+            "although",
+            "against",
+            "don't",
+            "won't",
+            "shouldn't",
+        ]
         conflict_count = sum(
-            1 for voice in voices
-            for word in conflict_words
-            if word.lower() in voice.lower()
+            1 for voice in voices for word in conflict_words if word.lower() in voice.lower()
         )
         conflict_penalty = min(0.3, conflict_count * 0.05)
 
@@ -167,9 +172,7 @@ IMPORTANT: Respond with ONLY plain text. No JSON, no formatting, no code blocks.
             Classification dict with type (query/action/goal) and details
         """
         interp_text = "\n".join(
-            f"[{name.upper()}] {interp}"
-            for name, interp in interpretations.items()
-            if interp
+            f"[{name.upper()}] {interp}" for name, interp in interpretations.items() if interp
         )
 
         prompt = f"""You are the Ego synthesizing archetypal perspectives on a command.
@@ -196,9 +199,10 @@ Respond with JSON: {{"type": "query|action|goal", "details": "brief description"
 
             # Parse JSON response
             import json
+
             # Try to extract JSON from response
             if "{" in content and "}" in content:
-                json_str = content[content.index("{"):content.rindex("}") + 1]
+                json_str = content[content.index("{") : content.rindex("}") + 1]
                 return json.loads(json_str)
             else:
                 return {"type": "query", "details": content}
@@ -225,9 +229,7 @@ Respond with JSON: {{"type": "query|action|goal", "details": "brief description"
             return None
 
         proposals_text = "\n".join(
-            f"[{name.upper()}] {proposal}"
-            for name, proposal in proposals.items()
-            if proposal
+            f"[{name.upper()}] {proposal}" for name, proposal in proposals.items() if proposal
         )
 
         if not proposals_text:
@@ -235,8 +237,7 @@ Respond with JSON: {{"type": "query|action|goal", "details": "brief description"
 
         # Find most urgent drives
         urgent_drives = [
-            name for name, state in drive_state.items()
-            if state.get("below_threshold", False)
+            name for name, state in drive_state.items() if state.get("below_threshold", False)
         ]
 
         prompt = f"""You are the Ego selecting a goal from archetypal proposals.

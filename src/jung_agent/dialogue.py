@@ -4,14 +4,12 @@ Coordinates archetypes and Ego to generate rich internal monologue
 that represents the psychological dynamics of the agent.
 """
 
-from __future__ import annotations
-
 import logging
 from typing import Any
 
-from jung_agent.archetypes import Archetype, Persona, Shadow, Anima, SelfArchetype, Ego
+from jung_agent.archetypes import Anima, Archetype, Ego, Persona, SelfArchetype, Shadow
 from jung_agent.event_bus import EventBus, get_event_bus
-from jung_agent.types import StreamSegment, PsycheComponent
+from jung_agent.types import PsycheComponent, StreamSegment
 
 logger = logging.getLogger(__name__)
 

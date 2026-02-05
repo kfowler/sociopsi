@@ -18,7 +18,7 @@ from jung_agent.actions.executor import ActionExecutor
 from jung_agent.config import AgentConfig, load_system_prompt
 from jung_agent.dialogue import ArchetypalDialogue
 from jung_agent.drives import DriveSystem
-from jung_agent.event_bus import EventBus, get_event_bus
+from jung_agent.event_bus import get_event_bus
 from jung_agent.llm import LLMError, chat_with_retry
 from jung_agent.logger import PsycheLogger
 from jung_agent.memory import SemanticMemory
@@ -212,10 +212,7 @@ class JungAgent:
             # Wait until deadline while servicing the run loop
             # This allows voice callbacks to fire naturally
             deadline = NSDate.dateWithTimeIntervalSinceNow_(wait_time)
-            while (
-                self._running
-                and NSDate.date().compare_(deadline) == NSOrderedAscending
-            ):
+            while self._running and NSDate.date().compare_(deadline) == NSOrderedAscending:
                 # Run loop returns when: input processed, deadline reached, or no sources
                 run_loop.runMode_beforeDate_(NSDefaultRunLoopMode, deadline)
 
@@ -284,7 +281,7 @@ class JungAgent:
             # Update individuation based on harmony
             if "individuation" in self.drive_system.drives:
                 if harmony > 0.7:
-                    self.drive_system.drives["individuation"].satisfy(0.05, harmony)
+                    self.drive_system.drives["individuation"].satisfy(0.05 * harmony)
 
             # Store mediated thought in memory
             if mediated_thought:
@@ -309,7 +306,9 @@ class JungAgent:
             self.voice.speak_stream(segments)
 
             # 13. Print harmony score
-            print(f"\n{colors.DIM}[HARMONY] {harmony:.2f} | Ego: {self.dialogue.ego.strength:.2f}{colors.RESET}")
+            print(
+                f"\n{colors.DIM}[HARMONY] {harmony:.2f} | Ego: {self.dialogue.ego.strength:.2f}{colors.RESET}"
+            )
 
             # 14. Get actions from LLM (still using JSON approach for actions)
             drive_perception = self.drive_system.format_for_perception()

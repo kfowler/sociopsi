@@ -612,7 +612,7 @@ PRIMED_ACTION_DEFAULTS: dict[str, dict[str, Any]] = {
 }
 
 
-def _generate_speak_text(drives: dict[str, "Drive"]) -> str:
+def _generate_speak_text(drives: dict[str, Drive]) -> str:
     """Generate contextual text for the speak action based on drive state."""
     import logging
 

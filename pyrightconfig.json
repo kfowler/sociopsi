@@ -1,8 +1,9 @@
 {
-  "pythonVersion": "3.11",
+  "pythonVersion": "3.14",
   "typeCheckingMode": "standard",
   "venvPath": ".",
   "venv": ".venv",
   "reportMissingImports": false,
-  "reportMissingModuleSource": false
+  "reportMissingModuleSource": false,
+  "reportAttributeAccessIssue": "warning"
 }

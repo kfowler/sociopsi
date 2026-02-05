@@ -58,7 +58,7 @@ def load_system_prompt(model: str) -> str:
 No other text. Only JSON."""
 
 
-def setup_logging(config: "AgentConfig") -> None:
+def setup_logging(config: AgentConfig) -> None:
     """Configure logging based on agent config.
 
     Sets up logging to console and optionally to a rotating file.
@@ -147,7 +147,7 @@ def _load_config_file(config_path: Path) -> dict[str, Any]:
         return {}
 
 
-def _apply_config_overrides(config: "AgentConfig", overrides: dict[str, Any]) -> None:
+def _apply_config_overrides(config: AgentConfig, overrides: dict[str, Any]) -> None:
     """Apply configuration overrides from a config file.
 
     Args:
@@ -177,7 +177,9 @@ def _apply_config_overrides(config: "AgentConfig", overrides: dict[str, Any]) ->
                 if isinstance(value, str):
                     value = Path(value).expanduser()
                 elif not isinstance(value, Path):
-                    logger.warning(f"Config key '{key}' expects a path or null, got {type(value).__name__}")
+                    logger.warning(
+                        f"Config key '{key}' expects a path or null, got {type(value).__name__}"
+                    )
                     continue
 
         # Type check for basic types

@@ -1,7 +1,5 @@
 """Creative actions: compose, dream, express."""
 
-from __future__ import annotations
-
 import random
 import subprocess
 from typing import TYPE_CHECKING, Any

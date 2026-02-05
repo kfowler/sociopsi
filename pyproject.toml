@@ -3,7 +3,7 @@ name = "jung-agent"
 version = "0.1.0"
 description = "A Jungian psyche agent for silicon consciousness"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.14"
 license = "MIT"
 authors = [
     { name = "K Fowler" }
@@ -16,9 +16,7 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: MacOS",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 dependencies = [
@@ -55,7 +53,7 @@ build-backend = "hatchling.build"
 packages = ["src/jung_agent"]
 
 [tool.ruff]
-target-version = "py311"
+target-version = "py314"
 line-length = 100
 src = ["src"]
 
@@ -77,7 +75,7 @@ ignore = [
 known-first-party = ["jung_agent"]
 
 [tool.pyright]
-pythonVersion = "3.11"
+pythonVersion = "3.14"
 typeCheckingMode = "standard"
 venvPath = "."
 venv = ".venv"

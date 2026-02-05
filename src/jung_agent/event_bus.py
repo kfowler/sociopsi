@@ -3,16 +3,14 @@
 Provides loose coupling between subsystems via publish/subscribe pattern.
 """
 
-from __future__ import annotations
-
 import logging
 from collections import defaultdict
 from collections.abc import Callable
-from typing import Any, TypeAlias
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
-EventHandler: TypeAlias = Callable[[dict[str, Any]], None]
+type EventHandler = Callable[[dict[str, Any]], None]
 
 
 class EventBus:

@@ -29,7 +29,7 @@ class PersonState:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "PersonState":
+    def from_dict(cls, data: dict[str, Any]) -> PersonState:
         return cls(
             present=data.get("present", False),
             looking_at_camera=data.get("looking_at_camera", False),
@@ -60,7 +60,7 @@ class ScreenState:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "ScreenState":
+    def from_dict(cls, data: dict[str, Any]) -> ScreenState:
         return cls(
             app_name=data.get("app_name", ""),
             activity=data.get("activity", ""),
@@ -95,7 +95,7 @@ class LocationState:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "LocationState":
+    def from_dict(cls, data: dict[str, Any]) -> LocationState:
         return cls(
             city=data.get("city", ""),
             region=data.get("region", ""),
@@ -129,7 +129,7 @@ class TimeState:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "TimeState":
+    def from_dict(cls, data: dict[str, Any]) -> TimeState:
         return cls(
             hour=data.get("hour", 0),
             period=data.get("period", ""),
@@ -189,7 +189,7 @@ class WorldModel:
             json.dump(data, f, indent=2)
 
     @classmethod
-    def load(cls, path: Path) -> "WorldModel":
+    def load(cls, path: Path) -> WorldModel:
         """Load world model from disk."""
         model = cls()
         model._path = path

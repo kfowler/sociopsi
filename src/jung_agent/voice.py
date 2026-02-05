@@ -5,14 +5,13 @@ Uses multiple NSSpeechSynthesizer instances (one per voice) to avoid
 voice switching delays. Each voice is preloaded at startup.
 """
 
-from __future__ import annotations
-
 import logging
 import re
 import threading
 from collections import deque
 from dataclasses import dataclass
 from threading import Event
+from typing import Self
 
 import objc
 from AppKit import NSSpeechSynthesizer
@@ -67,7 +66,7 @@ class SpeechItem:
 class SpeechQueueDelegate(NSObject):
     """Delegate to handle speech synthesizer callbacks."""
 
-    def init(self) -> SpeechQueueDelegate:
+    def init(self) -> Self:
         self = objc.super(SpeechQueueDelegate, self).init()
         if self is None:
             return None  # type: ignore[return-value]
@@ -97,7 +96,9 @@ class SpeechQueueDelegate(NSObject):
         if self._queue:
             item = self._queue.popleft()
             # Get the synthesizer for this voice (or default)
-            voice_key = item.voice_name if item.voice_name in self._synthesizers else self._default_voice
+            voice_key = (
+                item.voice_name if item.voice_name in self._synthesizers else self._default_voice
+            )
             synth = self._synthesizers.get(voice_key)
             if synth:
                 synth.startSpeakingString_(item.text)
@@ -166,15 +167,20 @@ class Voice:
         self._create_synthesizers()
 
         # Set up delegate
-        self._delegate = SpeechQueueDelegate.alloc().init()
-        self._delegate.setQueue_(self._queue)
-        self._delegate.setSynthesizers_(self._synthesizers)
-        self._delegate.setFinishedEvent_(self._finished_event)
-        self._delegate.setDefaultVoice_(self.config.voice_default)
+        delegate = SpeechQueueDelegate.alloc().init()
+        if delegate is None:
+            logger.error("Failed to create speech delegate")
+            self._running = False
+            return
+        delegate.setQueue_(self._queue)
+        delegate.setSynthesizers_(self._synthesizers)
+        delegate.setFinishedEvent_(self._finished_event)
+        delegate.setDefaultVoice_(self.config.voice_default)
+        self._delegate = delegate
 
         # Set delegate on all synthesizers
         for synth in self._synthesizers.values():
-            synth.setDelegate_(self._delegate)
+            synth.setDelegate_(delegate)
 
         with _voice_instance_lock:
             _voice_instance = self
@@ -326,7 +332,9 @@ class Voice:
         self._finished_event.clear()
 
         # Get the synthesizer for this voice
-        voice_key = item.voice_name if item.voice_name in self._synthesizers else self.config.voice_default
+        voice_key = (
+            item.voice_name if item.voice_name in self._synthesizers else self.config.voice_default
+        )
         synth = self._synthesizers.get(voice_key)
 
         if synth:

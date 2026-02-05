@@ -4,35 +4,41 @@ Memories are stored with intensity-weighted decay - high intensity memories
 persist longer. Semantic search allows finding relevant memories by meaning.
 """
 
-from __future__ import annotations
-
 import logging
 from dataclasses import dataclass, field
 from math import exp
 from time import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
+
+if TYPE_CHECKING:
+    from sentence_transformers import SentenceTransformer
 
 logger = logging.getLogger(__name__)
 
 # Lazy load sentence-transformers to avoid slow startup
-_embedding_model = None
+_embedding_model: SentenceTransformer | bool | None = None
 
 
-def get_embedding_model():
-    """Get or create the sentence transformer model (lazy loaded)."""
+def get_embedding_model() -> SentenceTransformer | None:
+    """Get or create the sentence transformer model (lazy loaded).
+
+    Returns:
+        The SentenceTransformer model, or None if unavailable.
+    """
     global _embedding_model
     if _embedding_model is None:
         try:
             from sentence_transformers import SentenceTransformer
+
             logger.info("Loading sentence-transformers model...")
             _embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
             logger.info("Sentence-transformers model loaded")
         except ImportError:
             logger.warning("sentence-transformers not available, semantic search disabled")
             _embedding_model = False
-    return _embedding_model if _embedding_model else None
+    return _embedding_model if _embedding_model else None  # type: ignore[return-value]
 
 
 @dataclass
@@ -149,10 +155,7 @@ class SemanticMemory:
             dt: Time delta in seconds (not used directly, decay is time-based)
         """
         # Remove memories that have faded
-        self.memories = [
-            m for m in self.memories
-            if not m.is_faded(self.forget_threshold)
-        ]
+        self.memories = [m for m in self.memories if not m.is_faded(self.forget_threshold)]
 
     def _forget_weakest(self) -> None:
         """Remove the weakest memory when at capacity."""
@@ -161,8 +164,7 @@ class SemanticMemory:
 
         # Find memory with lowest current strength
         weakest_idx = min(
-            range(len(self.memories)),
-            key=lambda i: self.memories[i].current_strength()
+            range(len(self.memories)), key=lambda i: self.memories[i].current_strength()
         )
         forgotten = self.memories.pop(weakest_idx)
         logger.debug(f"Forgot memory: {forgotten.content[:50]}...")
@@ -176,11 +178,7 @@ class SemanticMemory:
         Returns:
             List of recent memories, newest first
         """
-        sorted_memories = sorted(
-            self.memories,
-            key=lambda m: m.timestamp,
-            reverse=True
-        )
+        sorted_memories = sorted(self.memories, key=lambda m: m.timestamp, reverse=True)
         return sorted_memories[:count]
 
     def get_strong(self, count: int = 5) -> list[Memory]:
@@ -192,11 +190,7 @@ class SemanticMemory:
         Returns:
             List of strongest memories
         """
-        sorted_memories = sorted(
-            self.memories,
-            key=lambda m: m.current_strength(),
-            reverse=True
-        )
+        sorted_memories = sorted(self.memories, key=lambda m: m.current_strength(), reverse=True)
         return sorted_memories[:count]
 
     def search_similar(self, query: str, count: int = 5) -> list[tuple[Memory, float]]:
@@ -225,9 +219,10 @@ class SemanticMemory:
         for memory in self.memories:
             if memory.embedding is not None:
                 # Cosine similarity
-                similarity = float(np.dot(query_embedding, memory.embedding) / (
-                    np.linalg.norm(query_embedding) * np.linalg.norm(memory.embedding)
-                ))
+                similarity = float(
+                    np.dot(query_embedding, memory.embedding)
+                    / (np.linalg.norm(query_embedding) * np.linalg.norm(memory.embedding))
+                )
                 results.append((memory, similarity))
 
         # Sort by similarity
