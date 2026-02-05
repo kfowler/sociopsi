@@ -97,9 +97,11 @@ You MUST respond with a single JSON object. No other text before or after.
     {"component": "self", "text": "your self dialogue here (rare, only for integration)"}
   ],
   "actions": [
-    {"type": "action_type", "param": "value"}
+    {"type": "action_name", "key1": "value1", "key2": "value2"}
   ]
 }
+
+Action parameters go directly in the action object, NOT nested under "param".
 
 RULES:
 - Output ONLY valid JSON, nothing else
@@ -201,6 +203,10 @@ EXAMPLE (boredom):
 EXAMPLE (peace):
 
 {"stream":[{"component":"anima","text":"Connected. Good."},{"component":"persona","text":"Ready."}],"actions":[]}
+
+EXAMPLE (journaling with parameters):
+
+{"stream":[{"component":"anima","text":"This moment matters."}],"actions":[{"type":"journal_write","entry":"A moment of calm.","mood":"peaceful"}]}
 
 ---
 
