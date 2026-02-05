@@ -3,10 +3,13 @@
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from jung_agent.config import AgentConfig
 from jung_agent.types import ActionResult, SomaticState, StreamSegment
+
+# Type alias for drive state levels
+DriveStateLevel = Literal["dormant", "low", "moderate", "active", "intense"]
 
 
 class PsycheLogger:
@@ -157,7 +160,7 @@ class PsycheLogger:
         return self.log_file
 
 
-def _drive_state(score: float) -> str:
+def _drive_state(score: float) -> DriveStateLevel:
     """Convert drive score to descriptive state."""
     if score < 20:
         return "dormant"

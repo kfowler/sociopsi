@@ -4,9 +4,13 @@ import re
 import subprocess
 import threading
 from queue import Queue
+from typing import TypeAlias
 
 from jung_agent.config import AgentConfig
-from jung_agent.types import Action, ActionResult, StreamSegment
+from jung_agent.types import Action, ActionResult, PsycheComponent, StreamSegment
+
+# Type alias for voice queue items: (text, voice, rate) or None for shutdown
+VoiceQueueItem: TypeAlias = tuple[str, str, int] | None
 
 
 class Voice:
@@ -14,12 +18,12 @@ class Voice:
 
     def __init__(self, config: AgentConfig) -> None:
         self.config = config
-        self._queue: Queue[tuple[str, str, int] | None] = Queue()
+        self._queue: Queue[VoiceQueueItem] = Queue()
         self._thread: threading.Thread | None = None
         self._running = False
 
         # Map component names to voice config
-        self._component_voices = {
+        self._component_voices: dict[PsycheComponent, str] = {
             "anima": config.voice_anima,
             "shadow": config.voice_shadow,
             "persona": config.voice_persona,

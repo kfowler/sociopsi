@@ -3,7 +3,10 @@
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any
+from typing import Any, Literal
+
+# Type aliases for psyche components
+PsycheComponent = Literal["shadow", "anima", "persona", "self", "default"]
 
 
 class ThermalState(Enum):
@@ -100,7 +103,7 @@ class Action:
 class StreamSegment:
     """A segment of the psyche's inner dialogue."""
 
-    component: str  # shadow, anima, persona, self
+    component: PsycheComponent
     text: str
 
 

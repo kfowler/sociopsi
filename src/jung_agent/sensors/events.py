@@ -5,8 +5,12 @@ import time
 from collections import deque
 from collections.abc import Callable
 from datetime import datetime
+from typing import Any
 
 from jung_agent.types import Event, LidState, NetworkState, PowerState, SomaticState
+
+# Type alias for event callback
+EventCallback = Callable[[str, str], None]
 
 
 class EventCollector:
@@ -30,7 +34,7 @@ class EventCollector:
         for monitor in self._monitors:
             monitor.join(timeout=1.0)
 
-    def add_event(self, event_type: str, description: str, **data: object) -> None:
+    def add_event(self, event_type: str, description: str, **data: Any) -> None:
         """Add an event to the queue."""
         with self._lock:
             self._events.append(
@@ -122,9 +126,9 @@ class EventCollector:
 class TouchMonitor:
     """Monitor for trackpad and Touch ID events."""
 
-    def __init__(self, callback: Callable[[str, str], None]) -> None:
-        self._callback = callback
-        self._last_touch_time = 0.0
+    def __init__(self, callback: EventCallback) -> None:
+        self._callback: EventCallback = callback
+        self._last_touch_time: float = 0.0
 
     def on_touch(self) -> None:
         """Called when trackpad is touched."""

@@ -4,8 +4,9 @@ import json
 import re
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
-from jung_agent.types import Action, PsycheResponse, StreamSegment
+from jung_agent.types import Action, PsycheComponent, PsycheResponse, StreamSegment
 
 # Log directory for JSON errors
 _ERROR_LOG_DIR = Path.home() / ".jung" / "logs" / "json_errors"
@@ -97,7 +98,7 @@ def parse_response(response: str) -> PsycheResponse:
     return PsycheResponse(stream=stream, actions=actions, raw=response)
 
 
-def _normalize_component(name: str) -> str:
+def _normalize_component(name: str) -> PsycheComponent:
     """Normalize component name to standard form."""
     name_lower = name.lower()
     # Map various names to standard components
@@ -112,7 +113,7 @@ def _normalize_component(name: str) -> str:
     return "default"
 
 
-def _extract_component(item: dict) -> str:
+def _extract_component(item: dict[str, Any]) -> PsycheComponent:
     """Extract component name from a stream item dict."""
     # Standard format: {"component": "shadow", "text": "..."}
     if "component" in item:
@@ -134,7 +135,7 @@ def _extract_component(item: dict) -> str:
     return "default"
 
 
-def _extract_text(item: dict | list | str) -> str:
+def _extract_text(item: dict[str, Any] | list[Any] | str | Any) -> str:
     """Extract text content from various formats."""
     if isinstance(item, str):
         return item.strip()

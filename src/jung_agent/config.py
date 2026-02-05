@@ -3,6 +3,10 @@
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Literal
+
+# Type alias for module names
+ModuleName = Literal["somatic", "archetypes", "imago", "individuation"]
 
 
 def load_system_prompt(model: str) -> str:

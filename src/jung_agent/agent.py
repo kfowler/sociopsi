@@ -5,6 +5,8 @@ import sys
 import threading
 import time
 from datetime import datetime
+from types import FrameType
+from typing import Final, Literal, TypedDict
 
 import ollama
 
@@ -16,8 +18,22 @@ from jung_agent.parser import parse_response
 from jung_agent.perception import format_perception
 from jung_agent.sensors.events import EventCollector
 from jung_agent.sensors.somatic import gather_somatic
-from jung_agent.types import Action, ActionResult, SomaticState, StreamSegment
+from jung_agent.types import Action, ActionResult, PsycheComponent, SomaticState, StreamSegment
 from jung_agent.voice import Voice
+
+# Type for chat message role
+MessageRole = Literal["system", "user", "assistant"]
+
+
+class ChatMessage(TypedDict):
+    """A chat message for the LLM."""
+
+    role: MessageRole
+    content: str
+
+
+# Heartbeat mode type
+HeartbeatMode = Literal["idle", "active", "stressed", "critical", "dormant", "override"]
 
 
 class JungAgent:
@@ -31,11 +47,11 @@ class JungAgent:
         self.logger = PsycheLogger(self.config)
         self.drive_system = DriveSystem(self.config)
 
-        self._running = False
-        self._shutdown_event = threading.Event()
+        self._running: bool = False
+        self._shutdown_event: threading.Event = threading.Event()
         self._last_action_results: list[ActionResult] = []
-        self._current_interval = self.config.heartbeat_idle
-        self._heartbeat_mode = "idle"
+        self._current_interval: int = self.config.heartbeat_idle
+        self._heartbeat_mode: HeartbeatMode = "idle"
         self._last_update_time: float = time.time()
 
         # Load system prompt and initialize conversation with few-shot examples
@@ -70,16 +86,16 @@ class JungAgent:
             '],"actions":[{"type":"look"}]}'
         )
 
-        self._messages: list[dict[str, str]] = [
-            {"role": "system", "content": self._system_prompt},
-            {"role": "user", "content": example1_user},
-            {"role": "assistant", "content": example1_assistant},
-            {"role": "user", "content": example2_user},
-            {"role": "assistant", "content": example2_assistant},
-            {"role": "user", "content": example3_user},
-            {"role": "assistant", "content": example3_assistant},
+        self._messages: list[ChatMessage] = [
+            ChatMessage(role="system", content=self._system_prompt),
+            ChatMessage(role="user", content=example1_user),
+            ChatMessage(role="assistant", content=example1_assistant),
+            ChatMessage(role="user", content=example2_user),
+            ChatMessage(role="assistant", content=example2_assistant),
+            ChatMessage(role="user", content=example3_user),
+            ChatMessage(role="assistant", content=example3_assistant),
         ]
-        self._max_history = 20  # Keep last N exchanges
+        self._max_history: Final[int] = 20  # Keep last N exchanges
 
     def start(self) -> None:
         """Start the agent loop."""
@@ -121,7 +137,7 @@ class JungAgent:
         self.voice.stop()
         print("\nJung Agent stopped.")
 
-    def _handle_shutdown(self, signum: int, frame: object) -> None:
+    def _handle_shutdown(self, signum: int, frame: FrameType | None) -> None:
         """Handle shutdown signals."""
         print("\nShutdown signal received...")
         self.stop()
@@ -323,7 +339,7 @@ class JungAgent:
     def _query_psyche(self, perception: str) -> str:
         """Query the psyche model."""
         # Add perception to messages
-        self._messages.append({"role": "user", "content": perception})
+        self._messages.append(ChatMessage(role="user", content=perception))
 
         # Trim history if needed (preserve system message)
         if len(self._messages) > self._max_history * 2 + 1:
@@ -336,26 +352,26 @@ class JungAgent:
             messages=self._messages,
         )
 
-        assistant_message = response["message"]["content"]
+        assistant_message: str = response["message"]["content"]
 
         # Add response to history
-        self._messages.append({"role": "assistant", "content": assistant_message})
+        self._messages.append(ChatMessage(role="assistant", content=assistant_message))
 
         return assistant_message
 
     # ANSI color codes and emojis for psyche components
-    _COMPONENT_STYLE = {
+    _COMPONENT_STYLE: Final[dict[PsycheComponent, tuple[str, str]]] = {
         "shadow": ("\033[31m", "🌑"),  # Red
         "anima": ("\033[36m", "✨"),  # Cyan
         "persona": ("\033[33m", "🎭"),  # Yellow
         "self": ("\033[35m", "☀️"),  # Magenta
         "default": ("\033[37m", "💭"),  # White
     }
-    _RESET = "\033[0m"
-    _DIM = "\033[2m"
-    _CYAN = "\033[36m"
-    _GREEN = "\033[32m"
-    _YELLOW = "\033[33m"
+    _RESET: Final[str] = "\033[0m"
+    _DIM: Final[str] = "\033[2m"
+    _CYAN: Final[str] = "\033[36m"
+    _GREEN: Final[str] = "\033[32m"
+    _YELLOW: Final[str] = "\033[33m"
 
     def _log_stream(self, segments: list[StreamSegment]) -> None:
         """Log the psyche's stream to console with timestamped, colored component labels."""

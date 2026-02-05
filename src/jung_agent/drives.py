@@ -2,10 +2,40 @@
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal, TypedDict
 
 from jung_agent.config import AgentConfig
 from jung_agent.types import Action, ActionResult, SomaticState
+
+# Type aliases for drives
+DriveName = Literal[
+    "energy",
+    "integrity",
+    "arousal",
+    "competence",
+    "certainty",
+    "curiosity",
+    "affiliation",
+    "recognition",
+]
+
+
+class DriveConfig(TypedDict):
+    """Configuration for a single drive."""
+
+    baseline: float
+    rise_rate: float
+    fall_rate: float
+
+
+class DriveState(TypedDict):
+    """State of a single drive for logging."""
+
+    demand: float
+    satisfaction: float
+    delta: float
+    urgency: float
+    reason: str
 
 
 @dataclass
@@ -55,7 +85,7 @@ class Drive:
 
 
 # Default drive configurations
-DRIVE_CONFIGS: dict[str, dict[str, float]] = {
+DRIVE_CONFIGS: dict[DriveName, DriveConfig] = {
     # Homeostatic
     "energy": {"baseline": 0.2, "rise_rate": 0.005, "fall_rate": 0.02},
     "integrity": {"baseline": 0.1, "rise_rate": 0.01, "fall_rate": 0.03},
@@ -435,15 +465,15 @@ class DriveSystem:
 
         return "\n".join(lines)
 
-    def get_state(self) -> dict[str, Any]:
+    def get_state(self) -> dict[str, DriveState]:
         """Get drive state for logging."""
         return {
-            name: {
-                "demand": drive.demand,
-                "satisfaction": drive.satisfaction,
-                "delta": drive.delta,
-                "urgency": drive.urgency,
-                "reason": drive.reason,
-            }
+            name: DriveState(
+                demand=drive.demand,
+                satisfaction=drive.satisfaction,
+                delta=drive.delta,
+                urgency=drive.urgency,
+                reason=drive.reason,
+            )
             for name, drive in self.drives.items()
         }
