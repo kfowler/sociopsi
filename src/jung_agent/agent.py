@@ -416,6 +416,12 @@ def run_single(config: AgentConfig | None = None, perception: str | None = None)
     """Run a single perception-response cycle (for testing)."""
     config = config or AgentConfig()
 
+    # Start voice if enabled
+    voice: Voice | None = None
+    if config.voice_enabled:
+        voice = Voice(config)
+        voice.start()
+
     if perception is None:
         somatic = gather_somatic()
         perception = format_perception(
@@ -432,6 +438,18 @@ def run_single(config: AgentConfig | None = None, perception: str | None = None)
             model=config.model,
             messages=[{"role": "user", "content": perception}],
         )
-        return response["message"]["content"]
+        content = response["message"]["content"]
+
+        # Parse and speak the stream if voice enabled
+        if voice:
+            parsed = parse_response(content)
+            if parsed and parsed.stream:
+                voice.speak_stream(parsed.stream)
+            # Wait for all speech to complete before exiting
+            voice.stop(wait_for_completion=True)
+
+        return content
     except LLMError as e:
+        if voice:
+            voice.stop()
         return f'{{"stream":[],"actions":[],"error":"{e}"}}'
