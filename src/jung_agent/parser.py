@@ -11,28 +11,14 @@ def parse_response(response: str) -> PsycheResponse:
     stream = ""
     actions: list[Action] = []
 
-    # Extract stream section
-    stream_match = re.search(
-        r"\[STREAM\](.*?)(?=\[ACTIONS\]|$)", response, re.DOTALL | re.IGNORECASE
-    )
-    if stream_match:
-        stream = stream_match.group(1).strip()
-    else:
-        # If no [STREAM] tag, treat everything before [ACTIONS] as stream
-        actions_start = response.lower().find("[actions]")
-        if actions_start > 0:
-            stream = response[:actions_start].strip()
-        else:
-            stream = response.strip()
+    # First, find and remove the actions section entirely
+    # Match [ACTIONS] followed by JSON (handles multiline)
+    actions_pattern = r"\[ACTIONS\]\s*(\{[\s\S]*?\})\s*$"
+    actions_match = re.search(actions_pattern, response, re.IGNORECASE)
 
-    # Extract actions section
-    actions_match = re.search(
-        r"\[ACTIONS\]\s*(\{.*\})", response, re.DOTALL | re.IGNORECASE
-    )
     if actions_match:
         try:
             actions_json = actions_match.group(1)
-            # Clean up potential issues
             actions_json = _clean_json(actions_json)
             actions_data = json.loads(actions_json)
 
@@ -41,10 +27,60 @@ def parse_response(response: str) -> PsycheResponse:
                 if action_type:
                     actions.append(Action(type=action_type, params=action_dict))
         except json.JSONDecodeError as e:
-            # Log but don't fail
             print(f"Warning: Could not parse actions JSON: {e}")
 
+        # Remove the entire actions section from response for stream extraction
+        response_without_actions = response[: actions_match.start()].strip()
+    else:
+        response_without_actions = response.strip()
+
+    # Extract stream section (from cleaned response)
+    stream_match = re.search(
+        r"\[STREAM\]\s*(.*)", response_without_actions, re.DOTALL | re.IGNORECASE
+    )
+    if stream_match:
+        stream = stream_match.group(1).strip()
+    else:
+        # No [STREAM] tag - use everything (actions already removed)
+        stream = response_without_actions
+
+    # Final cleanup: remove any stray JSON-like content that might have been missed
+    stream = _remove_json_blocks(stream)
+
     return PsycheResponse(stream=stream, actions=actions, raw=response)
+
+
+def _remove_json_blocks(text: str) -> str:
+    """Remove any JSON-like blocks from text."""
+    # Remove lines that look like JSON objects or arrays
+    lines = []
+    in_json = False
+    brace_count = 0
+
+    for line in text.split("\n"):
+        stripped = line.strip()
+
+        # Detect start of JSON
+        if stripped.startswith("{") or stripped.startswith("["):
+            in_json = True
+            brace_count = stripped.count("{") + stripped.count("[")
+            brace_count -= stripped.count("}") + stripped.count("]")
+            continue
+
+        if in_json:
+            brace_count += stripped.count("{") + stripped.count("[")
+            brace_count -= stripped.count("}") + stripped.count("]")
+            if brace_count <= 0:
+                in_json = False
+            continue
+
+        # Skip lines that look like JSON properties
+        if re.match(r'^[\s]*["\']?\w+["\']?\s*:', stripped):
+            continue
+
+        lines.append(line)
+
+    return "\n".join(lines).strip()
 
 
 def _clean_json(json_str: str) -> str:
