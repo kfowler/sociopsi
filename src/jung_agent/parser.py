@@ -31,17 +31,40 @@ def parse_response(response: str) -> PsycheResponse:
         data = json.loads(json_str)
 
         # Extract stream segments
-        for item in data.get("stream", []):
-            component = item.get("component", "default").lower()
-            text = item.get("text", "").strip()
+        stream_data = data.get("stream", [])
+
+        # Handle stream as a single string
+        if isinstance(stream_data, str):
+            if stream_data.strip():
+                stream.append(StreamSegment(component="default", text=stream_data.strip()))
+            stream_data = []  # Don't iterate
+
+        for item in stream_data:
+            # Handle malformed stream items
+            if isinstance(item, str):
+                # LLM returned a string instead of object
+                if item.strip():
+                    stream.append(StreamSegment(component="default", text=item.strip()))
+                continue
+            if not isinstance(item, dict):
+                continue
+            component = item.get("component", "default")
+            if not isinstance(component, str):
+                component = "default"
+            text = item.get("text", "")
+            if not isinstance(text, str):
+                text = str(text) if text else ""
+            text = text.strip()
             if text:
-                stream.append(StreamSegment(component=component, text=text))
+                stream.append(StreamSegment(component=component.lower(), text=text))
 
         # Extract actions
         for action_dict in data.get("actions", []):
+            if not isinstance(action_dict, dict):
+                continue
             action_dict = dict(action_dict)  # Copy to avoid mutation
             action_type = action_dict.pop("type", None)
-            if action_type:
+            if action_type and isinstance(action_type, str):
                 actions.append(Action(type=action_type, params=action_dict))
 
     except json.JSONDecodeError as e:

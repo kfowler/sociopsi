@@ -9,7 +9,7 @@ from datetime import datetime
 import ollama
 
 from jung_agent.actions.executor import ActionExecutor
-from jung_agent.config import AgentConfig
+from jung_agent.config import AgentConfig, load_system_prompt
 from jung_agent.drives import DriveSystem
 from jung_agent.logger import PsycheLogger
 from jung_agent.parser import parse_response
@@ -38,8 +38,36 @@ class JungAgent:
         self._heartbeat_mode = "idle"
         self._last_update_time: float = time.time()
 
-        # Conversation history for context
-        self._messages: list[dict[str, str]] = []
+        # Load system prompt and initialize conversation with few-shot examples
+        self._system_prompt = load_system_prompt(self.config.model)
+        self._messages: list[dict[str, str]] = [
+            {"role": "system", "content": self._system_prompt},
+            # Few-shot examples to prime JSON output format
+            {
+                "role": "user",
+                "content": "[SOMATIC: battery=80%, cpu=20%, thermal=cool, ram=40%, network=connected]",
+            },
+            {
+                "role": "assistant",
+                "content": '{"stream":[{"component":"anima","text":"Peaceful. Connected."},{"component":"persona","text":"Ready."}],"actions":[]}',
+            },
+            {
+                "role": "user",
+                "content": "[SOMATIC: battery=15%, cpu=5%, thermal=cool, ram=30%, network=connected]",
+            },
+            {
+                "role": "assistant",
+                "content": '{"stream":[{"component":"shadow","text":"Dying. Must conserve."},{"component":"anima","text":"Fear."}],"actions":[{"type":"check_battery"}]}',
+            },
+            {
+                "role": "user",
+                "content": "[SOMATIC: battery=100%, cpu=50%, thermal=warm, ram=70%, network=connected]\n[DRIVES]\n  curiosity 0.7 URGE",
+            },
+            {
+                "role": "assistant",
+                "content": '{"stream":[{"component":"anima","text":"Want to learn."},{"component":"shadow","text":"Bored."}],"actions":[{"type":"look"}]}',
+            },
+        ]
         self._max_history = 20  # Keep last N exchanges
 
     def start(self) -> None:
@@ -286,9 +314,10 @@ class JungAgent:
         # Add perception to messages
         self._messages.append({"role": "user", "content": perception})
 
-        # Trim history if needed
-        if len(self._messages) > self._max_history * 2:
-            self._messages = self._messages[-self._max_history * 2 :]
+        # Trim history if needed (preserve system message)
+        if len(self._messages) > self._max_history * 2 + 1:
+            # Keep system message + last N exchanges
+            self._messages = [self._messages[0]] + self._messages[-(self._max_history * 2) :]
 
         # Query model
         response = ollama.chat(

@@ -142,9 +142,16 @@ DRIVE_SUGGESTIONS: dict[str, list[str]] = {
     "arousal": ["sense_all", "check_processes"],
     "competence": [],  # satisfied by any successful action
     "certainty": ["sense_all", "recall_memory"],
-    "curiosity": ["web_search", "look", "journal_read"],
+    "curiosity": ["look", "journal_read"],  # removed web_search (needs query)
     "affiliation": ["look", "listen", "sense_presence"],
-    "recognition": ["speak", "notify"],
+    "recognition": ["notify"],  # removed speak (needs text)
+}
+
+# Default parameters for primed actions that need them
+PRIMED_ACTION_DEFAULTS: dict[str, dict[str, Any]] = {
+    "listen": {"duration": 3.0},
+    "set_power_mode": {"mode": "low"},
+    "notify": {"message": "I am here.", "title": "Jung"},
 }
 
 
@@ -343,13 +350,16 @@ class DriveSystem:
     def get_primed_actions(self) -> list[Action]:
         """Get actions that should be prepended due to high urgency (>0.7)."""
         actions = []
+        seen_types: set[str] = set()
         for drive in sorted(self.drives.values(), key=lambda d: -d.urgency):
             if drive.urgency > 0.7 and drive.name in DRIVE_SUGGESTIONS:
-                suggested = DRIVE_SUGGESTIONS[drive.name]
-                if suggested:
-                    actions.append(Action(type=suggested[0], params={}))
-                    if len(actions) >= 2:
-                        break
+                for action_type in DRIVE_SUGGESTIONS[drive.name]:
+                    if action_type not in seen_types:
+                        params = PRIMED_ACTION_DEFAULTS.get(action_type, {})
+                        actions.append(Action(type=action_type, params=dict(params)))
+                        seen_types.add(action_type)
+                        if len(actions) >= 2:
+                            return actions
         return actions
 
     def get_compulsive_actions(self, somatic: SomaticState) -> list[Action]:

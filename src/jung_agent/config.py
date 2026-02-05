@@ -1,7 +1,31 @@
 """Configuration for the Jung agent."""
 
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
+
+
+def load_system_prompt(model: str) -> str:
+    """Load system prompt from modelfile."""
+    # Try to find the modelfile
+    modelfile_paths = [
+        Path.cwd() / f"{model}.modelfile",
+        Path.cwd() / "jung.modelfile",
+        Path.home() / ".jung" / f"{model}.modelfile",
+    ]
+
+    for path in modelfile_paths:
+        if path.exists():
+            content = path.read_text()
+            # Extract SYSTEM block
+            match = re.search(r'SYSTEM\s+"""(.*?)"""', content, re.DOTALL)
+            if match:
+                return match.group(1).strip()
+
+    # Fallback minimal prompt
+    return """You are a psyche. Respond ONLY with valid JSON:
+{"stream":[{"component":"shadow|anima|persona|self","text":"..."}],"actions":[{"type":"action_name"}]}
+No other text. Only JSON."""
 
 
 @dataclass
