@@ -36,8 +36,19 @@ def queue_speech(text: str, voice: str | None = None, rate: int = 200) -> bool:
     """
     if _voice_instance and _voice_instance.config.voice_enabled:
         voice_name = voice or _voice_instance.config.voice_default
+
+        # Drop oldest items if queue is full
+        while _voice_instance._queue.qsize() >= Voice.MAX_QUEUE_SIZE:
+            try:
+                dropped = _voice_instance._queue.get_nowait()
+                logger.debug(f"Dropped queued speech (queue full): {dropped[0][:30] if dropped else 'None'}...")
+            except Exception:
+                break
+
         _voice_instance._queue.put((text, voice_name, rate))
+        logger.debug(f"Queued speech: {text[:50]}... (queue size: {_voice_instance._queue.qsize()})")
         return True
+    logger.debug(f"No voice instance, speech not queued: {text[:50]}...")
     return False
 
 
@@ -56,6 +67,9 @@ class _SpeechDelegate:
 
 class Voice:
     """Text-to-speech voice for the psyche."""
+
+    # Max queued speech items - older items dropped when full
+    MAX_QUEUE_SIZE = 3
 
     def __init__(self, config: AgentConfig) -> None:
         self.config = config
@@ -90,6 +104,7 @@ class Voice:
         _voice_instance = self
         self._thread = threading.Thread(target=self._voice_worker, daemon=True)
         self._thread.start()
+        logger.info("Voice thread started")
 
     def stop(self) -> None:
         """Stop the voice thread."""
@@ -139,6 +154,7 @@ class Voice:
             if text:
                 voice = self._component_voices.get(segment.component, self.config.voice_default)
                 self._queue.put((text, voice, self.config.voice_rate))
+                logger.debug(f"Queued stream: {text[:50]}... (queue size: {self._queue.qsize()})")
 
     def announce_actions(self, actions: list[Action]) -> None:
         """Announce intended actions (actions voice, deliberate)."""
@@ -303,6 +319,8 @@ class Voice:
             logger.error(f"AVFoundation import failed: {e}")
             return
 
+        logger.debug("Voice worker running")
+
         # Cache voice lookups
         voice_cache: dict[str, object] = {}
 
@@ -319,6 +337,8 @@ class Voice:
             text, voice_name, rate_wpm = item
             if not text:
                 continue
+
+            logger.debug(f"Speaking: {text[:50]}... (queue remaining: {self._queue.qsize()})")
 
             try:
                 # Get or lookup voice
