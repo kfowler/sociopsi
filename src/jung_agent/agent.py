@@ -50,11 +50,11 @@ class JungAgent:
         print(f"Jung Agent starting with model: {self.config.model}")
         print(f"Modules enabled: {', '.join(self.config.modules)}")
         if self.config.voice_enabled:
-            mode = "sequential" if self.config.voice_sequential else "concurrent"
-            print(f"Voice mode: {mode} @ {self.config.voice_rate} wpm")
+            print(f"Voices @ {self.config.voice_rate} wpm:")
             print(f"  Anima: {self.config.voice_anima}")
             print(f"  Shadow: {self.config.voice_shadow}")
             print(f"  Persona: {self.config.voice_persona}")
+            print(f"  Self: {self.config.voice_self}")
             print(f"  Actions: {self.config.voice_actions} @ {self.config.voice_actions_rate} wpm")
         else:
             print("Voice: disabled")

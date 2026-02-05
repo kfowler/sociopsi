@@ -60,16 +60,12 @@ class Voice:
         # Parse stream into component segments
         segments = self._parse_components(stream)
 
-        if self.config.voice_sequential:
-            # Speak one at a time (queued)
-            for segment in segments:
-                text = self._clean_for_speech(segment.text)
-                if text:
-                    voice = self._component_voices.get(segment.component, self.config.voice_default)
-                    self._queue.put((text, voice, self.config.voice_rate))
-        else:
-            # Speak all together (concurrent) - use separate processes
-            self._speak_concurrent(segments)
+        # Speak each segment sequentially with its component's voice
+        for segment in segments:
+            text = self._clean_for_speech(segment.text)
+            if text:
+                voice = self._component_voices.get(segment.component, self.config.voice_default)
+                self._queue.put((text, voice, self.config.voice_rate))
 
     def announce_actions(self, actions: list[Action]) -> None:
         """Announce intended actions (actions voice, deliberate)."""
@@ -129,35 +125,6 @@ class Voice:
             segments.append(VoiceSegment(text=current_text.strip(), component=current_component))
 
         return segments
-
-    def _speak_concurrent(self, segments: list[VoiceSegment]) -> None:
-        """Speak all segments concurrently (overlapping voices)."""
-        processes: list[subprocess.Popen[bytes]] = []
-
-        for segment in segments:
-            text = self._clean_for_speech(segment.text)
-            if not text:
-                continue
-
-            voice = self._component_voices.get(segment.component, self.config.voice_default)
-
-            try:
-                # Start speech process without waiting
-                proc = subprocess.Popen(
-                    ["say", "-v", voice, "-r", str(self.config.voice_rate), text],
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                )
-                processes.append(proc)
-            except FileNotFoundError:
-                pass
-
-        # Wait for all to finish
-        for proc in processes:
-            try:
-                proc.wait(timeout=120)
-            except subprocess.TimeoutExpired:
-                proc.kill()
 
     def _clean_for_speech(self, text: str) -> str:
         """Clean text for natural speech."""

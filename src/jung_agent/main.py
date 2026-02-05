@@ -58,12 +58,6 @@ def main() -> int:
         help="Disable voice output",
     )
 
-    parser.add_argument(
-        "--voice-sequential",
-        action="store_true",
-        help="Speak psyche components one at a time instead of overlapping",
-    )
-
     args = parser.parse_args()
 
     # Build config
@@ -72,7 +66,6 @@ def main() -> int:
         modules=args.modules,
         log_stream=not args.quiet,
         voice_enabled=not args.no_voice,
-        voice_sequential=args.voice_sequential,
     )
 
     if args.heartbeat:
