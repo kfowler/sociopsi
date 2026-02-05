@@ -194,74 +194,115 @@ def get_usb_connections() -> list[dict[str, Any]]:
 
 def capture_camera(duration: float = 0.5) -> dict[str, Any]:
     """Capture an image from the camera."""
+    import time
+
     try:
-        # Use imagesnap if available, or AVFoundation via ffmpeg
+        import cv2
+
+        # Open the default camera
+        cap = cv2.VideoCapture(0)
+        if not cap.isOpened():
+            return {"status": "unavailable", "description": "Camera not available"}
+
+        # Let camera warm up
+        time.sleep(duration)
+
+        # Capture frame
+        ret, frame = cap.read()
+        cap.release()
+
+        if not ret or frame is None:
+            return {"status": "failed", "description": "Failed to capture frame"}
+
+        # Get frame info
+        height, width = frame.shape[:2]
+
+        # Save to temp file for potential vision processing
         with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as f:
             temp_path = f.name
+        cv2.imwrite(temp_path, frame)
 
-        # Try imagesnap first (brew install imagesnap)
-        result = subprocess.run(
-            ["imagesnap", "-w", str(duration), temp_path],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
+        # Encode for storage
+        import base64
+        with open(temp_path, "rb") as f:
+            image_data = base64.b64encode(f.read()).decode()
 
-        if result.returncode == 0 and Path(temp_path).exists():
-            # Read and encode image
-            with open(temp_path, "rb") as f:
-                import base64
+        Path(temp_path).unlink()
 
-                image_data = base64.b64encode(f.read()).decode()
+        return {
+            "status": "captured",
+            "format": "jpeg",
+            "width": width,
+            "height": height,
+            "data": image_data[:100] + "...",  # Truncated for display
+            "full_data": image_data,  # Full data for vision model
+            "description": f"Captured {width}x{height} image",
+        }
 
-            Path(temp_path).unlink()
-
-            return {
-                "status": "captured",
-                "format": "jpeg",
-                "data": image_data[:100] + "...",  # Truncated for display
-                "description": "Image captured",  # Would need vision model to describe
-            }
-
-        return {"status": "failed", "error": result.stderr}
-
-    except (subprocess.TimeoutExpired, FileNotFoundError):
-        return {"status": "unavailable", "error": "Camera not available or imagesnap not installed"}
+    except ImportError:
+        return {"status": "unavailable", "description": "opencv not installed"}
+    except Exception as e:
+        return {"status": "failed", "error": str(e), "description": f"Camera error: {e}"}
 
 
 def capture_audio(duration: float = 3.0) -> dict[str, Any]:
     """Capture audio from the microphone."""
     try:
+        import sounddevice as sd
+        import soundfile as sf
+        import numpy as np
+
+        sample_rate = 44100
+
+        # Record audio
+        recording = sd.rec(
+            int(duration * sample_rate),
+            samplerate=sample_rate,
+            channels=1,
+            dtype=np.float32,
+        )
+        sd.wait()  # Wait until recording is finished
+
+        # Save to temp file
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
             temp_path = f.name
 
-        # Use sox if available
-        result = subprocess.run(
-            ["rec", "-q", temp_path, "trim", "0", str(duration)],
-            capture_output=True,
-            text=True,
-            timeout=duration + 5,
-        )
+        sf.write(temp_path, recording, sample_rate)
+        size = Path(temp_path).stat().st_size
 
-        if result.returncode == 0 and Path(temp_path).exists():
-            # Get file size as indicator
-            size = Path(temp_path).stat().st_size
-            Path(temp_path).unlink()
+        # Calculate audio level (RMS)
+        rms = float(np.sqrt(np.mean(recording**2)))
+        peak = float(np.max(np.abs(recording)))
 
-            return {
-                "status": "captured",
-                "duration": duration,
-                "size_bytes": size,
-                "description": "Audio captured",
-            }
-
-        return {"status": "failed", "error": result.stderr}
-
-    except (subprocess.TimeoutExpired, FileNotFoundError):
         return {
-            "status": "unavailable",
-            "error": "Microphone not available or sox not installed",
+            "status": "captured",
+            "duration": duration,
+            "size_bytes": size,
+            "sample_rate": sample_rate,
+            "rms_level": rms,
+            "peak_level": peak,
+            "temp_path": temp_path,  # Keep for transcription
+            "description": _describe_audio_level(rms),
         }
+
+    except ImportError:
+        return {"status": "unavailable", "description": "sounddevice not installed"}
+    except Exception as e:
+        return {"status": "failed", "error": str(e), "description": f"Microphone error: {e}"}
+
+
+def _describe_audio_level(rms: float) -> str:
+    """Describe audio level in experiential terms."""
+    if rms < 0.01:
+        return "silence"
+    elif rms < 0.05:
+        return "quiet, distant sounds"
+    elif rms < 0.15:
+        return "moderate sounds"
+    elif rms < 0.3:
+        return "loud sounds"
+    else:
+        return "very loud, overwhelming"
 
 
 def get_fan_speed() -> dict[str, Any]:

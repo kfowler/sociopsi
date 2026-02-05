@@ -162,34 +162,26 @@ def web_read(url: str) -> dict[str, Any]:
 
 def describe_image(prompt: str | None = None) -> dict[str, Any]:
     """Capture an image from the camera and describe it using vision."""
+    from jung_agent.sensors import external
+
     try:
-        # Capture image
-        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as f:
-            temp_path = f.name
+        # Capture image using opencv
+        capture = external.capture_camera(0.5)
 
-        # Use imagesnap to capture (brew install imagesnap)
-        result = subprocess.run(
-            ["imagesnap", "-w", "0.5", temp_path],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-
-        if result.returncode != 0 or not Path(temp_path).exists():
+        if capture.get("status") != "captured":
             return {
-                "error": "Camera capture failed",
-                "description": "Could not capture image from camera",
+                "error": capture.get("error", "Camera capture failed"),
+                "description": capture.get("description", "Could not capture image from camera"),
             }
 
-        # Check if we have a vision-capable model available
-        # For now, we'll use a simple description based on file properties
-        # In a full implementation, this would use ollama with llava or similar
-
-        file_size = Path(temp_path).stat().st_size
+        # Save full image data to temp file for vision model
+        import base64
+        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as f:
+            temp_path = f.name
+            f.write(base64.b64decode(capture["full_data"]))
 
         # Try to use ollama with a vision model if available
         try:
-            # Check if llava is available
             check_result = subprocess.run(
                 ["ollama", "list"],
                 capture_output=True,
@@ -202,7 +194,6 @@ def describe_image(prompt: str | None = None) -> dict[str, Any]:
             if has_vision:
                 vision_prompt = prompt or "Describe what you see in this image in detail."
 
-                # Use ollama with llava
                 import ollama as ollama_client
                 response = ollama_client.chat(
                     model="llava",
@@ -214,10 +205,12 @@ def describe_image(prompt: str | None = None) -> dict[str, Any]:
                 )
 
                 description = response["message"]["content"]
-
                 Path(temp_path).unlink()
+
                 return {
                     "captured": True,
+                    "width": capture.get("width"),
+                    "height": capture.get("height"),
                     "description": description,
                     "prompt": vision_prompt,
                 }
@@ -227,45 +220,39 @@ def describe_image(prompt: str | None = None) -> dict[str, Any]:
         Path(temp_path).unlink()
         return {
             "captured": True,
-            "file_size": file_size,
-            "description": "Image captured but no vision model available to describe it. Install llava: ollama pull llava",
+            "width": capture.get("width"),
+            "height": capture.get("height"),
+            "description": f"Captured {capture.get('width')}x{capture.get('height')} image but no vision model available. Install: ollama pull llava",
         }
 
-    except FileNotFoundError:
-        return {
-            "error": "imagesnap not found",
-            "description": "Camera not available. Install: brew install imagesnap",
-        }
     except Exception as e:
         return {"error": str(e), "description": f"Vision failed: {e}"}
 
 
 def transcribe_audio(duration: float = 5.0) -> dict[str, Any]:
     """Record audio and transcribe speech."""
+    from jung_agent.sensors import external
+
     try:
-        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
-            temp_path = f.name
+        # Record audio using sounddevice
+        capture = external.capture_audio(duration)
 
-        # Record audio using sox (brew install sox)
-        result = subprocess.run(
-            ["rec", "-q", temp_path, "trim", "0", str(duration)],
-            capture_output=True,
-            text=True,
-            timeout=duration + 10,
-        )
-
-        if result.returncode != 0 or not Path(temp_path).exists():
+        if capture.get("status") != "captured":
             return {
-                "error": "Recording failed",
-                "description": "Could not record audio from microphone",
+                "error": capture.get("error", "Recording failed"),
+                "description": capture.get("description", "Could not record audio from microphone"),
             }
 
-        file_size = Path(temp_path).stat().st_size
+        temp_path = capture.get("temp_path")
+        if not temp_path or not Path(temp_path).exists():
+            return {
+                "error": "No audio file",
+                "description": "Audio captured but file not available",
+            }
 
         # Try to use whisper for transcription if available
         try:
-            # Check if whisper CLI is available (brew install openai-whisper)
-            subprocess.run(
+            result = subprocess.run(
                 ["whisper", temp_path, "--model", "tiny", "--output_format", "txt", "--output_dir", "/tmp"],
                 capture_output=True,
                 text=True,
@@ -280,36 +267,22 @@ def transcribe_audio(duration: float = 5.0) -> dict[str, Any]:
 
                 return {
                     "duration": duration,
+                    "rms_level": capture.get("rms_level"),
                     "transcription": transcription,
                     "description": f"Heard: {transcription[:100]}..." if len(transcription) > 100 else f"Heard: {transcription}",
                 }
         except FileNotFoundError:
             pass
 
-        # Fallback: try macOS built-in speech recognition via AppleScript
-        try:
-            # This is a simplified approach - full implementation would use SFSpeechRecognizer
-            Path(temp_path).unlink()
-            return {
-                "duration": duration,
-                "recorded": True,
-                "file_size": file_size,
-                "description": "Audio recorded but no transcription available. Install: brew install openai-whisper",
-            }
-        except Exception:
-            pass
-
+        # No whisper available - return audio info
         Path(temp_path).unlink()
         return {
             "duration": duration,
-            "error": "No transcription service",
-            "description": "Audio recorded but could not transcribe",
+            "recorded": True,
+            "rms_level": capture.get("rms_level"),
+            "audio_description": capture.get("description"),
+            "description": f"Recorded {duration}s of audio ({capture.get('description')}). Install whisper for transcription: brew install openai-whisper",
         }
 
-    except FileNotFoundError:
-        return {
-            "error": "sox not found",
-            "description": "Microphone not available. Install: brew install sox",
-        }
     except Exception as e:
         return {"error": str(e), "description": f"Transcription failed: {e}"}

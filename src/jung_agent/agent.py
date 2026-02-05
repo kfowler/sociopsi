@@ -10,6 +10,7 @@ import ollama
 
 from jung_agent.actions.executor import ActionExecutor
 from jung_agent.config import AgentConfig
+from jung_agent.logger import PsycheLogger
 from jung_agent.parser import parse_response
 from jung_agent.perception import format_perception
 from jung_agent.sensors.events import EventCollector
@@ -26,6 +27,7 @@ class JungAgent:
         self.executor = ActionExecutor(self.config)
         self.event_collector = EventCollector()
         self.voice = Voice(self.config)
+        self.logger = PsycheLogger(self.config)
 
         self._running = False
         self._shutdown_event = threading.Event()
@@ -59,6 +61,7 @@ class JungAgent:
         else:
             print("Voice: disabled")
         print(f"Initial heartbeat: {self._current_interval}s")
+        print(f"Logging to: {self.logger.get_session_log()}")
         print("-" * 60)
 
         try:
@@ -128,7 +131,18 @@ class JungAgent:
                     status = "OK" if result.success else "FAILED"
                     print(f"  [{status}] {result.action_type}")
 
-                # 8. Check for heartbeat override
+                # 8. Log perception, drives, and state
+                self.logger.log_cycle(
+                    perception=perception,
+                    somatic=somatic,
+                    stream=parsed.stream,
+                    actions=[a.type for a in parsed.actions],
+                    action_results=self._last_action_results,
+                    heartbeat_interval=self._current_interval,
+                    heartbeat_mode=self._heartbeat_mode,
+                )
+
+                # 9. Check for heartbeat override
                 override = self.executor.get_heartbeat_override()
                 if override is not None:
                     self._current_interval = override
