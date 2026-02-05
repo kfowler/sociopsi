@@ -56,16 +56,21 @@ def display_message(text: str, duration: int | None = None) -> dict[str, Any]:
             display dialog "{text}" buttons {{"OK"}} giving up after {duration}
         end tell
         '''
-        subprocess.run(
+        result = subprocess.run(
             ["osascript", "-e", script],
             capture_output=True,
+            text=True,
             timeout=duration + 5,
         )
+        # Check if user clicked OK vs dialog timed out
+        # AppleScript returns "gave up:true" when it times out
+        acknowledged = "gave up:true" not in result.stdout.lower()
         return {
             "displayed": True,
+            "acknowledged": acknowledged,
             "text": text,
             "duration": duration,
-            "description": "message shown on screen",
+            "description": "acknowledged by User" if acknowledged else "message shown, no response",
         }
     except Exception as e:
         return {"error": str(e), "description": "could not display message"}

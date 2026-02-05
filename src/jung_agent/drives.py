@@ -100,6 +100,31 @@ DRIVE_CONFIGS: dict[DriveName, DriveConfig] = {
 }
 
 
+def _person_looking_at_camera(description: str) -> bool:
+    """Check if vision description suggests person is looking at camera."""
+    desc_lower = description.lower()
+    looking_phrases = [
+        "looking at the camera",
+        "looking at camera",
+        "looking into the camera",
+        "looking into camera",
+        "looking directly",
+        "staring at",
+        "eye contact",
+        "facing the camera",
+        "facing camera",
+        "looking at me",
+        "looking at you",
+    ]
+    return any(phrase in desc_lower for phrase in looking_phrases)
+
+
+def _has_person(description: str) -> bool:
+    """Check if vision description mentions a person."""
+    desc_lower = description.lower()
+    return any(word in desc_lower for word in ["person", "man", "woman", "someone", "human"])
+
+
 # Satisfaction mapping: action_type -> {drive_name -> satisfaction_value_or_callable}
 SatisfactionValue = float | Callable[[dict[str, Any]], float]
 SATISFACTION_MAP: dict[str, dict[str, SatisfactionValue]] = {
@@ -135,11 +160,13 @@ SATISFACTION_MAP: dict[str, dict[str, SatisfactionValue]] = {
     },
     # Social - depends on what was perceived
     "look": {
-        "affiliation": lambda r: 0.7 if "person" in r.get("description", "").lower() else 0,
+        "affiliation": lambda r: 0.7 if _has_person(r.get("description", "")) else 0,
+        "recognition": lambda r: 0.8 if _person_looking_at_camera(r.get("description", "")) else 0,
         "curiosity": 0.2,
     },
     "look_for": {
-        "affiliation": lambda r: 0.7 if "person" in r.get("description", "").lower() else 0,
+        "affiliation": lambda r: 0.7 if _has_person(r.get("description", "")) else 0,
+        "recognition": lambda r: 0.8 if _person_looking_at_camera(r.get("description", "")) else 0,
         "curiosity": 0.3,
     },
     "listen": {
@@ -161,7 +188,7 @@ SATISFACTION_MAP: dict[str, dict[str, SatisfactionValue]] = {
         "recognition": 0.3,
     },
     "display_message": {
-        "recognition": 0.2,
+        "recognition": lambda r: 0.7 if r.get("acknowledged") else 0.1,
     },
 }
 
@@ -196,6 +223,7 @@ class DriveSystem:
         self._recent_failures: int = 0
         self._recent_successes: int = 0
         self._recently_saw_person: bool = False  # Track if person was seen recently
+        self._recently_acknowledged: bool = False  # Track if user acknowledged us
 
         # Initialize drives
         for name, cfg in DRIVE_CONFIGS.items():
@@ -329,15 +357,18 @@ class DriveSystem:
             d["affiliation"].reason = "connected"
 
         # Recognition
-        if d["recognition"].demand > 0.6:
+        if self._recently_acknowledged:
+            d["recognition"].reason = "acknowledged"
+        elif d["recognition"].demand > 0.6:
             d["recognition"].reason = "unacknowledged"
         else:
             d["recognition"].reason = "seen"
 
     def satisfy_from_results(self, results: list[ActionResult]) -> None:
         """Apply satisfaction from action results."""
-        # Reset person sighting flag at start of new results processing
+        # Reset tracking flags at start of new results processing
         self._recently_saw_person = False
+        self._recently_acknowledged = False
 
         for result in results:
             action_type = result.action_type
@@ -363,9 +394,15 @@ class DriveSystem:
 
                 # Track if we saw a person (for affiliation reason updates)
                 if action_type in ("look", "look_for"):
-                    description = result_dict.get("description", "").lower()
-                    if "person" in description or "man" in description or "woman" in description:
+                    description = result_dict.get("description", "")
+                    if _has_person(description):
                         self._recently_saw_person = True
+                    if _person_looking_at_camera(description):
+                        self._recently_acknowledged = True
+
+                # Track if user acknowledged a message
+                if action_type == "display_message" and result_dict.get("acknowledged"):
+                    self._recently_acknowledged = True
 
                 for drive_name, value in SATISFACTION_MAP[action_type].items():
                     if drive_name in self.drives:
@@ -376,9 +413,11 @@ class DriveSystem:
                         if sat > 0:
                             self.drives[drive_name].satisfy(sat)
 
-        # Update affiliation reason immediately if person was seen
+        # Update reasons immediately based on perception results
         if self._recently_saw_person:
             self.drives["affiliation"].reason = "someone nearby"
+        if self._recently_acknowledged:
+            self.drives["recognition"].reason = "acknowledged"
 
     def get_suggestions(self) -> list[tuple[str, str, str]]:
         """Get suggested actions for urgent drives.
