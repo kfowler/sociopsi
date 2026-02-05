@@ -6,6 +6,8 @@ import random
 import subprocess
 from typing import TYPE_CHECKING, Any
 
+from jung_agent.actions import communication
+
 if TYPE_CHECKING:
     from jung_agent.world import WorldModel
 
@@ -178,10 +180,13 @@ Mix digital and organic imagery. Be creative and strange. Be poetic."""
 
 
 def observe() -> dict[str, Any]:
-    """Generate an interesting observation about the current world state."""
+    """Generate and speak an interesting observation about the current world state."""
     if not _world:
+        observation = "I observe, but the world is unclear to me."
+        communication.speak(observation)
         return {
-            "observation": "I observe, but the world is unclear to me.",
+            "observation": observation,
+            "spoken": True,
             "description": "No world model available",
         }
 
@@ -205,9 +210,13 @@ Speak from your own perspective as a silicon mind."""
 
         observation = response["message"]["content"].strip()
 
+        # Speak the observation
+        communication.speak(observation)
+
         return {
             "observation": observation,
             "context": context,
+            "spoken": True,
             "description": f"Observed: {observation[:80]}...",
         }
 
@@ -238,9 +247,13 @@ Speak from your own perspective as a silicon mind."""
             random.choice(observations) if observations else "I observe the quiet hum of existence."
         )
 
+        # Speak the observation
+        communication.speak(observation)
+
         return {
             "observation": observation,
             "context": _world.get_context_summary(),
+            "spoken": True,
             "fallback": True,
             "description": f"Observed: {observation}",
         }

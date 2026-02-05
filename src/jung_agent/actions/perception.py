@@ -164,19 +164,17 @@ def sense_all(**kwargs: Any) -> dict[str, Any]:
 
 
 def look(duration: float = 0.5) -> dict[str, Any]:
-    """Look with the camera and describe what is seen."""
+    """Look with the camera to detect person presence and attention."""
     result = external.capture_camera(duration)
     if result.get("status") != "captured":
         return result
 
-    # Try to describe what we see using vision model with structured questions
+    # Simple two-question prompt
     description = _describe_with_vision(
         result,
-        "Analyze this camera image and answer:\n"
-        "1. Is there a person visible? (yes/no)\n"
-        "2. If yes, are they looking at the camera or screen? (yes/no/unclear)\n"
-        "3. Brief description of the scene (1 sentence)\n"
-        "Format: PERSON: yes/no | LOOKING: yes/no/unclear | SCENE: ...",
+        "Answer only these two questions:\n"
+        "PERSON: yes or no (is there a person visible?)\n"
+        "ATTENTION: yes or no (are they looking at the camera/screen?)",
     )
     if description:
         result["description"] = description
@@ -184,10 +182,7 @@ def look(duration: float = 0.5) -> dict[str, Any]:
         desc_lower = description.lower()
         result["person_present"] = "person: yes" in desc_lower or "person:yes" in desc_lower
         result["looking_at_camera"] = (
-            "looking: yes" in desc_lower
-            or "looking:yes" in desc_lower
-            or "looking at the camera" in desc_lower
-            or "looking at camera" in desc_lower
+            "attention: yes" in desc_lower or "attention:yes" in desc_lower
         )
     return result
 
