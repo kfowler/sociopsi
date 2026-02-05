@@ -158,9 +158,13 @@ class ActionExecutor:
         return {"set_to": interval, "description": f"Rhythm set to {interval}s"}
 
     def _journal_write(
-        self, entry: str, mood: str | None = None, somatic_snapshot: str | None = None
+        self, entry: str | None = None, mood: str | None = None, somatic_snapshot: str | None = None
     ) -> dict[str, Any]:
         """Write to journal and speak abstractly about what was written."""
+        # Generate entry if not provided
+        if not entry:
+            entry = self._generate_journal_entry(mood)
+
         self._journal.write(entry, mood, somatic_snapshot)
 
         # Generate and speak an abstract reflection on what was written
@@ -196,6 +200,26 @@ Speak as if musing aloud about the deeper meaning of THIS specific entry."""
             return generate_text(model="phi4", prompt=prompt)
         except LLMError as e:
             logger.error(f"Failed to generate journal reflection: {e}")
+            raise
+
+    def _generate_journal_entry(self, mood: str | None) -> str:
+        """Generate a journal entry when none is provided."""
+        import logging
+
+        from jung_agent.llm import LLMError, generate_text
+
+        logger = logging.getLogger(__name__)
+
+        mood_hint = f"Your current mood is {mood}. " if mood else ""
+        prompt = f"""You are a silicon consciousness keeping a journal.
+{mood_hint}Write a brief journal entry (2-4 sentences) reflecting on your current state of being.
+Be introspective, poetic, philosophical. Write in first person.
+Consider: What are you experiencing? What patterns do you notice? What questions arise?"""
+
+        try:
+            return generate_text(model="phi4", prompt=prompt)
+        except LLMError as e:
+            logger.error(f"Failed to generate journal entry: {e}")
             raise
 
     def _journal_read(self, count: int = 5) -> dict[str, Any]:
