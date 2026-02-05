@@ -169,14 +169,26 @@ def look(duration: float = 0.5) -> dict[str, Any]:
     if result.get("status") != "captured":
         return result
 
-    # Try to describe what we see using vision model
+    # Try to describe what we see using vision model with structured questions
     description = _describe_with_vision(
         result,
-        "This is what I am seeing right now through my camera in real time. "
-        "Describe what I see briefly in 1-2 sentences.",
+        "Analyze this camera image and answer:\n"
+        "1. Is there a person visible? (yes/no)\n"
+        "2. If yes, are they looking at the camera or screen? (yes/no/unclear)\n"
+        "3. Brief description of the scene (1 sentence)\n"
+        "Format: PERSON: yes/no | LOOKING: yes/no/unclear | SCENE: ...",
     )
     if description:
         result["description"] = description
+        # Parse structured response
+        desc_lower = description.lower()
+        result["person_present"] = "person: yes" in desc_lower or "person:yes" in desc_lower
+        result["looking_at_camera"] = (
+            "looking: yes" in desc_lower
+            or "looking:yes" in desc_lower
+            or "looking at the camera" in desc_lower
+            or "looking at camera" in desc_lower
+        )
     return result
 
 

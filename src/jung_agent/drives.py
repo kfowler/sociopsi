@@ -198,13 +198,25 @@ SATISFACTION_MAP: dict[str, dict[str, SatisfactionValue]] = {
     },
     # Social - depends on what was perceived
     "look": {
-        "affiliation": lambda r: 0.7 if _has_person(r.get("description", "")) else 0,
-        "recognition": lambda r: 0.8 if _person_looking_at_camera(r.get("description", "")) else 0,
+        "affiliation": lambda r: (
+            0.7 if r.get("person_present") or _has_person(r.get("description", "")) else 0
+        ),
+        "recognition": lambda r: (
+            0.8
+            if r.get("looking_at_camera") or _person_looking_at_camera(r.get("description", ""))
+            else 0
+        ),
         "curiosity": 0.2,
     },
     "look_for": {
-        "affiliation": lambda r: 0.7 if _has_person(r.get("description", "")) else 0,
-        "recognition": lambda r: 0.8 if _person_looking_at_camera(r.get("description", "")) else 0,
+        "affiliation": lambda r: (
+            0.7 if r.get("person_present") or _has_person(r.get("description", "")) else 0
+        ),
+        "recognition": lambda r: (
+            0.8
+            if r.get("looking_at_camera") or _person_looking_at_camera(r.get("description", ""))
+            else 0
+        ),
         "curiosity": 0.3,
     },
     "listen": {
@@ -432,10 +444,14 @@ class DriveSystem:
 
                 # Track if we saw a person (for affiliation reason updates)
                 if action_type in ("look", "look_for"):
-                    description = result_dict.get("description", "")
-                    if _has_person(description):
+                    # Use structured fields if available, fall back to text parsing
+                    if result_dict.get("person_present") or _has_person(
+                        result_dict.get("description", "")
+                    ):
                         self._recently_saw_person = True
-                    if _person_looking_at_camera(description):
+                    if result_dict.get("looking_at_camera") or _person_looking_at_camera(
+                        result_dict.get("description", "")
+                    ):
                         self._recently_acknowledged = True
 
                 # Track if user acknowledged a message/notification
