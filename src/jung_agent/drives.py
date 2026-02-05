@@ -120,9 +120,47 @@ def _person_looking_at_camera(description: str) -> bool:
 
 
 def _has_person(description: str) -> bool:
-    """Check if vision description mentions a person."""
+    """Check if vision description mentions a person of any kind."""
     desc_lower = description.lower()
-    return any(word in desc_lower for word in ["person", "man", "woman", "someone", "human"])
+    person_words = [
+        "person",
+        "people",
+        "someone",
+        "somebody",
+        "human",
+        "man",
+        "woman",
+        "men",
+        "women",
+        "boy",
+        "girl",
+        "child",
+        "children",
+        "kid",
+        "kids",
+        "adult",
+        "teenager",
+        "teen",
+        "face",
+        "head",
+        "hand",
+        "hands",
+        "arm",
+        "arms",
+        "individual",
+        "figure",
+        "silhouette",
+        "user",
+        "viewer",
+        "subject",
+        "he ",
+        "she ",
+        "him",
+        "her",
+        "his ",
+        "they ",
+    ]
+    return any(word in desc_lower for word in person_words)
 
 
 # Satisfaction mapping: action_type -> {drive_name -> satisfaction_value_or_callable}
