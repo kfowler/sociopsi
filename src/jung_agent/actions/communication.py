@@ -65,28 +65,53 @@ def _get_best_voice(language: str = "en-US") -> tuple[str | None, str]:
         return (None, "default")
 
 
-def speak(text: str, voice: str | None = None, rate: float = 0.4) -> dict[str, Any]:
-    """Speak text aloud using macOS AVSpeechSynthesizer with premium voices.
+def speak(text: str, voice: str | None = None, rate: int = 200) -> dict[str, Any]:
+    """Speak text aloud via the voice queue (non-blocking) or directly (blocking fallback).
 
     Args:
         text: The text to speak
-        voice: Optional voice identifier (e.g., "com.apple.voice.premium.en-US.Ava")
-               If not specified, automatically selects highest quality available voice.
-        rate: Speech rate 0.0-1.0 (default 0.4 for contemplative pace, 0.5 is normal)
+        voice: Optional voice name. If not specified, uses default voice.
+        rate: Speech rate in words per minute (default 200)
     """
+    from jung_agent.voice import queue_speech
+
+    # Try to use the voice queue (non-blocking)
+    if queue_speech(text, voice, rate):
+        return {
+            "spoken": True,
+            "queued": True,
+            "text": text,
+            "description": "speech queued",
+        }
+
+    # Fallback: speak directly (blocking) if no voice instance
+    return _speak_direct(text, voice, rate)
+
+
+def _speak_direct(text: str, voice: str | None = None, rate: int = 200) -> dict[str, Any]:
+    """Speak directly using AVFoundation (blocking). Used as fallback."""
     try:
         import threading
 
         import AVFoundation  # type: ignore[import-untyped]
 
+        # Convert WPM to AVSpeechSynthesizer rate (0.0-1.0)
+        av_rate = max(0.0, min(1.0, (rate - 90) / 420))
+
         # Select best voice if not specified
         voice_name = "default"
         if not voice:
-            voice, voice_name = _get_best_voice("en-US")
+            _, voice_name = _get_best_voice("en-US")
+            # Get voice by name
+            voices = AVFoundation.AVSpeechSynthesisVoice.speechVoices()  # type: ignore[attr-defined]
+            for v in voices:
+                if v.name() == voice_name:
+                    voice = v.identifier()
+                    break
 
-        # Create utterance (PyObjC lacks type stubs)
+        # Create utterance
         utterance = AVFoundation.AVSpeechUtterance.speechUtteranceWithString_(text)  # type: ignore[attr-defined]
-        utterance.setRate_(rate)
+        utterance.setRate_(av_rate)
         utterance.setPitchMultiplier_(1.0)
         utterance.setVolume_(1.0)
 
@@ -104,10 +129,10 @@ def speak(text: str, voice: str | None = None, rate: float = 0.4) -> dict[str, A
         done_event = threading.Event()
 
         class SpeechDelegate:
-            def speechSynthesizer_didFinishSpeechUtterance_(self, synth, utterance):
+            def speechSynthesizer_didFinishSpeechUtterance_(self, synth, utt):
                 done_event.set()
 
-            def speechSynthesizer_didCancelSpeechUtterance_(self, synth, utterance):
+            def speechSynthesizer_didCancelSpeechUtterance_(self, synth, utt):
                 done_event.set()
 
         delegate = SpeechDelegate()
@@ -119,15 +144,15 @@ def speak(text: str, voice: str | None = None, rate: float = 0.4) -> dict[str, A
 
         return {
             "spoken": True,
+            "queued": False,
             "text": text,
             "voice": voice_name,
-            "rate": rate,
             "description": "words spoken aloud",
         }
 
     except ImportError:
         return {
-            "error": "AVFoundation not available - install pyobjc-framework-AVFoundation",
+            "error": "AVFoundation not available",
             "description": "could not speak",
         }
 

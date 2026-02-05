@@ -14,6 +14,32 @@ logger = logging.getLogger(__name__)
 # Type alias for voice queue items: (text, voice, rate) or None for shutdown
 VoiceQueueItem: TypeAlias = tuple[str, str, int] | None
 
+# Module-level voice instance for global access
+_voice_instance: "Voice | None" = None
+
+
+def get_voice() -> "Voice | None":
+    """Get the global voice instance if available."""
+    return _voice_instance
+
+
+def queue_speech(text: str, voice: str | None = None, rate: int = 200) -> bool:
+    """Queue text for speech via the global voice instance.
+
+    Args:
+        text: Text to speak
+        voice: Voice name (uses default if None)
+        rate: Words per minute
+
+    Returns:
+        True if queued, False if no voice instance available.
+    """
+    if _voice_instance and _voice_instance.config.voice_enabled:
+        voice_name = voice or _voice_instance.config.voice_default
+        _voice_instance._queue.put((text, voice_name, rate))
+        return True
+    return False
+
 
 class _SpeechDelegate:
     """Delegate for AVSpeechSynthesizer completion callbacks."""
@@ -51,6 +77,8 @@ class Voice:
 
     def start(self) -> None:
         """Start the voice thread."""
+        global _voice_instance
+
         if not self.config.voice_enabled:
             return
 
@@ -59,15 +87,20 @@ class Voice:
                 return  # Already running
             self._running = True
 
+        _voice_instance = self
         self._thread = threading.Thread(target=self._voice_worker, daemon=True)
         self._thread.start()
 
     def stop(self) -> None:
         """Stop the voice thread."""
+        global _voice_instance
+
         with self._running_lock:
             if not self._running:
                 return  # Already stopped
             self._running = False
+
+        _voice_instance = None
 
         # Stop any current speech
         with self._synth_lock:
