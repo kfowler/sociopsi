@@ -18,6 +18,7 @@ from jung_agent.actions.executor import ActionExecutor
 from jung_agent.config import AgentConfig, load_system_prompt
 from jung_agent.dialogue import ArchetypalDialogue
 from jung_agent.drives import DriveSystem
+from jung_agent.ear import Ear
 from jung_agent.event_bus import get_event_bus
 from jung_agent.llm import LLMError, chat_with_retry
 from jung_agent.logger import PsycheLogger
@@ -63,6 +64,7 @@ class JungAgent:
         self.executor = ActionExecutor(self.config)
         self.event_collector = EventCollector()
         self.voice = Voice(self.config)
+        self.ear = Ear(self.config)
         self.logger = PsycheLogger(self.config)
         self.drive_system = DriveSystem(self.config)
 
@@ -148,6 +150,7 @@ class JungAgent:
         self._running = True
         self.event_collector.start()
         self.voice.start()
+        self.ear.start()
 
         # Set up signal handlers
         signal.signal(signal.SIGINT, self._handle_shutdown)
@@ -164,6 +167,10 @@ class JungAgent:
             print(f"  Actions: {self.config.voice_actions} @ {self.config.voice_actions_rate} wpm")
         else:
             print("Voice: disabled")
+        if self.config.ear_enabled:
+            print(f"Ear: listening ({self.config.ear_locale})")
+        else:
+            print("Ear: disabled")
         print(f"Initial heartbeat: {self._current_interval}s")
         print(f"Logging to: {self.logger.get_session_log()}")
         print("-" * 60)
@@ -179,6 +186,7 @@ class JungAgent:
         """Stop the agent loop."""
         self._running = False
         self._shutdown_event.set()
+        self.ear.stop()
         self.event_collector.stop()
         self.voice.stop()
         print("\nJung Agent stopped.")
@@ -231,6 +239,19 @@ class JungAgent:
             # 2. Collect events
             events = self.event_collector.collect_events(somatic)
 
+            # 2b. Drain speech utterances from Ear
+            utterances = self.ear.get_utterances()
+            if utterances:
+                print(f"\n{colors.GREEN}[SPEECH]{colors.RESET}")
+                for utterance in utterances:
+                    print(f'  "{utterance}"')
+                    # Store speech in semantic memory as interactions
+                    self.memory.add_memory(
+                        content=f"Human said: {utterance}",
+                        intensity=0.7,
+                        memory_type="interaction",
+                    )
+
             # 3. Update drives
             now = time.time()
             dt = now - self._last_update_time
@@ -270,7 +291,7 @@ class JungAgent:
 
             # 9. Build context for dialogue
             drive_state = self._get_drive_state_dict()
-            context = self._build_dialogue_context(somatic, events)
+            context = self._build_dialogue_context(somatic, events, utterances)
 
             # 10. Generate archetypal dialogue (internal monologue)
             segments, mediated_thought, harmony = self.dialogue.generate_dialogue(
@@ -320,6 +341,7 @@ class JungAgent:
                 heartbeat_interval=self._current_interval,
                 heartbeat_mode=self._heartbeat_mode,
                 drives=drive_perception,
+                utterances=utterances,
             )
             response = self._query_psyche(perception)
             parsed = parse_response(response)
@@ -520,17 +542,24 @@ class JungAgent:
         self,
         somatic: SomaticState,
         events: list[Any],
+        utterances: list[str] | None = None,
     ) -> str:
         """Build context string for dialogue generation.
 
         Args:
             somatic: Current somatic state
             events: Recent events
+            utterances: Speech heard from humans
 
         Returns:
             Context string
         """
         context_parts = []
+
+        # Add speech context first (most salient input)
+        if utterances:
+            speech_text = "; ".join(f'"{u}"' for u in utterances)
+            context_parts.append(f"Human said: {speech_text}")
 
         # Add somatic context
         context_parts.append(f"Battery: {somatic.battery_percent}%")

@@ -335,6 +335,15 @@ class AgentConfig:
 
         voice_actions_rate: Speech rate for action announcements. Range: 100-300.
             Default: 190.
+
+        ear_enabled: Whether continuous speech recognition is enabled.
+            Default: True.
+
+        ear_locale: Locale for speech recognition (BCP-47).
+            Default: "en-US".
+
+        ear_on_device: Force on-device recognition (no network).
+            Default: True.
     """
 
     # Model settings
@@ -383,6 +392,11 @@ class AgentConfig:
     # Intentions/actions voice
     voice_actions: str = "Evan (Enhanced)"
     voice_actions_rate: int = 190  # Slower, deliberate announcements
+
+    # Ear (continuous speech recognition)
+    ear_enabled: bool = True
+    ear_locale: str = "en-US"
+    ear_on_device: bool = True
 
     def __post_init__(self) -> None:
         """Initialize config: load config file, create data directory, validate voices."""
