@@ -1,0 +1,176 @@
+% Shared preamble for Jung Agent research documents
+% Compiled with XeLaTeX
+
+\usepackage{geometry}
+\geometry{
+  letterpaper,
+  margin=1in,
+  top=1.2in,
+  bottom=1.2in,
+}
+
+% Fonts
+\usepackage{fontspec}
+\setmainfont{EB Garamond}[
+  Numbers=OldStyle,
+  Ligatures=TeX,
+]
+\setsansfont{Inter}[
+  Scale=MatchLowercase,
+  Ligatures=TeX,
+]
+\setmonofont{IBM Plex Mono}[
+  Scale=MatchLowercase,
+]
+
+% Colors
+\usepackage[dvipsnames,svgnames]{xcolor}
+\definecolor{jungdark}{HTML}{1a1a2e}
+\definecolor{jungaccent}{HTML}{e94560}
+\definecolor{jungblue}{HTML}{0f3460}
+\definecolor{junggold}{HTML}{c4a35a}
+\definecolor{jungmuted}{HTML}{6b7280}
+\definecolor{junglight}{HTML}{f8f9fa}
+\definecolor{shadowred}{HTML}{8b0000}
+\definecolor{animacyan}{HTML}{1a8f8f}
+\definecolor{personagold}{HTML}{b8860b}
+\definecolor{selfviolet}{HTML}{6a0dad}
+
+% Section formatting
+\usepackage{titlesec}
+\titleformat{\section}
+  {\sffamily\Large\bfseries\color{jungblue}}
+  {\thesection}{1em}{}
+  [\vspace{-0.5em}\textcolor{jungaccent}{\rule{\textwidth}{0.4pt}}]
+\titleformat{\subsection}
+  {\sffamily\large\bfseries\color{jungdark}}
+  {\thesubsection}{0.8em}{}
+\titleformat{\subsubsection}
+  {\sffamily\normalsize\bfseries\color{jungmuted}}
+  {\thesubsubsection}{0.6em}{}
+
+% Headers and footers
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\sffamily\small\textcolor{jungmuted}{\leftmark}}
+\fancyhead[R]{\sffamily\small\textcolor{jungmuted}{\thepage}}
+\fancyfoot[C]{\sffamily\footnotesize\textcolor{jungmuted}{Jung Agent Project}}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\headrule}{\hbox to\headwidth{\color{jungaccent}\leaders\hrule height \headrulewidth\hfill}}
+
+% Tables
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{longtable}
+\usepackage{multirow}
+
+% Lists
+\usepackage{enumitem}
+\setlist{noitemsep,topsep=3pt}
+\setlist[itemize]{label=\textcolor{jungaccent}{\textbullet}}
+
+% Boxes and callouts
+\usepackage[most]{tcolorbox}
+
+\newtcolorbox{insightbox}[1][]{
+  enhanced,
+  colback=junglight,
+  colframe=jungblue,
+  fonttitle=\sffamily\bfseries,
+  title=#1,
+  sharp corners,
+  boxrule=0.5pt,
+  left=8pt,
+  right=8pt,
+  top=6pt,
+  bottom=6pt,
+  before upper={\parindent0pt},
+}
+
+\newtcolorbox{archetype}[2][]{
+  enhanced,
+  colback=white,
+  colframe=#2,
+  fonttitle=\sffamily\bfseries\color{#2},
+  title=#1,
+  sharp corners,
+  boxrule=0.8pt,
+  left=8pt,
+  right=8pt,
+  top=6pt,
+  bottom=6pt,
+  borderline west={3pt}{0pt}{#2},
+}
+
+\newtcolorbox{gapbox}{
+  enhanced,
+  colback=red!3,
+  colframe=jungaccent,
+  sharp corners,
+  boxrule=0.5pt,
+  left=8pt,
+  right=8pt,
+  top=6pt,
+  bottom=6pt,
+  borderline west={3pt}{0pt}{jungaccent},
+}
+
+\newtcolorbox{opportunitybox}{
+  enhanced,
+  colback=green!3,
+  colframe=OliveGreen,
+  sharp corners,
+  boxrule=0.5pt,
+  left=8pt,
+  right=8pt,
+  top=6pt,
+  bottom=6pt,
+  borderline west={3pt}{0pt}{OliveGreen},
+}
+
+% TikZ for diagrams
+\usepackage{tikz}
+\usetikzlibrary{
+  arrows.meta,
+  positioning,
+  shapes.geometric,
+  fit,
+  calc,
+  backgrounds,
+  decorations.pathmorphing,
+}
+
+% Hyperlinks
+\usepackage{hyperref}
+\hypersetup{
+  colorlinks=true,
+  linkcolor=jungblue,
+  citecolor=jungblue,
+  urlcolor=jungaccent,
+}
+
+% Bibliography (manual - biblatex not available)
+% Citations are inline; references listed manually at end
+
+% Math symbols
+\usepackage{amssymb}
+
+% Misc
+\usepackage{microtype}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{caption}
+\captionsetup{
+  font={small,sf},
+  labelfont={bf,color=jungblue},
+  format=plain,
+}
+
+% Custom commands
+\newcommand{\jungagent}{\textsc{Jung Agent}}
+\newcommand{\micropsi}{\textsc{MicroPsi2}}
+\newcommand{\psitheory}{Psi theory}
+\newcommand{\archname}[1]{\textsf{\textbf{#1}}}
+\newcommand{\drivename}[1]{\texttt{#1}}
+\newcommand{\modulatorname}[1]{\textit{#1}}

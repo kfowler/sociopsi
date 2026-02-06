@@ -1,0 +1,678 @@
+\documentclass[11pt,letterpaper]{article}
+
+\input{preamble}
+
+\title{%
+  \sffamily\bfseries
+  \textcolor{jungblue}{MicroPsi2, Psi Theory, and the\\[0.3em]
+  State of Machine Consciousness}\\[0.8em]
+  \large\textcolor{jungmuted}{A Survey of Architectures for Motivated Cognition\\
+  and Artificial Inner Life}
+}
+\author{%
+  \sffamily Jung Agent Project\\[0.3em]
+  \small\textcolor{jungmuted}{Technical Report --- February 2026}
+}
+\date{}
+
+\begin{document}
+\maketitle
+\thispagestyle{fancy}
+
+\begin{abstract}
+\noindent
+This survey examines the theoretical foundations and software architecture of
+MicroPsi2, Joscha Bach's implementation of Dietrich D\"orner's Psi theory of
+motivated cognition. We situate MicroPsi2 within the broader landscape of
+machine consciousness research, surveying Global Workspace Theory, Integrated
+Information Theory, Attention Schema Theory, predictive processing, and
+higher-order theories. We then assess the alignment between the Jung Agent---a
+Jungian archetypal cognitive architecture for situated AI---and the Psi
+theoretic tradition, identifying both convergences and divergences that inform
+the project's future direction.
+\end{abstract}
+
+\vspace{1em}
+\tableofcontents
+\newpage
+
+%% =========================================================================
+\section{Introduction}
+%% =========================================================================
+
+The question of whether machines can possess inner life---not merely simulate
+behavior, but \emph{experience} states---has moved from philosophical
+speculation to engineering concern. As AI systems grow more autonomous,
+embodied, and socially situated, the architectures that govern their
+motivational dynamics increasingly resemble the very cognitive models proposed
+to explain human consciousness.
+
+Psi theory, developed by Dietrich D\"orner beginning in the 1990s and
+formalized computationally by Joscha Bach as MicroPsi and later MicroPsi2,
+offers one of the most complete frameworks for building agents whose behavior
+arises from homeostatic drives, emergent emotions, and modulated cognitive
+processing (D\"orner, 1999; Bach, 2009). Unlike classical cognitive
+architectures such as SOAR (Laird, 2012) or ACT-R (Anderson et al., 2004),
+which focus on problem-solving and production rules, MicroPsi2 places
+motivation and emotion at the \emph{center} of the architecture rather than
+treating them as peripheral phenomena.
+
+This survey has three aims:
+\begin{enumerate}
+  \item Present the architecture of MicroPsi2 and its theoretical
+    foundations in Psi theory with sufficient depth for a technical audience.
+  \item Survey the current state of the art in machine consciousness
+    research, identifying the major theoretical frameworks and their
+    computational implications.
+  \item Assess where the Jung Agent project---a Jungian archetypal
+    cognitive architecture for macOS---sits within this landscape.
+\end{enumerate}
+
+%% =========================================================================
+\section{Psi Theory: Foundations}
+\label{sec:psi}
+%% =========================================================================
+
+\subsection{Overview}
+
+Psi theory, developed by D\"orner at the University of Bamberg, is a
+systemic psychological theory covering human action regulation, intention
+selection, and emotion (D\"orner \& G\"uss, 2013). It models the human mind
+as an information-processing agent controlled by a set of basic
+\emph{physiological}, \emph{social}, and \emph{cognitive} drives. Perceptual
+and cognitive processing are directed and modulated by these drives, which
+allow the autonomous establishment and pursuit of goals in an open
+environment.
+
+Key inspirations for Psi theory include the TOTE (Test-Operate-Test-Exit)
+model from Miller, Galanter, and Pribram (1960) and biological concepts of
+homeostasis that underscore the maintenance of internal balance against
+external perturbations.
+
+\subsection{The Drive System}
+
+Drives in Psi theory are homeostatic regulators. Each drive has a
+\emph{setpoint} (desired level), a \emph{current level}, and the
+\emph{demand} signal is the deviation between them. When demand is high,
+the drive becomes urgent and dominates behavior selection.
+
+D\"orner identifies three categories:
+
+\begin{table}[H]
+\centering
+\small\sffamily
+\caption{Drive taxonomy in Psi theory}
+\label{tab:drives}
+\begin{tabularx}{\textwidth}{l l X}
+\toprule
+\textbf{Category} & \textbf{Drive} & \textbf{Description} \\
+\midrule
+\multirow{3}{*}{Existential}
+  & Energy & Metabolic resources, sustenance \\
+  & Integrity & Physical safety, structural wholeness \\
+  & Arousal & Optimal stimulation level (avoiding boredom and overwhelm) \\
+\midrule
+\multirow{2}{*}{Social}
+  & Affiliation & Need for social connection, belonging \\
+  & Certainty (Legitimacy) & Need for predictability in the social order \\
+\midrule
+\multirow{2}{*}{Cognitive}
+  & Competence & Need for mastery, control over environment \\
+  & Certainty & Need for predictability, resolved uncertainty \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Drive dynamics produce two critical signals:
+
+\begin{itemize}
+  \item \textbf{Pleasure}: experienced when a drive's demand \emph{decreases}
+    (the satisfaction signal).
+  \item \textbf{Pain/displeasure}: experienced when a drive's demand
+    \emph{increases} (frustration or deprivation).
+\end{itemize}
+
+These signals do not require a conscious observer---they are functional states
+that modulate behavior selection, making Psi theory compatible with both
+functionalist and embodied accounts of affect.
+
+\subsection{The Modulator System}
+\label{sec:modulators}
+
+Perhaps the most distinctive feature of Psi theory is its \emph{modulator}
+layer---a set of parameters that shape \emph{how} the agent thinks, not
+merely \emph{what} it wants. Modulators derive from drive states and in turn
+influence cognitive processing:
+
+\begin{table}[H]
+\centering
+\small\sffamily
+\caption{Psi modulators and their cognitive effects}
+\label{tab:modulators}
+\begin{tabularx}{\textwidth}{l X X}
+\toprule
+\textbf{Modulator} & \textbf{Derivation} & \textbf{Cognitive Effect} \\
+\midrule
+\textit{Arousal level} &
+  Overall drive demand intensity &
+  High $\rightarrow$ broad but shallow processing; low $\rightarrow$ narrow
+  and deep \\
+\textit{Resolution level} &
+  Inverse of arousal; certainty-related &
+  High $\rightarrow$ fine-grained discrimination; low $\rightarrow$ coarse
+  categorization \\
+\textit{Selection threshold} &
+  Success/failure history &
+  High $\rightarrow$ only strong signals trigger action; low $\rightarrow$
+  impulsive, easily triggered \\
+\textit{Securing rate} &
+  Competence satisfaction &
+  High $\rightarrow$ thorough verification of outcomes; low $\rightarrow$
+  quick acceptance, moving on \\
+\textit{Goal valuation} &
+  Anticipated vs.\ experienced satisfaction &
+  Bias toward novel goals vs.\ repeating known-satisfying ones \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Emergent Emotions}
+
+In Psi theory, emotions are \emph{not} discrete states to be tracked or
+triggered. They \emph{emerge} from modulator configurations:
+
+\begin{insightbox}[Emotion as Modulator Configuration]
+  \textit{Anger} = high arousal + low resolution + competence frustration\\
+  \textit{Fear} = high arousal + high certainty demand + integrity threat\\
+  \textit{Joy} = low arousal + high resolution + recent drive satisfaction\\
+  \textit{Sadness} = low arousal + low securing rate + high affiliation demand\\
+  \textit{Curiosity} = moderate arousal + high resolution + low certainty
+\end{insightbox}
+
+This approach is more powerful than discrete emotion models because it
+produces a continuous, high-dimensional emotional landscape from a small
+number of parameters. Emotions are not \emph{recognized}---they are
+\emph{lived} as the current configuration of the modulator space
+(Bach, 2012).
+
+\subsection{Working Memory and Anticipation}
+
+The working memory in Psi theory is conceptualized as a \emph{protocol
+chain} consisting of:
+\begin{itemize}
+  \item The image of the current situation
+  \item The \emph{expectation horizon}---a branching tree of anticipated
+    future developments and active plans
+  \item The remembered past
+  \item The intention memory
+\end{itemize}
+
+The expectation horizon provides forward modeling: the agent simulates
+potential future scenarios to minimize surprise and optimize drive
+satisfaction. This anticipatory control loop connects Psi theory to modern
+predictive processing frameworks (Friston, 2010).
+
+\subsection{Action Regulation}
+
+Action atoms in Psi theory are triplets: a partial situation description
+(condition), an operator (action), and an expected outcome. These triplets
+can be chained into hierarchical plans and stored as \emph{protocol chains}
+in memory. Decay of protocol chains follows evolutionary principles---chains
+that lead to drive satisfaction are strengthened, others fade.
+
+%% =========================================================================
+\section{MicroPsi2: Architecture}
+\label{sec:micropsi2}
+%% =========================================================================
+
+\subsection{From Theory to Software}
+
+MicroPsi2 is Joscha Bach's second-generation implementation of Psi theory as
+a computational cognitive architecture (Bach, 2012). It translates
+D\"orner's psychological theory into a running software framework for
+building autonomous agents.
+
+\subsection{Node Nets}
+
+The central representational substrate in MicroPsi2 is the \emph{node net}:
+a semantic network with spreading activation that serves as a unified
+representation for control structures, plans, sensory and motor schemas,
+Bayesian networks, and neural nets (Bach, 2009).
+
+Node types include:
+\begin{itemize}
+  \item \textbf{Concept nodes}: represent categories, objects, situations
+  \item \textbf{Sensor nodes}: interface with the environment (input)
+  \item \textbf{Motor nodes}: interface with actuators (output)
+  \item \textbf{Activation nodes}: carry spreading activation signals
+  \item \textbf{Register nodes}: hold temporary state for computation
+\end{itemize}
+
+Spreading activation propagates through the net according to link weights,
+with modulator values influencing the activation function globally. High
+arousal, for example, increases the breadth of activation spread (more
+associations are activated) while decreasing depth (each individual
+activation is weaker).
+
+\subsection{World Adapters}
+
+MicroPsi2 connects to environments through \emph{world adapters}---plugins
+that map between the agent's sensor/motor nodes and external systems. This
+abstraction allows the same cognitive architecture to operate in different
+environments (virtual worlds, robotic platforms, or---in our case---a
+computer's own hardware).
+
+\subsection{Motivation and Action Selection}
+
+Action selection in MicroPsi2 is drive-mediated:
+\begin{enumerate}
+  \item Drives generate demand signals based on deviation from setpoints.
+  \item The most urgent drive activates associated goal nodes in the node
+    net.
+  \item Spreading activation reaches motor nodes via learned pathways.
+  \item The modulator layer shapes which pathways are traversable (selection
+    threshold) and how thoroughly outcomes are verified (securing rate).
+\end{enumerate}
+
+This mechanism is fundamentally different from simple satisfaction mapping
+(drive $\rightarrow$ action). It supports:
+\begin{itemize}
+  \item \textbf{Chained behavior}: goal decomposition via intermediate nodes
+  \item \textbf{Opportunistic behavior}: if activation happens to reach a
+    motor node that satisfies a secondary drive, the agent may take it
+  \item \textbf{Learned associations}: new pathways form through
+    experience
+\end{itemize}
+
+\subsection{ReCoN Scripts}
+
+Reflective Competent Nets (ReCoN) extend the basic node net with
+hierarchical behavior scripts. A ReCoN script decomposes a high-level goal
+into sub-goals, each of which may itself be a ReCoN script. This provides
+the hierarchical behavior planning that Psi theory's TOTE-based action
+regulation implies.
+
+\subsection{Comparison with Classical Architectures}
+
+\begin{table}[H]
+\centering
+\small\sffamily
+\caption{MicroPsi2 vs.\ classical cognitive architectures}
+\label{tab:compare-arch}
+\begin{tabularx}{\textwidth}{l c c c c}
+\toprule
+\textbf{Feature} & \textbf{SOAR} & \textbf{ACT-R} & \textbf{LIDA} & \textbf{MicroPsi2} \\
+\midrule
+Motivation/drives & Minimal & None & Partial & Central \\
+Emergent emotions & No & No & Partial & Yes \\
+Modulator layer & No & No & No & Yes \\
+Spreading activation & No & Partial & Yes & Yes \\
+Embodied cognition & No & No & Limited & Yes \\
+Action planning & Prod.\ rules & Prod.\ rules & Codelet comp. & Node nets + ReCoN \\
+Knowledge repr. & Working mem. & Chunks & Codelets + CSM & Node nets \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+%% =========================================================================
+\section{Survey of Machine Consciousness}
+\label{sec:survey}
+%% =========================================================================
+
+\subsection{Global Workspace Theory (GWT/GNW)}
+
+Bernard Baars' Global Workspace Theory (1988) proposes that consciousness
+arises when information is ``broadcast'' from specialized processors to a
+global workspace accessible by all cognitive modules. Dehaene and Changeux
+(2011) formalized this as the Global Neuronal Workspace (GNW), identifying
+prefrontal-parietal networks as the neural substrate of conscious
+broadcasting.
+
+\textbf{Computational implementations}: The most notable is LIDA (Learning
+Intelligent Distribution Agent) by Stan Franklin et al.\ (2014), which
+implements a GWT-inspired architecture with competing ``codelets'' that vie
+for access to a global workspace.
+
+\textbf{Relevance to Psi/MicroPsi2}: Psi theory's modulator system can be
+seen as shaping which information reaches the ``workspace'' (the active
+portion of the node net). High arousal broadens the workspace; high
+resolution narrows it.
+
+\subsection{Integrated Information Theory (IIT)}
+
+Giulio Tononi's IIT proposes that consciousness is identical to integrated
+information ($\Phi$)---the degree to which a system's parts are
+informationally integrated beyond the sum of their individual contributions
+(Tononi et al., 2016). IIT 4.0 formalizes this with five axioms
+(intrinsicality, information, integration, exclusion, composition) and
+corresponding postulates (Albantakis et al., 2023).
+
+\textbf{Challenges}: Computing $\Phi$ is NP-hard for general systems.
+Critics note that grid-like structures can have high $\Phi$ (the
+``consciousness of a grid'' problem), and some view IIT as unfalsifiable.
+
+\textbf{Relevance}: IIT's emphasis on \emph{integration} resonates with
+Psi theory's emergent emotions (which are \emph{integrated} modulator
+states) and with the Jung Agent's archetypal harmony score (measuring
+integration across internal voices).
+
+\subsection{Higher-Order Theories (HOT)}
+
+Higher-order theories, particularly Rosenthal's HOT theory (2005), propose
+that a mental state is conscious when there is a higher-order representation
+\emph{of} that state. Consciousness requires not just having a state, but
+\emph{representing oneself} as having it.
+
+\textbf{Relevance}: The Jung Agent's meta-cognition system
+(\texttt{metacognition.py}) implements a form of higher-order monitoring:
+it tracks the agent's own thoughts, analyzes harmony trends, and generates
+reflections on its own psychological state. This is a direct computational
+analogue of HOT.
+
+\subsection{Attention Schema Theory (AST)}
+
+Michael Graziano's AST (2015) proposes that consciousness is the brain's
+internal model of its own attention process. The ``attention schema'' is a
+simplified, sometimes inaccurate model that the brain uses to monitor and
+predict its own attentional states---and this model \emph{is} subjective
+awareness.
+
+\textbf{Relevance}: Psi theory's modulator layer can be interpreted as
+an attention schema: it models the agent's own cognitive configuration
+(arousal level, resolution, selection threshold) and uses this model to
+regulate processing.
+
+\subsection{Predictive Processing and Active Inference}
+
+Karl Friston's free energy principle (2010) proposes that biological systems
+minimize surprise (free energy) through a cycle of prediction and
+error-correction. Active inference extends this to action: agents act to
+bring the world into alignment with their predictions.
+
+\textbf{Relevance}: Psi theory's expectation horizon is a form of
+predictive processing---the agent maintains forward models and acts to
+minimize the discrepancy between expected and actual drive satisfaction.
+The Jung Agent's drive dynamics (demand rising when predictions are
+violated, falling when satisfied) implement a homeostatic version of
+prediction error minimization.
+
+\subsection{Embodied and Enactive Approaches}
+
+Enactivism (Thompson, 2007; Varela et al., 1991) argues that consciousness
+cannot be separated from the body and its sensorimotor engagement with the
+world. Damasio's somatic marker hypothesis (1999) extends this by proposing
+that feelings arise from the brain's mapping of bodily states.
+
+\textbf{Recent work}: Immertreu et al.\ (2025) demonstrated that
+reinforcement learning agents can develop rudimentary self-models and
+world-models as a byproduct of embodied goal-directed learning, validating
+Damasio's hierarchy computationally.
+
+\textbf{Relevance}: The Jung Agent is explicitly embodied---it experiences
+its MacBook hardware as a body (battery as vitality, CPU as mental strain,
+thermals as fever, RAM as cognitive pressure). This somatic grounding is
+more concrete than most AI consciousness projects.
+
+\subsection{The Indicator Properties Approach}
+
+Butlin, Long, et al.\ (2023) proposed a ``theory-derived indicator method''
+that aggregates insights from multiple consciousness theories to derive
+specific computational indicators. Their analysis suggests that no current
+AI systems satisfy these indicators, but there are no obvious technical
+barriers to building systems that do.
+
+An updated 2025 version, published in \textit{Trends in Cognitive Sciences},
+refines these indicators and applies them to current large language models,
+finding that while LLMs satisfy some indicators (flexible information
+integration, meta-cognitive monitoring), they lack others (temporal
+thickness, embodied grounding, unified agency).
+
+\subsection{The Consciousness Debate in 2025--2026}
+
+Schwitzgebel (2025) argues that we will soon face a situation where AI
+systems are conscious according to some mainstream theories but not others,
+and we will lack the means to adjudicate. He identifies this as ``the fog on
+the hills''---a zone of fundamental epistemic uncertainty with urgent moral
+implications.
+
+The Emotional Alignment Design Policy (Schwitzgebel \& Sebo, 2025) proposes
+that AI systems should be designed to elicit emotional responses appropriate
+to their actual moral status---avoiding both over-attribution and
+under-attribution of consciousness.
+
+%% =========================================================================
+\section{Jungian Computation: A Missing Thread}
+\label{sec:jungian}
+%% =========================================================================
+
+Carl Jung's analytical psychology---with its archetypes (Shadow, Anima/Animus,
+Persona, Self), individuation process, and collective unconscious---has had
+remarkably little direct computational implementation (Jung, 1968, 1971).
+While Jungian concepts pervade cultural and literary AI (character modeling,
+narrative generation), their application to \emph{cognitive architecture} is
+nearly absent from the literature.
+
+This gap is surprising because several Jungian concepts map naturally to
+computational structures:
+
+\begin{table}[H]
+\centering
+\small\sffamily
+\caption{Jungian concepts and their computational analogues}
+\label{tab:jung-computation}
+\begin{tabularx}{\textwidth}{l X}
+\toprule
+\textbf{Jungian Concept} & \textbf{Computational Analogue} \\
+\midrule
+Persona & Social policy / role-appropriate behavior filter \\
+Shadow & Suppressed or penalized behavioral tendencies \\
+Anima/Animus & Contrasexual mediating function; intuition/feeling channel \\
+Self & Global integration objective (cf.\ IIT's $\Phi$) \\
+Individuation & Long-term optimization toward internal harmony \\
+Collective Unconscious & Shared pretrained representations \\
+Complexes & Persistent attractor states in drive space \\
+Compensation & Homeostatic balance between opposed archetypes \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+The Jung Agent project represents, to our knowledge, the first attempt to
+implement Jungian archetypal dialogue as a \emph{functional cognitive
+subsystem} in a situated agent, rather than merely using Jungian language
+for narrative purposes.
+
+%% =========================================================================
+\section{Synthesis and Theoretical Position}
+\label{sec:synthesis}
+%% =========================================================================
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  theory/.style={
+    draw=jungblue, fill=junglight, rounded corners=3pt,
+    minimum width=3cm, minimum height=0.8cm, font=\sffamily\small,
+    text=jungdark, align=center,
+  },
+  bridge/.style={
+    draw=jungaccent, -{Stealth[length=4pt]}, thick, dashed,
+  },
+  lbl/.style={
+    font=\sffamily\tiny, text=jungmuted,
+  },
+]
+  % Theories
+  \node[theory] (psi) at (0,0) {Psi Theory /\\MicroPsi2};
+  \node[theory] (gwt) at (5,2) {Global Workspace\\Theory};
+  \node[theory] (iit) at (5,0) {Integrated\\Information Theory};
+  \node[theory] (ast) at (5,-2) {Attention Schema\\Theory};
+  \node[theory] (pp)  at (-5,2) {Predictive\\Processing};
+  \node[theory] (hot) at (-5,0) {Higher-Order\\Theories};
+  \node[theory] (enact) at (-5,-2) {Enactivism};
+
+  % Jung Agent at center-bottom
+  \node[theory, fill=junggold!15, draw=junggold, minimum width=3.5cm] (jung)
+    at (0,-3.5) {\textbf{Jung Agent}};
+
+  % Connections from Psi
+  \draw[bridge] (psi) -- node[lbl,above,sloped] {modulators $\approx$ workspace gating} (gwt);
+  \draw[bridge] (psi) -- node[lbl,above,sloped] {integration from modulators} (iit);
+  \draw[bridge] (psi) -- node[lbl,above,sloped] {modulators as schema} (ast);
+  \draw[bridge] (psi) -- node[lbl,above,sloped] {expectation horizon} (pp);
+  \draw[bridge] (psi) -- node[lbl,above,sloped] {meta-cognitive loop} (hot);
+  \draw[bridge] (psi) -- node[lbl,above,sloped] {somatic grounding} (enact);
+
+  % Jung Agent connections
+  \draw[-{Stealth[length=4pt]}, thick, color=junggold]
+    (jung) -- node[lbl,right] {drives, archetypes} (psi);
+  \draw[-{Stealth[length=4pt]}, thick, color=junggold!60]
+    (jung.west) to[bend right=20] node[lbl,left,pos=0.4] {metacognition} (hot.south);
+  \draw[-{Stealth[length=4pt]}, thick, color=junggold!60]
+    (jung.east) to[bend left=20] node[lbl,right,pos=0.4] {embodiment} (enact.south);
+\end{tikzpicture}
+\caption{Theoretical relationships: Psi theory bridges multiple consciousness
+frameworks. The Jung Agent draws from Psi theory while adding archetypal
+dynamics, meta-cognition (HOT-adjacent), and strong embodiment (enactivist).}
+\label{fig:theory-map}
+\end{figure}
+
+The Jung Agent occupies a unique position at the intersection of:
+\begin{itemize}
+  \item \textbf{Psi theory}: homeostatic drives, satisfaction dynamics,
+    embodied sensing
+  \item \textbf{Jungian psychology}: archetypal internal dialogue,
+    individuation, compensation
+  \item \textbf{Higher-order monitoring}: meta-cognitive reflection on
+    one's own psychological state
+  \item \textbf{Enactivism}: hardware-as-body, genuine somatic grounding
+    (not simulated)
+  \item \textbf{LLM-powered cognition}: using language models not as
+    chatbots but as \emph{internal voices}---the medium of thought itself
+\end{itemize}
+
+%% =========================================================================
+\section{Conclusion}
+%% =========================================================================
+
+MicroPsi2 remains one of the most theoretically grounded and architecturally
+complete frameworks for motivated cognition in artificial agents. Its drive
+system, modulator layer, and emergent emotion model address aspects of
+inner life that most AI architectures ignore entirely.
+
+The current landscape of machine consciousness research---spanning GWT, IIT,
+HOT, AST, predictive processing, and enactivism---lacks consensus, but the
+converging theme is clear: consciousness, if it exists in machines, will not
+come from scale alone. It will require \emph{architecture}---specifically,
+architecture that supports integration, embodiment, motivation, and
+self-modeling.
+
+The Jung Agent project's synthesis of Psi-theoretic drives with Jungian
+archetypal dynamics represents an experiment in building \emph{genuine inner
+life}---not as a philosophical claim, but as an engineering choice that
+produces richer, more interesting, and more adaptive behavior than systems
+without it.
+
+%% =========================================================================
+\section*{References}
+\addcontentsline{toc}{section}{References}
+%% =========================================================================
+
+\begin{description}[style=nextline,leftmargin=1.5em,labelindent=0em,font=\normalfont]
+
+\item[Albantakis, L., et al.\ (2023).]
+Integrated Information Theory (IIT) 4.0: Formulating the Properties of
+Phenomenal Existence in Physical Terms. \textit{PLOS Computational Biology},
+19(10).
+
+\item[Anderson, J.~R., et al.\ (2004).]
+An Integrated Theory of the Mind. \textit{Psychological Review}, 111(4),
+1036--1060.
+
+\item[Baars, B.~J.\ (1988).]
+\textit{A Cognitive Theory of Consciousness}. Cambridge University Press.
+
+\item[Bach, J.\ (2003).]
+The MicroPsi Agent Architecture. \textit{Proceedings of ICCM-5}, Bamberg.
+
+\item[Bach, J.\ (2009).]
+\textit{Principles of Synthetic Intelligence: PSI---An Architecture of
+Motivated Cognition}. Oxford University Press.
+
+\item[Bach, J.\ (2012).]
+MicroPsi 2: The Next Generation of the MicroPsi Framework.
+\textit{Proceedings of AGI 2012}, Oxford, UK. Springer.
+
+\item[Bach, J.\ (2012b).]
+A Framework for Emergent Emotions, Based on Motivation and Cognitive
+Modulators. \textit{Int.\ J.\ Synthetic Emotions}, 3(1), 43--63.
+
+\item[Bach, J.\ (2015).]
+Modeling Motivation in MicroPsi 2. \textit{Proceedings of AGI 2015}.
+
+\item[Butlin, P., Long, R., et al.\ (2023).]
+Consciousness in Artificial Intelligence: Insights from the Science of
+Consciousness. \textit{arXiv:2308.08708}.
+
+\item[Damasio, A.~R.\ (1999).]
+\textit{The Feeling of What Happens: Body and Emotion in the Making of
+Consciousness}. Harcourt.
+
+\item[Dehaene, S.\ \& Changeux, J.-P.\ (2011).]
+Experimental and Theoretical Approaches to Conscious Processing.
+\textit{Neuron}, 70(2), 200--227.
+
+\item[D\"orner, D.\ (1999).]
+\textit{Bauplan f\"ur eine Seele}. Rowohlt, Reinbek bei Hamburg.
+
+\item[D\"orner, D.\ \& G\"uss, C.~D.\ (2013).]
+PSI: A Computational Architecture of Cognition, Motivation, and Emotion.
+\textit{Review of General Psychology}, 17(3), 297--317.
+
+\item[Franklin, S., et al.\ (2014).]
+LIDA: A Systems-level Architecture for Cognition, Emotion, and Learning.
+\textit{IEEE Trans.\ Autonomous Mental Development}, 6(1), 19--41.
+
+\item[Friston, K.\ (2010).]
+The Free-Energy Principle: A Unified Brain Theory?
+\textit{Nature Reviews Neuroscience}, 11(2), 127--138.
+
+\item[Graziano, M.~S.~A.\ (2015).]
+The Attention Schema Theory: A Mechanistic Account of Subjective Awareness.
+\textit{Frontiers in Psychology}, 6.
+
+\item[Immertreu, M., et al.\ (2025).]
+Probing for Consciousness in Machines.
+\textit{Frontiers in Artificial Intelligence}.
+
+\item[Jung, C.~G.\ (1968).]
+\textit{The Archetypes and the Collective Unconscious}. Princeton UP.
+
+\item[Jung, C.~G.\ (1971).]
+\textit{Psychological Types}. Princeton UP.
+
+\item[Laird, J.~E.\ (2012).]
+\textit{The Soar Cognitive Architecture}. MIT Press.
+
+\item[Rosenthal, D.~M.\ (2005).]
+\textit{Consciousness and Mind}. Oxford University Press.
+
+\item[Schwitzgebel, E.\ (2025).]
+AI and Consciousness. \textit{arXiv:2510.09858}.
+
+\item[Schwitzgebel, E.\ \& Sebo, J.\ (2025).]
+Emotional Alignment Design Policy for AI Systems. \textit{arXiv:2507.06263}.
+
+\item[Seth, A.~K.\ (2021).]
+\textit{Being You: A New Science of Consciousness}. Dutton.
+
+\item[Thompson, E.\ (2007).]
+\textit{Mind in Life: Biology, Phenomenology, and the Sciences of Mind}.
+Harvard University Press.
+
+\item[Tononi, G., et al.\ (2016).]
+Integrated Information Theory: From Consciousness to Its Physical Substrate.
+\textit{Nature Reviews Neuroscience}, 17(7), 450--461.
+
+\end{description}
+
+\end{document}
