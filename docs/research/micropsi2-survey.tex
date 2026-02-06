@@ -52,7 +52,7 @@ formalized computationally by Joscha Bach as MicroPsi and later MicroPsi2,
 offers one of the most complete frameworks for building agents whose behavior
 arises from homeostatic drives, emergent emotions, and modulated cognitive
 processing (D\"orner, 1999; Bach, 2009). Unlike classical cognitive
-architectures such as SOAR (Laird, 2012) or ACT-R (Anderson et al., 2004),
+architectures such as Soar (Laird, 2012) or ACT-R (Anderson et al., 2004),
 which focus on problem-solving and production rules, MicroPsi2 places
 motivation and emotion at the \emph{center} of the architecture rather than
 treating them as peripheral phenomena.
@@ -96,12 +96,16 @@ Drives in Psi theory are homeostatic regulators. Each drive has a
 \emph{demand} signal is the deviation between them. When demand is high,
 the drive becomes urgent and dominates behavior selection.
 
-D\"orner identifies three categories:
+D\"orner identifies three categories of drives. Note that certainty
+operates in both social and cognitive domains---D\"orner treats
+\emph{legitimacy} (predictability in the social order) and
+\emph{epistemic certainty} (resolved uncertainty about the world) as
+related but distinct regulatory needs:
 
 \begin{table}[H]
 \centering
 \small\sffamily
-\caption{Drive taxonomy in Psi theory}
+\caption{Drive taxonomy in Psi theory (D\"orner \& G\"uss, 2013)}
 \label{tab:drives}
 \begin{tabularx}{\textwidth}{l l X}
 \toprule
@@ -114,7 +118,7 @@ D\"orner identifies three categories:
 \midrule
 \multirow{2}{*}{Social}
   & Affiliation & Need for social connection, belonging \\
-  & Certainty (Legitimacy) & Need for predictability in the social order \\
+  & Legitimacy & Need for predictability in the social order \\
 \midrule
 \multirow{2}{*}{Cognitive}
   & Competence & Need for mastery, control over environment \\
@@ -122,6 +126,14 @@ D\"orner identifies three categories:
 \bottomrule
 \end{tabularx}
 \end{table}
+
+The Jung Agent extends this taxonomy with three additional drives:
+\textbf{curiosity} (explicit exploratory motivation, implicit in Psi's
+competence/certainty interaction), \textbf{recognition} (explicit social
+acknowledgment, subsumed within Psi's social drives), and
+\textbf{individuation} (a Jungian contribution: long-term growth toward
+psychological integration, absent from Psi theory entirely). These
+extensions are analyzed in detail in the companion competitive analysis.
 
 Drive dynamics produce two critical signals:
 
@@ -301,12 +313,12 @@ regulation implies.
 \label{tab:compare-arch}
 \begin{tabularx}{\textwidth}{l c c c c}
 \toprule
-\textbf{Feature} & \textbf{SOAR} & \textbf{ACT-R} & \textbf{LIDA} & \textbf{MicroPsi2} \\
+\textbf{Feature} & \textbf{Soar} & \textbf{ACT-R} & \textbf{LIDA} & \textbf{MicroPsi2} \\
 \midrule
-Motivation/drives & Minimal & None & Partial & Central \\
+Motivation/drives & Minimal & Indirect (utility) & Partial & Central \\
 Emergent emotions & No & No & Partial & Yes \\
 Modulator layer & No & No & No & Yes \\
-Spreading activation & No & Partial & Yes & Yes \\
+Spreading activation & Partial (SM) & Partial (DM) & Yes & Yes \\
 Embodied cognition & No & No & Limited & Yes \\
 Action planning & Prod.\ rules & Prod.\ rules & Codelet comp. & Node nets + ReCoN \\
 Knowledge repr. & Working mem. & Chunks & Codelets + CSM & Node nets \\
@@ -343,9 +355,11 @@ resolution narrows it.
 Giulio Tononi's IIT proposes that consciousness is identical to integrated
 information ($\Phi$)---the degree to which a system's parts are
 informationally integrated beyond the sum of their individual contributions
-(Tononi et al., 2016). IIT 4.0 formalizes this with five axioms
-(intrinsicality, information, integration, exclusion, composition) and
-corresponding postulates (Albantakis et al., 2023).
+(Tononi et al., 2016). IIT 4.0 distinguishes between five \emph{axioms}
+of phenomenal existence (existence, composition, information, integration,
+exclusion)---properties of experience itself---and five corresponding
+\emph{postulates} that translate these axioms into physical requirements
+on the substrate (Albantakis et al., 2023).
 
 \textbf{Challenges}: Computing $\Phi$ is NP-hard for general systems.
 Critics note that grid-like structures can have high $\Phi$ (the
@@ -385,16 +399,21 @@ regulate processing.
 \subsection{Predictive Processing and Active Inference}
 
 Karl Friston's free energy principle (2010) proposes that biological systems
-minimize surprise (free energy) through a cycle of prediction and
-error-correction. Active inference extends this to action: agents act to
-bring the world into alignment with their predictions.
+minimize surprise (variational free energy) through a cycle of prediction and
+error-correction. Two distinct mechanisms operate under this umbrella:
+\emph{predictive coding} concerns perceptual inference---updating internal
+models to match sensory input---while \emph{active inference} extends this
+to action, where agents change the world to match their predictions rather
+than merely updating beliefs.
 
-\textbf{Relevance}: Psi theory's expectation horizon is a form of
-predictive processing---the agent maintains forward models and acts to
-minimize the discrepancy between expected and actual drive satisfaction.
-The Jung Agent's drive dynamics (demand rising when predictions are
-violated, falling when satisfied) implement a homeostatic version of
-prediction error minimization.
+\textbf{Relevance}: Psi theory's expectation horizon maps most closely to
+active inference: the agent maintains forward models of drive trajectories
+and acts to prevent predicted deprivation. The Jung Agent's drive dynamics
+(demand rising when satisfaction predictions are violated, falling when
+confirmed) implement a homeostatic version of prediction error minimization.
+The reactive sense-think-act cycle is predictive coding; adding an
+expectation horizon (see companion competitive analysis, Section 6.3) would
+move the architecture toward active inference.
 
 \subsection{Embodied and Enactive Approaches}
 
@@ -476,10 +495,12 @@ Compensation & Homeostatic balance between opposed archetypes \\
 \end{tabularx}
 \end{table}
 
-The Jung Agent project represents, to our knowledge, the first attempt to
-implement Jungian archetypal dialogue as a \emph{functional cognitive
-subsystem} in a situated agent, rather than merely using Jungian language
-for narrative purposes.
+While Jungian typology has been applied to agent personality modeling (e.g.,
+MBTI-based character systems) and narrative AI, the Jung Agent project
+appears to be the first system to implement Jungian archetypal dialogue as a
+\emph{functional cognitive subsystem}---where competing archetypal
+perspectives (Shadow, Anima, Persona, Self) are generated in parallel and
+mediated by an Ego process---in a situated agent with real-world embodiment.
 
 %% =========================================================================
 \section{Synthesis and Theoretical Position}
@@ -549,6 +570,19 @@ The Jung Agent occupies a unique position at the intersection of:
   \item \textbf{LLM-powered cognition}: using language models not as
     chatbots but as \emph{internal voices}---the medium of thought itself
 \end{itemize}
+
+Of particular note is the \textbf{individuation drive}---a dedicated
+homeostatic regulator for long-term psychological integration. Unlike Psi's
+drives, which regulate immediate needs (energy, safety, social connection),
+individuation operates on a slow timescale (rise rate 0.005, the lowest of
+any drive) and is satisfied by introspective actions: journaling, composing
+thoughts, meditating, and dreaming. It is satisfied when the archetypal
+harmony score is high---when Shadow, Anima, Persona, and Self are expressing
+coherent, non-contradictory perspectives. This maps directly to Jung's
+concept of the individuation process as the central developmental task of
+the psyche, and represents a computational bridge between Psi's homeostatic
+framework and Jungian analytical psychology that neither tradition offers
+independently.
 
 %% =========================================================================
 \section{Conclusion}
@@ -653,6 +687,9 @@ Probing for Consciousness in Machines.
 \item[Laird, J.~E.\ (2012).]
 \textit{The Soar Cognitive Architecture}. MIT Press.
 
+\item[Miller, G.~A., Galanter, E., \& Pribram, K.~H.\ (1960).]
+\textit{Plans and the Structure of Behavior}. Holt, Rinehart \& Winston.
+
 \item[Rosenthal, D.~M.\ (2005).]
 \textit{Consciousness and Mind}. Oxford University Press.
 
@@ -668,6 +705,10 @@ Emotional Alignment Design Policy for AI Systems. \textit{arXiv:2507.06263}.
 \item[Thompson, E.\ (2007).]
 \textit{Mind in Life: Biology, Phenomenology, and the Sciences of Mind}.
 Harvard University Press.
+
+\item[Varela, F.~J., Thompson, E., \& Rosch, E.\ (1991).]
+\textit{The Embodied Mind: Cognitive Science and Human Experience}.
+MIT Press.
 
 \item[Tononi, G., et al.\ (2016).]
 Integrated Information Theory: From Consciousness to Its Physical Substrate.

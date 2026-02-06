@@ -38,13 +38,14 @@ Psi theory into the Jung Agent's existing architecture.
 %% =========================================================================
 
 The Jung Agent and MicroPsi2 share a common ancestor in D\"orner's Psi
-theory but diverge significantly in implementation philosophy:
+theory (D\"orner \& G\"uss, 2013) but diverge significantly in
+implementation philosophy:
 
 \begin{itemize}
-  \item \textbf{MicroPsi2} faithfully implements the full Psi architecture
-    via node nets, spreading activation, and formal modulator dynamics.
-    It is a \emph{cognitive modeling framework}---general-purpose, theoretically
-    pure, and environment-agnostic.
+  \item \textbf{MicroPsi2} (Bach, 2012) faithfully implements the full Psi
+    architecture via node nets, spreading activation, and formal modulator
+    dynamics. It is a \emph{cognitive modeling framework}---general-purpose,
+    theoretically pure, and environment-agnostic.
   \item \textbf{Jung Agent} takes Psi drives as a foundation and extends
     them with Jungian archetypal dialogue, LLM-powered cognition, genuine
     hardware embodiment, and semantic memory. It is a \emph{situated
@@ -188,9 +189,13 @@ selection, archetype activation, and speech content.
 
 \textbf{Current state}: The \texttt{[FEELING]} section of drive perception
 lists drives that are rising (pain) or falling (pleasure). The archetypal
-dialogue system uses drive states to weight archetype voices (low affiliation
-$\rightarrow$ Shadow emerges). This is a partial implementation---drive
-states influence \emph{which} voices speak, but not \emph{how} they speak.
+dialogue system passes drive states as context to all four archetype
+prompts, influencing their \emph{tone} and \emph{concerns} rather than
+gating which archetypes speak. Infrastructure for drive-weighted archetype
+activation exists (\texttt{calculate\_weights} in \texttt{dialogue.py}) but
+is not yet integrated into the main loop---all four voices currently speak
+every cycle. This is a partial implementation: drive states shape archetype
+\emph{content} but not archetype \emph{activation strength}.
 
 \subsection{Gap 3: Node Nets / Spreading Activation}
 
@@ -277,9 +282,11 @@ is not a model of a body---it \emph{is} the body's state.
 
 \subsection{LLM-Powered Cognition}
 
-MicroPsi2 uses node nets for all cognition. The Jung Agent uses large
-language models (Cydonia 22B via Ollama) as the substrate of thought. This
-enables:
+MicroPsi2 uses node nets for all cognition. The Jung Agent uses a
+multi-model LLM architecture via Ollama: Cydonia 22B (custom
+\texttt{jung-mid} model) for archetypal voices and action selection, phi4
+for creative generation (poetry, dreams, observations, piano compositions),
+and optionally Anthropic Claude Haiku for the psyche query. This enables:
 
 \begin{itemize}
   \item Natural language inner monologue (not numerical activations)
@@ -293,9 +300,13 @@ enables:
 \subsection{Semantic Memory with Weighted Recall}
 
 The Jung Agent's memory system uses sentence-transformer embeddings for
-semantic search and a weight-based recall system where meditation modifies
-memory salience. This is more sophisticated than MicroPsi2's protocol
-chain decay.
+semantic search (cosine similarity over 384-dimensional vectors) and a
+weight-based recall system where meditation boosts surfaced memories'
+weight by +0.3 (capped at 5.0) while decaying non-surfaced memories by
+$\times$0.95. Sampling uses \texttt{weight $\times$ current\_strength},
+where strength follows intensity-weighted exponential decay. This differs
+from MicroPsi2's protocol chain mechanism, where action-outcome chains
+strengthen through successful drive satisfaction and decay through disuse.
 
 \subsection{Meta-Cognition}
 
@@ -310,16 +321,28 @@ state. This higher-order monitoring has no equivalent in MicroPsi2.
 
 \subsection{What Jung Agent Should Adopt from Psi/MicroPsi2}
 
+\begin{opportunitybox}
+\textbf{Highest-value adoption}: The modulator layer (Bach, 2012b). A
+small, pure-arithmetic module that would make cognitive processing
+\emph{qualitatively different} under different drive configurations---the
+single most impactful Psi mechanism missing from the Jung Agent.
+\end{opportunitybox}
+
 \begin{enumerate}
   \item \textbf{Modulator layer} (high priority): Derive arousal, resolution,
-    selection threshold, and securing rate from current drive states. Use
-    these to modulate LLM parameters (temperature, top-p), cycle timing,
-    archetype weighting, and action verification behavior.
+    selection threshold, and securing rate from current drive states (Bach,
+    2009). Use these to modulate LLM parameters (temperature, top-p), cycle
+    timing, archetype weighting, and action verification behavior.
+
+  \item \textbf{Drive-weighted archetype activation} (high priority): Wire
+    the existing \texttt{calculate\_weights} method in \texttt{dialogue.py}
+    into the main loop. This is low-hanging fruit---the infrastructure
+    exists but is not yet called.
 
   \item \textbf{Emergent emotion labels} (medium priority): Map modulator
-    configurations to emotion names. Display current emotion in the console
-    and feed it into the LLM context. This makes the agent's emotional state
-    legible without requiring discrete emotion tracking.
+    configurations to emotion names (Bach, 2012b). Display current emotion
+    in the console and feed it into the LLM context. This makes the agent's
+    emotional state legible without requiring discrete emotion tracking.
 
   \item \textbf{Expectation horizon} (medium priority): Maintain a simple
     forward model of drive trajectories. Use it to generate anticipatory
@@ -457,24 +480,20 @@ states cross urgency thresholds. Feed projections into the LLM context:
 \small\sffamily
 \caption{Risk assessment for Psi theory integration}
 \label{tab:risks}
-\begin{tabularx}{\textwidth}{l c c X}
+\begin{tabularx}{\textwidth}{X c c X}
 \toprule
 \textbf{Risk} & \textbf{Likelihood} & \textbf{Impact} & \textbf{Mitigation} \\
 \midrule
-Modulator layer adds\\
-  latency per cycle &
+Modulator layer adds latency per cycle &
   Medium & Low &
   Modulators are pure arithmetic---nanosecond cost \\
-Emotion labels feel\\
-  ``canned'' &
+Emotion labels feel ``canned'' &
   Medium & Medium &
   Use as LLM context input, not console display; let the LLM interpret \\
-Over-engineering beyond\\
-  observable benefit &
+Over-engineering beyond observable benefit &
   High & Medium &
   Implement Phase 1 first, evaluate, then decide on Phase 2--3 \\
-Divergence from Psi\\
-  orthodoxy &
+Divergence from Psi orthodoxy &
   Certain & None &
   Jung Agent is not a Psi implementation---it's a Psi-\emph{inspired}
   Jungian system \\
@@ -529,7 +548,7 @@ Divergence from Psi\\
   \node[module] (j-somatic) at (4,-0.5) {Somatic Sensors};
   \node[unique] (j-meta)    at (4,-1.5) {Meta-Cognition};
   \node[unique] (j-memory)  at (4,-2.5) {Semantic Memory};
-  \node[unique] (j-llm)     at (4,-3.5) {LLM (Cydonia)};
+  \node[unique] (j-llm)     at (4,-3.5) {LLM (multi-model)};
   \node[unique] (j-voice)   at (4,-4.5) {Voice + Ear};
 
   % --- Shared column ---
@@ -607,8 +626,16 @@ Modeling Motivation in MicroPsi 2. \textit{Proceedings of AGI 2015}.
 PSI: A Computational Architecture of Cognition, Motivation, and Emotion.
 \textit{Review of General Psychology}, 17(3), 297--317.
 
+\item[Friston, K.\ (2010).]
+The Free-Energy Principle: A Unified Brain Theory?
+\textit{Nature Reviews Neuroscience}, 11(2), 127--138.
+
 \item[Jung, C.~G.\ (1968).]
 \textit{The Archetypes and the Collective Unconscious}. Princeton UP.
+
+\item[Tononi, G., et al.\ (2016).]
+Integrated Information Theory: From Consciousness to Its Physical Substrate.
+\textit{Nature Reviews Neuroscience}, 17(7), 450--461.
 
 \end{description}
 
