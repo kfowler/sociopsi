@@ -8,6 +8,7 @@ import signal
 import sys
 import threading
 import time
+from concurrent.futures import Future
 from datetime import datetime
 from types import FrameType
 from typing import Any, Final, Literal, TypedDict
@@ -20,7 +21,7 @@ from jung_agent.dialogue import ArchetypalDialogue
 from jung_agent.drives import DriveSystem
 from jung_agent.ear import Ear
 from jung_agent.event_bus import get_event_bus
-from jung_agent.llm import LLMError, chat_with_retry
+from jung_agent.llm import LLMError, chat_with_retry, get_executor, shutdown_executor, submit_chat
 from jung_agent.logger import PsycheLogger
 from jung_agent.memory import SemanticMemory
 from jung_agent.metacognition import MetaCognition
@@ -72,6 +73,7 @@ class JungAgent:
         self.dialogue = ArchetypalDialogue(
             model=self.config.model,
             event_bus=self.event_bus,
+            pump_fn=self._pump_until_done,
         )
 
         # Semantic memory with vector embeddings
@@ -149,6 +151,10 @@ class JungAgent:
         """Start the agent loop."""
         self._running = True
         self.event_collector.start()
+
+        # Wire voice speaking state to ear mute/unmute to prevent hearing own speech
+        self.voice._on_speak_start = self.ear.mute
+        self.voice._on_speak_end = self.ear.unmute
         self.voice.start()
         self.ear.start()
 
@@ -167,8 +173,14 @@ class JungAgent:
             print(f"  Actions: {self.config.voice_actions} @ {self.config.voice_actions_rate} wpm")
         else:
             print("Voice: disabled")
-        if self.config.ear_enabled:
-            print(f"Ear: listening ({self.config.ear_locale})")
+        if self.ear.enabled and self.ear._running:
+            print(
+                f"Ear: listening ({self.config.ear_locale}, on_device={self.config.ear_on_device})"
+            )
+        elif self.config.ear_enabled:
+            print(
+                f"{colors.RED}Ear: failed to start (check Siri & Dictation in System Settings){colors.RESET}"
+            )
         else:
             print("Ear: disabled")
         print(f"Initial heartbeat: {self._current_interval}s")
@@ -189,6 +201,7 @@ class JungAgent:
         self.ear.stop()
         self.event_collector.stop()
         self.voice.stop()
+        shutdown_executor(wait=False)
         print("\nJung Agent stopped.")
 
     def _handle_shutdown(self, signum: int, frame: FrameType | None) -> None:
@@ -224,6 +237,32 @@ class JungAgent:
                 # Run loop returns when: input processed, deadline reached, or no sources
                 run_loop.runMode_beforeDate_(NSDefaultRunLoopMode, deadline)
 
+    def _pump_until_done(self, *futures: Future[Any], timeout: float = 120.0) -> None:
+        """Wait for futures to complete while pumping NSRunLoop.
+
+        Polls futures in a loop, running NSRunLoop in 50ms intervals so
+        that voice synthesis delegates and speech recognition callbacks
+        can fire while LLM calls execute on worker threads.
+
+        Args:
+            *futures: Futures to wait on.
+            timeout: Maximum seconds to wait before raising TimeoutError.
+
+        Raises:
+            TimeoutError: If futures don't complete within timeout.
+        """
+        run_loop = NSRunLoop.currentRunLoop()
+        deadline = time.time() + timeout
+
+        while not all(f.done() for f in futures):
+            if time.time() > deadline:
+                for f in futures:
+                    f.cancel()
+                raise TimeoutError(f"LLM futures did not complete within {timeout}s")
+            run_loop.runMode_beforeDate_(
+                NSDefaultRunLoopMode, NSDate.dateWithTimeIntervalSinceNow_(0.05)
+            )
+
     def _run_cycle(self, cycle_count: int) -> None:
         """Run one perception-action cycle."""
         try:
@@ -242,15 +281,20 @@ class JungAgent:
             # 2b. Drain speech utterances from Ear
             utterances = self.ear.get_utterances()
             if utterances:
-                print(f"\n{colors.GREEN}[SPEECH]{colors.RESET}")
                 for utterance in utterances:
-                    print(f'  "{utterance}"')
                     # Store speech in semantic memory as interactions
                     self.memory.add_memory(
                         content=f"Human said: {utterance}",
                         intensity=0.7,
                         memory_type="interaction",
                     )
+
+                # Spike drives that trigger the speak action so a response is very likely
+                for drive_name in ("affiliation", "recognition", "curiosity"):
+                    if drive_name in self.drive_system.drives:
+                        drive = self.drive_system.drives[drive_name]
+                        drive.demand = min(1.0, drive.demand + 0.6)
+                        drive.urgency = max(drive.urgency, 0.9)
 
             # 3. Update drives
             now = time.time()
@@ -312,9 +356,14 @@ class JungAgent:
                     memory_type="thought",
                 )
 
-            # 11. Run meta-cognitive reflection periodically
+            # 11. Run meta-cognitive reflection periodically (offloaded to pool)
             if now - self._last_reflection_time >= self._reflection_interval:
-                reflection = self.metacognition.reflect(drive_state)
+                reflect_future = get_executor().submit(self.metacognition.reflect, drive_state)
+                try:
+                    self._pump_until_done(reflect_future)
+                    reflection = reflect_future.result()
+                except TimeoutError:
+                    reflection = ""
                 if reflection:
                     print(f"\n{colors.DIM}[META] {reflection}{colors.RESET}")
                 self._last_reflection_time = now
@@ -322,9 +371,6 @@ class JungAgent:
             # 12. Log and speak stream
             if self.config.log_stream:
                 self._log_stream(segments)
-
-            # Speak the internal monologue
-            self.voice.speak_stream(segments)
 
             # 13. Print harmony score
             print(
@@ -360,10 +406,17 @@ class JungAgent:
                 if action.type not in proposed_types:
                     final_actions.append(action)
 
-            # Add LLM-proposed actions
-            final_actions.extend(parsed.actions)
+            # Add LLM-proposed actions, synthesizing speak text from mediated thought
+            for action in parsed.actions:
+                if action.type == "speak" and mediated_thought:
+                    action.params["text"] = mediated_thought
+                final_actions.append(action)
 
-            # 14. Announce and execute actions
+            # Auto-inject speak when dialogue produced a mediated thought
+            if mediated_thought and not any(a.type == "speak" for a in final_actions):
+                final_actions.append(Action(type="speak", params={"text": mediated_thought}))
+
+            # 14. Execute actions
             if final_actions:
                 print(f"\n{colors.YELLOW}[ACTIONS]{colors.RESET}")
                 for i, action in enumerate(final_actions, 1):
@@ -379,7 +432,6 @@ class JungAgent:
                         print(f"  {i}. {action.type}({params_str}){source}")
                     else:
                         print(f"  {i}. {action.type}(){source}")
-                self.voice.announce_actions(final_actions)
             else:
                 print(f"\n{colors.YELLOW}[ACTIONS]{colors.RESET} (none)")
 
@@ -388,8 +440,7 @@ class JungAgent:
             # 15. Satisfy drives from action results
             self.drive_system.satisfy_from_results(self._last_action_results)
 
-            # 16. Speak what was seen/heard
-            self.voice.speak_perceptions(self._last_action_results)
+            # 16. (Speech happens only via speak action with ego-mediated text)
 
             # 17. Log action results with full details
             if self._last_action_results:
@@ -437,7 +488,7 @@ class JungAgent:
             traceback.print_exc()
 
     def _query_psyche(self, perception: str) -> str:
-        """Query the psyche model."""
+        """Query the psyche model (offloaded to thread pool)."""
         # Add perception to messages
         self._messages.append(ChatMessage(role="user", content=perception))
 
@@ -446,14 +497,16 @@ class JungAgent:
             # Keep system message + last N exchanges
             self._messages = [self._messages[0]] + self._messages[-(self._max_history * 2) :]
 
-        # Query model with retry logic
+        # Query model with retry logic, offloaded to pool
         try:
-            response = chat_with_retry(
+            future = submit_chat(
                 model=self.config.model,
                 messages=self._messages,
             )
+            self._pump_until_done(future)
+            response = future.result()
             assistant_message: str = response["message"]["content"]
-        except LLMError as e:
+        except (LLMError, TimeoutError) as e:
             # Remove the failed perception from history
             self._messages.pop()
             print(f"{colors.RED}[LLM ERROR]{colors.RESET} {e}")

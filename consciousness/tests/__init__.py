@@ -1,1 +1,0 @@
-"""Socio-Psi test suite."""

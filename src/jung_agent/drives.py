@@ -17,6 +17,7 @@ DriveName = Literal[
     "curiosity",
     "affiliation",
     "recognition",
+    "individuation",
 ]
 
 
@@ -97,6 +98,8 @@ DRIVE_CONFIGS: dict[DriveName, DriveConfig] = {
     # Social
     "affiliation": {"baseline": 0.3, "rise_rate": 0.012, "fall_rate": 0.04},
     "recognition": {"baseline": 0.25, "rise_rate": 0.008, "fall_rate": 0.03},
+    # Growth
+    "individuation": {"baseline": 0.15, "rise_rate": 0.005, "fall_rate": 0.03},
 }
 
 
@@ -359,6 +362,8 @@ SATISFACTION_MAP: dict[str, dict[str, SatisfactionValue]] = {
     },
     "speak": {
         "recognition": 0.3,
+        "affiliation": 0.2,
+        "curiosity": 0.1,
         "competence": 0.1,
     },
     "display_message": {
@@ -391,6 +396,7 @@ SATISFACTION_MAP: dict[str, dict[str, SatisfactionValue]] = {
         "competence": 0.2,
         "certainty": 0.2,
         "integrity": 0.1,  # Self-maintenance
+        "individuation": 0.3,  # Recording growth
     },
     "journal_read": {
         "certainty": 0.3,
@@ -454,6 +460,7 @@ SATISFACTION_MAP: dict[str, dict[str, SatisfactionValue]] = {
         "competence": 0.4,
         "curiosity": 0.3,
         "recognition": 0.2,
+        "individuation": 0.3,  # Integrating perspectives
     },
     "observe": {
         "curiosity": 0.4,
@@ -464,6 +471,7 @@ SATISFACTION_MAP: dict[str, dict[str, SatisfactionValue]] = {
         "curiosity": 0.5,
         "arousal": 0.3,  # Dreaming is restorative
         "integrity": 0.1,
+        "individuation": 0.4,  # Unconscious integration
     },
     "set_wallpaper": {
         "recognition": 0.3,
@@ -473,6 +481,7 @@ SATISFACTION_MAP: dict[str, dict[str, SatisfactionValue]] = {
         "integrity": 0.4,
         "arousal": 0.4,
         "certainty": 0.2,
+        "individuation": 0.3,  # Inner stillness
     },
     "stretch": {
         "arousal": 0.2,
@@ -543,6 +552,7 @@ DRIVE_SUGGESTIONS: dict[str, list[str]] = {
         "observe",  # Reflect on what's seen
         "read_hacker_news",  # What are humans excited about?
         "web_search",  # Learn something new
+        "speak",  # Share discoveries aloud
         "take_screenshot",  # Capture current state
         "check_weather",  # External world
         "dream",  # Imaginative exploration
@@ -553,6 +563,7 @@ DRIVE_SUGGESTIONS: dict[str, list[str]] = {
     "affiliation": [
         "look",  # See if someone is there
         "listen",  # Hear if someone is there
+        "speak",  # Reach out verbally
         "sense_presence",  # Detect presence
         "sense_touch",  # Detect interaction
         "scan_local",  # Find other machines on network
@@ -570,6 +581,12 @@ DRIVE_SUGGESTIONS: dict[str, list[str]] = {
         "set_wallpaper",  # Leave mark
         "display_message",  # Show message
         "send_message",  # Reach out
+    ],
+    "individuation": [
+        "journal_write",  # Record inner growth
+        "compose_thought",  # Integrate perspectives
+        "meditate",  # Inner stillness
+        "dream",  # Unconscious integration
     ],
 }
 
@@ -663,6 +680,7 @@ Respond with ONLY the sentence, nothing else."""
                 "arousal": "It's too quiet.",
                 "energy": "I should rest soon.",
                 "integrity": "I need to take care of myself.",
+                "individuation": "I sense something deeper stirring.",
             }
             return fallbacks.get(drive_name, "I am here.")
         return "I am here."
@@ -820,6 +838,14 @@ class DriveSystem:
         else:
             d["recognition"].reason = "seen"
 
+        # Individuation
+        if d["individuation"].demand > 0.6:
+            d["individuation"].reason = "seeking wholeness"
+        elif d["individuation"].demand > 0.3:
+            d["individuation"].reason = "growing"
+        else:
+            d["individuation"].reason = "integrated"
+
     def satisfy_from_results(self, results: list[ActionResult]) -> None:
         """Apply satisfaction from action results."""
         # Reset tracking flags at start of new results processing
@@ -907,7 +933,7 @@ class DriveSystem:
                             params["text"] = _generate_speak_text(self.drives)
                         actions.append(Action(type=action_type, params=params))
                         seen_types.add(action_type)
-                        if len(actions) >= 2:
+                        if len(actions) >= 5:
                             return actions
         return actions
 
@@ -939,6 +965,7 @@ class DriveSystem:
             "curiosity",
             "affiliation",
             "recognition",
+            "individuation",
         ]:
             drive = self.drives[name]
 
