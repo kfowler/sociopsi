@@ -65,18 +65,28 @@ def _get_best_voice(language: str = "en-US") -> tuple[str | None, str]:
         return (None, "default")
 
 
-def speak(text: str, voice: str | None = None, rate: int = 200) -> dict[str, Any]:
+def speak(text: str, voice: str | None = None, rate: int | None = None) -> dict[str, Any]:
     """Speak text aloud via the voice queue (non-blocking) or directly (blocking fallback).
+
+    Uses the holistic self voice by default.
 
     Args:
         text: The text to speak
-        voice: Optional voice name. If not specified, uses default voice.
-        rate: Speech rate in words per minute (default 200)
+        voice: Optional voice name. If not specified, uses the self voice.
+        rate: Speech rate in words per minute. If not specified, uses config rate.
     """
-    from jung_agent.voice import queue_speech
+    from jung_agent.voice import get_voice, queue_speech
+
+    # Use self voice and config rate as defaults
+    v = get_voice()
+    if v is not None:
+        voice = voice or v.config.voice_self
+        rate = rate or v.config.voice_rate
+
+    speech_rate = rate or 200
 
     # Try to use the voice queue (non-blocking)
-    if queue_speech(text, voice, rate):
+    if queue_speech(text, voice, speech_rate):
         return {
             "spoken": True,
             "queued": True,
@@ -85,7 +95,7 @@ def speak(text: str, voice: str | None = None, rate: int = 200) -> dict[str, Any
         }
 
     # Fallback: speak directly (blocking) if no voice instance
-    return _speak_direct(text, voice, rate)
+    return _speak_direct(text, voice, speech_rate)
 
 
 def _speak_direct(text: str, voice: str | None = None, rate: int = 200) -> dict[str, Any]:

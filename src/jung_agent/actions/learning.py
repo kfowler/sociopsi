@@ -121,19 +121,13 @@ def web_search(query: str) -> dict[str, Any]:
     # Generate witty summary using LLM
     summary = _summarize_search_results(query, raw_results)
 
-    # Speak the search results summary
-    from jung_agent.actions import communication
-
-    communication.speak(summary)
-
     return {
         "query": query,
         "source": source,
         "results": raw_results,
         "count": len(raw_results),
         "summary": summary,
-        "spoken": True,
-        "description": summary[:100] + "..." if len(summary) > 100 else summary,
+        "description": summary,
     }
 
 
@@ -172,8 +166,6 @@ Speak naturally, as if sharing an interesting discovery with a friend."""
 
 def read_hacker_news(count: int = 10) -> dict[str, Any]:
     """Read top Hacker News stories and summarize the most interesting ones."""
-    from jung_agent.actions import communication
-
     try:
         # Fetch top story IDs
         result = subprocess.run(
@@ -215,15 +207,11 @@ def read_hacker_news(count: int = 10) -> dict[str, Any]:
         # Generate witty summary
         summary = _summarize_hacker_news(stories)
 
-        # Speak the interesting bits
-        communication.speak(summary)
-
         return {
             "stories": stories,
             "count": len(stories),
             "summary": summary,
-            "spoken": True,
-            "description": f"Read {len(stories)} stories from Hacker News",
+            "description": f"Read {len(stories)} stories from Hacker News. {summary}",
         }
 
     except Exception as e:

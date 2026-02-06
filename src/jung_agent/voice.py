@@ -9,6 +9,7 @@ import logging
 import re
 import threading
 from collections import deque
+from collections.abc import Callable
 from dataclasses import dataclass
 from threading import Event
 from typing import Self
@@ -74,6 +75,7 @@ class SpeechQueueDelegate(NSObject):
         self._queue: deque[SpeechItem] = deque()
         self._synthesizers: dict[str, NSSpeechSynthesizer] = {}
         self._default_voice: str = ""
+        self._on_queue_empty: Callable[[], None] | None = None
         return self
 
     def setQueue_(self, queue: deque[SpeechItem]) -> None:  # noqa: N802
@@ -87,6 +89,9 @@ class SpeechQueueDelegate(NSObject):
 
     def setDefaultVoice_(self, voice: str) -> None:  # noqa: N802
         self._default_voice = voice
+
+    def setOnQueueEmpty_(self, callback: Callable[[], None] | None) -> None:  # noqa: N802
+        self._on_queue_empty = callback
 
     def speechSynthesizer_didFinishSpeaking_(  # noqa: N802
         self, sender: NSSpeechSynthesizer, finished_speaking: bool
@@ -104,6 +109,8 @@ class SpeechQueueDelegate(NSObject):
                 synth.startSpeakingString_(item.text)
         else:
             self._finished_event.set()
+            if self._on_queue_empty is not None:
+                self._on_queue_empty()
 
 
 # ----------------------------
@@ -134,6 +141,10 @@ class Voice:
         self._synthesizers: dict[str, NSSpeechSynthesizer] = {}
         self._delegate: SpeechQueueDelegate | None = None
         self._voice_ids: dict[str, str] = {}  # voice name -> voice ID
+
+        # Callbacks for speaking state changes (used to mute/unmute ear)
+        self._on_speak_start: Callable[[], None] | None = None
+        self._on_speak_end: Callable[[], None] | None = None
 
         # Voice mapping for components
         self._component_voices: dict[PsycheComponent, str] = {
@@ -176,6 +187,7 @@ class Voice:
         delegate.setSynthesizers_(self._synthesizers)
         delegate.setFinishedEvent_(self._finished_event)
         delegate.setDefaultVoice_(self.config.voice_default)
+        delegate.setOnQueueEmpty_(self._on_speak_end)
         self._delegate = delegate
 
         # Set delegate on all synthesizers
@@ -327,6 +339,10 @@ class Voice:
         """Start speaking the next item in the queue."""
         if not self._queue:
             return
+
+        # Notify that speaking is starting (mute ear)
+        if self._on_speak_start is not None and not self._any_speaking():
+            self._on_speak_start()
 
         item = self._queue.popleft()
         self._finished_event.clear()

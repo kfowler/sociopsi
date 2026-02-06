@@ -5,6 +5,7 @@ persist longer. Semantic search allows finding relevant memories by meaning.
 """
 
 import logging
+import random
 from dataclasses import dataclass, field
 from math import exp
 from time import time
@@ -51,6 +52,7 @@ class Memory:
     emotional_valence: float = 0.0  # -1.0 (negative) to 1.0 (positive)
     memory_type: str = "thought"  # thought, perception, action, interaction
     embedding: np.ndarray | None = None
+    weight: float = 1.0  # recall weight, modified by meditation
 
     # Decay parameters
     base_decay_rate: float = 0.001  # per second
@@ -192,6 +194,29 @@ class SemanticMemory:
         """
         sorted_memories = sorted(self.memories, key=lambda m: m.current_strength(), reverse=True)
         return sorted_memories[:count]
+
+    def sample_weighted(self, count: int = 3) -> list[Memory]:
+        """Sample memories randomly, weighted by weight * current_strength.
+
+        Higher-weight memories are more likely to surface. Returns up to
+        *count* unique memories without replacement.
+        """
+        if not self.memories:
+            return []
+        weights = [max(m.weight * m.current_strength(), 1e-9) for m in self.memories]
+        k = min(count, len(self.memories))
+        indices = []
+        pool = list(range(len(self.memories)))
+        pool_weights = list(weights)
+        for _ in range(k):
+            chosen = random.choices(pool, weights=pool_weights, k=1)[0]
+            idx_in_pool = pool.index(chosen)
+            indices.append(chosen)
+            pool.pop(idx_in_pool)
+            pool_weights.pop(idx_in_pool)
+            if not pool:
+                break
+        return [self.memories[i] for i in indices]
 
     def search_similar(self, query: str, count: int = 5) -> list[tuple[Memory, float]]:
         """Search for memories similar to query using embeddings.

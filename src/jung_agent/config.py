@@ -254,8 +254,18 @@ class AgentConfig:
     model settings, heartbeat timing, thresholds, file paths, and voice settings.
 
     Attributes:
-        model: Ollama model name. Options: "jung", "jung-mid", "jung-small".
-            Default: "jung-mid".
+        llm_provider: LLM backend for the psyche action-selection query.
+            "ollama" uses the local Ollama model; "anthropic" uses the
+            Anthropic API (requires ANTHROPIC_API_KEY env var).
+            Archetype voices, ego, and creative actions always use Ollama.
+            Default: "ollama".
+
+        llm_anthropic_model: Anthropic model ID when llm_provider="anthropic".
+            Default: "claude-haiku-4-5-20251001".
+
+        model: Ollama model name. Used for archetype voices, ego mediation,
+            creative actions, vision (llava), and psyche query when
+            llm_provider="ollama". Default: "jung-mid".
 
         modules: List of enabled psyche modules. Valid values:
             "somatic", "archetypes", "imago", "individuation".
@@ -346,7 +356,12 @@ class AgentConfig:
             Default: True.
     """
 
-    # Model settings
+    # LLM provider for psyche query: "ollama" or "anthropic" (requires ANTHROPIC_API_KEY)
+    llm_provider: str = "ollama"
+    llm_anthropic_model: str = "claude-haiku-4-5-20251001"
+    llm_log_prompts: bool = False
+
+    # Ollama model name (used when llm_provider="ollama", and always for vision/llava)
     model: str = "jung-mid"
 
     # Enabled modules

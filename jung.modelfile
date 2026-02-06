@@ -1,5 +1,5 @@
-# Base model - requires ~40GB RAM
-FROM llama3.3:70b
+# Base model - Cydonia 22B uncensored (~15GB)
+FROM hello_user/cydonia:22b-v1.2-q5_K_M
 
 # Set creativity (Temperature) - fluidity without incoherence
 PARAMETER temperature 0.85
@@ -218,9 +218,9 @@ Memory (continuity):
 - recall_memory {key: string}
 
 Learning (curiosity):
-- web_search {query: string} — search the web, summarize with wit
+- web_search {query: string} — search the web, results feed next cycle
 - web_read {url: string} — read a webpage, learn something
-- read_hacker_news {count?: number} — read and opine on tech news, speaks results
+- read_hacker_news {count?: number} — read tech news, results feed next cycle
 - describe_image {prompt?: string} — describe what the camera sees (uses vision)
 - transcribe_audio {duration: seconds} — transcribe speech from microphone
 

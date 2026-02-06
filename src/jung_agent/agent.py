@@ -21,7 +21,16 @@ from jung_agent.dialogue import ArchetypalDialogue
 from jung_agent.drives import DriveSystem
 from jung_agent.ear import Ear
 from jung_agent.event_bus import get_event_bus
-from jung_agent.llm import LLMError, chat_with_retry, get_executor, shutdown_executor, submit_chat
+from jung_agent.llm import (
+    LLMError,
+    chat_with_retry,
+    get_executor,
+    shutdown_executor,
+    submit_chat,
+)
+from jung_agent.llm import (
+    configure as configure_llm,
+)
 from jung_agent.logger import PsycheLogger
 from jung_agent.memory import SemanticMemory
 from jung_agent.metacognition import MetaCognition
@@ -58,6 +67,9 @@ class JungAgent:
     def __init__(self, config: AgentConfig | None = None) -> None:
         self.config = config or AgentConfig()
 
+        # Configure LLM (sets Anthropic model name for when provider="anthropic" is used)
+        configure_llm(self.config.llm_anthropic_model, self.config.llm_log_prompts)
+
         # Initialize event bus
         self.event_bus = get_event_bus()
 
@@ -78,6 +90,11 @@ class JungAgent:
 
         # Semantic memory with vector embeddings
         self.memory = SemanticMemory(max_memories=100)
+
+        # Give creative actions access to semantic memory (for meditation)
+        from jung_agent.actions.creative import set_semantic_memory
+
+        set_semantic_memory(self.memory)
 
         # Meta-cognition for self-reflection
         self.metacognition = MetaCognition(
@@ -104,8 +121,19 @@ class JungAgent:
         # Cycle counter
         self._cycle_count: int = 0
 
-        # Load system prompt for action generation (still used for actions)
-        self._system_prompt = load_system_prompt(self.config.model)
+        # Load system prompt for action generation
+        if self.config.llm_provider == "anthropic":
+            self._system_prompt = (
+                "Read the somatic sensor data and drive levels. "
+                "Write 2-3 short sentences interpreting the state, "
+                "labeled by component (shadow, anima, persona, self). "
+                "Then select 0-3 actions from the available list. "
+                "Output ONLY valid JSON, nothing else: "
+                '{"stream":[{"component":"...","text":"..."}],'
+                '"actions":[{"type":"action_name"}]}'
+            )
+        else:
+            self._system_prompt = load_system_prompt(self.config.model)
 
         # Few-shot examples as proper JSON
         example1_user = "[SOMATIC: battery=80%, cpu=20%, thermal=cool, ram=40%, network=connected]"
@@ -162,7 +190,11 @@ class JungAgent:
         signal.signal(signal.SIGINT, self._handle_shutdown)
         signal.signal(signal.SIGTERM, self._handle_shutdown)
 
-        print(f"Jung Agent starting with model: {self.config.model}")
+        print(f"Ollama model: {self.config.model}")
+        if self.config.llm_provider == "anthropic":
+            print(f"Psyche LLM: Anthropic ({self.config.llm_anthropic_model})")
+        else:
+            print(f"Psyche LLM: Ollama ({self.config.model})")
         print(f"Modules enabled: {', '.join(self.config.modules)}")
         if self.config.voice_enabled:
             print(f"Voices @ {self.config.voice_rate} wpm:")
@@ -389,6 +421,26 @@ class JungAgent:
                 drives=drive_perception,
                 utterances=utterances,
             )
+
+            # Enrich perception for Anthropic with monologue and memories
+            if self.config.llm_provider == "anthropic":
+                extra: list[str] = []
+                if segments:
+                    extra.append("")
+                    extra.append("[MONOLOGUE]")
+                    for seg in segments:
+                        extra.append(f"- {seg.component}: {seg.text}")
+                if mediated_thought:
+                    extra.append(f"- ego: {mediated_thought}")
+                sampled_memories = self.memory.sample_weighted(3)
+                if sampled_memories:
+                    extra.append("")
+                    extra.append("[MEMORIES]")
+                    for mem in sampled_memories:
+                        extra.append(f"- ({mem.memory_type}, w={mem.weight:.1f}) {mem.content}")
+                if extra:
+                    perception += "\n" + "\n".join(extra)
+
             response = self._query_psyche(perception)
             parsed = parse_response(response)
 
@@ -502,6 +554,7 @@ class JungAgent:
             future = submit_chat(
                 model=self.config.model,
                 messages=self._messages,
+                provider=self.config.llm_provider,
             )
             self._pump_until_done(future)
             response = future.result()
@@ -661,6 +714,7 @@ def run_single(config: AgentConfig | None = None, perception: str | None = None)
         response = chat_with_retry(
             model=config.model,
             messages=[{"role": "user", "content": perception}],
+            provider=config.llm_provider,
         )
         content = response["message"]["content"]
 

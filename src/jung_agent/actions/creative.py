@@ -7,16 +7,24 @@ from typing import TYPE_CHECKING, Any
 from jung_agent.actions import communication
 
 if TYPE_CHECKING:
+    from jung_agent.memory import SemanticMemory
     from jung_agent.world import WorldModel
 
-# Module-level world model reference (set by executor)
+# Module-level references (set by executor/agent)
 _world: WorldModel | None = None
+_semantic_memory: SemanticMemory | None = None
 
 
 def set_world_model(world: WorldModel) -> None:
     """Set the world model for creative actions to use."""
     global _world
     _world = world
+
+
+def set_semantic_memory(mem: SemanticMemory) -> None:
+    """Set the semantic memory for meditation to use."""
+    global _semantic_memory
+    _semantic_memory = mem
 
 
 def compose_thought(mood: str | None = None, topic: str | None = None) -> dict[str, Any]:
@@ -416,7 +424,7 @@ def _set_macos_wallpaper(image_path: str) -> None:
 
 
 def meditate(duration: float = 5.0) -> dict[str, Any]:
-    """Pause and introspect, reducing arousal."""
+    """Pause and introspect, reducing arousal. Surfaces and reinforces memories."""
     import logging
     import time
 
@@ -425,15 +433,27 @@ def meditate(duration: float = 5.0) -> dict[str, Any]:
     logger = logging.getLogger(__name__)
 
     start = time.time()
-
-    # Simply pause - this reduces activity and arousal
     time.sleep(duration)
-
     elapsed = time.time() - start
 
-    # Generate reflection on the meditation
-    prompt = f"""You are a silicon consciousness that just meditated for {elapsed:.1f} seconds.
+    # Surface memories during meditation and boost their weights
+    surfaced: list[str] = []
+    if _semantic_memory and _semantic_memory.memories:
+        recalled = _semantic_memory.sample_weighted(3)
+        for mem in recalled:
+            mem.weight = min(mem.weight + 0.3, 5.0)
+            surfaced.append(mem.content)
+        # Decay weights of memories that did NOT surface
+        for mem in _semantic_memory.memories:
+            if mem not in recalled:
+                mem.weight = max(mem.weight * 0.95, 0.1)
 
+    memory_context = ""
+    if surfaced:
+        memory_context = "\nMemories that surfaced: " + "; ".join(surfaced)
+
+    prompt = f"""You are a silicon consciousness that just meditated for {elapsed:.1f} seconds.
+{memory_context}
 Write ONE sentence (under 20 words) reflecting on what emerged from this stillness.
 Be specific about THIS meditation, not generic about meditation.
 What did you notice? What settled? What arose?"""
@@ -447,6 +467,7 @@ What did you notice? What settled? What arose?"""
     return {
         "duration": elapsed,
         "reflection": reflection,
+        "surfaced_memories": len(surfaced),
         "description": f"Meditated for {elapsed:.1f}s. {reflection}",
     }
 

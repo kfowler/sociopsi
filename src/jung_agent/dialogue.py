@@ -5,10 +5,13 @@ that represents the psychological dynamics of the agent.
 """
 
 import logging
+from collections.abc import Callable
+from concurrent.futures import Future
 from typing import Any
 
 from jung_agent.archetypes import Anima, Archetype, Ego, Persona, SelfArchetype, Shadow
 from jung_agent.event_bus import EventBus, get_event_bus
+from jung_agent.llm import get_executor
 from jung_agent.types import PsycheComponent, StreamSegment
 
 logger = logging.getLogger(__name__)
@@ -25,15 +28,19 @@ class ArchetypalDialogue:
         self,
         model: str = "jung-mid",
         event_bus: EventBus | None = None,
+        pump_fn: Callable[..., None] | None = None,
     ) -> None:
         """Initialize archetypal dialogue system.
 
         Args:
             model: Ollama model to use for LLM generation
             event_bus: Event bus for publishing dialogue events (uses global if None)
+            pump_fn: Callable that waits on futures while pumping NSRunLoop.
+                     If None, futures are awaited with blocking result() calls.
         """
         self.model = model
         self.event_bus = event_bus or get_event_bus()
+        self._pump_fn = pump_fn
 
         # Initialize archetypes
         self.archetypes: dict[str, Archetype] = {
@@ -70,16 +77,30 @@ class ArchetypalDialogue:
         if active_archetypes is None:
             active_archetypes = list(self.archetypes.keys())
 
-        # Generate voices from each active archetype
-        archetypal_voices: dict[str, str] = {}
-        segments: list[StreamSegment] = []
-
+        # Submit all archetype voice generation to pool in parallel
+        voice_futures: dict[str, Future[str]] = {}
         for archetype_name in active_archetypes:
             if archetype_name not in self.archetypes:
                 continue
-
             archetype = self.archetypes[archetype_name]
-            voice = archetype.generate_voice(drive_state, context)
+            voice_futures[archetype_name] = get_executor().submit(
+                archetype.generate_voice, drive_state, context
+            )
+
+        # Wait for all voice futures (pumping NSRunLoop if available)
+        if self._pump_fn is not None:
+            self._pump_fn(*voice_futures.values())
+        else:
+            # Blocking fallback for tests
+            for f in voice_futures.values():
+                f.result()
+
+        # Collect results
+        archetypal_voices: dict[str, str] = {}
+        segments: list[StreamSegment] = []
+
+        for archetype_name, future in voice_futures.items():
+            voice = future.result()
 
             if voice:
                 archetypal_voices[archetype_name] = voice
@@ -101,12 +122,17 @@ class ArchetypalDialogue:
         # Store for context
         self.last_voices = archetypal_voices
 
-        # Calculate harmony between voices
+        # Calculate harmony between voices (non-LLM heuristic, main thread)
         harmony = self.ego.calculate_harmony(archetypal_voices)
         self.last_harmony = harmony
 
-        # Ego mediates the voices
-        mediated_thought = self.ego.mediate(archetypal_voices, drive_state)
+        # Ego mediates the voices (offloaded to pool)
+        mediation_future = get_executor().submit(self.ego.mediate, archetypal_voices, drive_state)
+        if self._pump_fn is not None:
+            self._pump_fn(mediation_future)
+        else:
+            mediation_future.result()
+        mediated_thought = mediation_future.result()
 
         # Develop ego based on integration quality
         self.ego.develop(harmony)

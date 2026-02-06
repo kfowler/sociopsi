@@ -3,7 +3,7 @@
 from unittest.mock import MagicMock, patch
 
 from jung_agent.config import AgentConfig
-from jung_agent.ear import Ear
+from jung_agent.ear import BENIGN_ERROR_CODES, Ear, MAX_CONSECUTIVE_ERRORS
 
 
 class TestEarInit:
@@ -213,3 +213,86 @@ class TestPerceptionIntegration:
         )
 
         assert "[SPEECH]" not in result
+
+
+class TestErrorHandling:
+    """Tests for persistent error detection and graceful shutdown."""
+
+    def _make_error(self, code: int = 1, description: str = "test error") -> MagicMock:
+        """Create a mock NSError."""
+        error = MagicMock()
+        error.code.return_value = code
+        error.localizedDescription.return_value = description
+        return error
+
+    def test_benign_errors_reset_counter(self) -> None:
+        """Test that benign error codes (timeout, cancel) reset the error counter."""
+        config = AgentConfig(ear_enabled=False)
+        ear = Ear(config)
+        ear._running = True
+        ear._consecutive_errors = 2
+
+        for code in BENIGN_ERROR_CODES:
+            ear._consecutive_errors = 2
+            error = self._make_error(code=code)
+            ear._recognition_result_handler(None, error)
+            assert ear._consecutive_errors == 0
+
+    def test_non_benign_errors_increment_counter(self) -> None:
+        """Test that non-benign errors increment the consecutive counter."""
+        config = AgentConfig(ear_enabled=False)
+        ear = Ear(config)
+        ear._running = True
+
+        error = self._make_error(code=999, description="Siri and Dictation are disabled")
+        ear._recognition_result_handler(None, error)
+
+        assert ear._consecutive_errors == 1
+        assert ear._running is True  # Not yet disabled
+
+    def test_persistent_errors_disable_ear(self) -> None:
+        """Test that MAX_CONSECUTIVE_ERRORS non-benign errors disable the ear."""
+        config = AgentConfig(ear_enabled=False)
+        ear = Ear(config)
+        ear._running = True
+        ear._enabled = True
+
+        error = self._make_error(code=999, description="Siri and Dictation are disabled")
+
+        for _ in range(MAX_CONSECUTIVE_ERRORS):
+            ear._recognition_result_handler(None, error)
+
+        assert ear._enabled is False
+        assert ear._running is False
+
+    def test_successful_result_resets_error_counter(self) -> None:
+        """Test that a successful final result resets the error counter."""
+        config = AgentConfig(ear_enabled=False)
+        ear = Ear(config)
+        ear._running = True
+        ear._consecutive_errors = 2
+
+        result = MagicMock()
+        result.isFinal.return_value = True
+        result.bestTranscription.return_value.formattedString.return_value = "hello"
+
+        ear._recognition_result_handler(result, None)
+
+        assert ear._consecutive_errors == 0
+        assert "hello" in list(ear._utterances)
+
+    def test_partial_result_does_not_reset_counter(self) -> None:
+        """Test that partial results don't reset the error counter."""
+        config = AgentConfig(ear_enabled=False)
+        ear = Ear(config)
+        ear._running = True
+        ear._consecutive_errors = 2
+
+        result = MagicMock()
+        result.isFinal.return_value = False
+        result.bestTranscription.return_value.formattedString.return_value = "hel"
+
+        ear._recognition_result_handler(result, None)
+
+        assert ear._consecutive_errors == 2
+        assert ear._partial == "hel"
