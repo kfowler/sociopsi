@@ -78,8 +78,12 @@ class JungAgent:
         # Configure LLM (sets Anthropic model name for when provider="anthropic" is used)
         configure_llm(self.config.llm_anthropic_model, self.config.llm_log_prompts)
 
-        # Initialize event bus
+        # Initialize event bus with async dispatch configuration
         self.event_bus = get_event_bus()
+        # Survival/compulsive events skip queue — dispatch immediately inline
+        self.event_bus.set_priority("survival.battery_critical", "survival.thermal_critical")
+        # Somatic updates coalesce — only latest value dispatched
+        self.event_bus.set_coalesce("somatic.update")
 
         # Core subsystems
         self.executor = ActionExecutor(self.config)
@@ -192,6 +196,7 @@ class JungAgent:
     def start(self) -> None:
         """Start the agent loop."""
         self._running = True
+        self.event_bus.start()
         self.event_collector.start()
 
         # Wire voice speaking state to ear mute/unmute to prevent hearing own speech
@@ -247,6 +252,7 @@ class JungAgent:
         self.ear.stop()
         self.event_collector.stop()
         self.voice.stop()
+        self.event_bus.stop()
         shutdown_executor(wait=False)
         print("\nSocio-Psi stopped.")
 
