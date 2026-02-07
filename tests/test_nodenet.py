@@ -490,7 +490,7 @@ class TestIntegrationScenario:
         net = NodeNet(max_nodes=50)
 
         for i in range(100):
-            net.activate_concepts([f"concept_{i}", f"concept_{i+1}"], amount=0.5)
+            net.activate_concepts([f"concept_{i}", f"concept_{i + 1}"], amount=0.5)
             net.update()
 
         assert len(net.nodes) <= 50

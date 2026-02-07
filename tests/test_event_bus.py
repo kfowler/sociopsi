@@ -50,7 +50,10 @@ class TestSynchronousFallback:
 
     def test_unsubscribe(self, bus: EventBus):
         received = []
-        handler = lambda d: received.append(d)
+
+        def handler(d):
+            received.append(d)
+
         bus.subscribe("test.event", handler)
         bus.unsubscribe("test.event", handler)
         bus.publish("test.event", {"x": 1})
@@ -93,6 +96,7 @@ class TestAsyncDispatch:
     def test_async_dispatch(self, bus: EventBus):
         received = []
         event = threading.Event()
+
         def handler(d: dict) -> None:
             received.append(d)
             event.set()
@@ -123,7 +127,9 @@ class TestAsyncDispatch:
             bus.publish("test.event", {"x": 1})
             publish_time = time.monotonic() - start
             # publish should return well under 100ms (the handler sleep time)
-            assert publish_time < 0.05, f"publish() took {publish_time:.3f}s, should be non-blocking"
+            assert publish_time < 0.05, (
+                f"publish() took {publish_time:.3f}s, should be non-blocking"
+            )
             # But handler should eventually be called
             assert handler_done.wait(timeout=2.0)
         finally:

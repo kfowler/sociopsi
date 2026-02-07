@@ -190,10 +190,10 @@ class TestExecuteAllMixed:
         executor._handlers["journal_write"] = lambda **kw: {"type": "journal"}
 
         actions = [
-            Action(type="speak", params={"text": "hi"}),       # sequential
-            Action(type="check_battery"),                        # parallel
-            Action(type="journal_write", params={"entry": "x"}), # sequential
-            Action(type="web_search", params={"query": "q"}),   # parallel
+            Action(type="speak", params={"text": "hi"}),  # sequential
+            Action(type="check_battery"),  # parallel
+            Action(type="journal_write", params={"entry": "x"}),  # sequential
+            Action(type="web_search", params={"query": "q"}),  # parallel
         ]
         results = executor.execute_all(actions)
 
@@ -303,7 +303,7 @@ class TestExecuteAllErrorHandling:
 
         assert len(results) == 2
         assert not results[0].success  # web_search failed
-        assert results[1].success       # speak still ran
+        assert results[1].success  # speak still ran
 
 
 class TestConstants:

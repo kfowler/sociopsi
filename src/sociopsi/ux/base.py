@@ -171,9 +171,7 @@ class UXRenderer(ABC):
     # ------------------------------------------------------------------
 
     @abstractmethod
-    def render_heartbeat_change(
-        self, old_mode: str, new_mode: str, interval: float
-    ) -> None:
+    def render_heartbeat_change(self, old_mode: str, new_mode: str, interval: float) -> None:
         """Render a heartbeat mode/interval change.
 
         Args:

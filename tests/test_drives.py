@@ -519,6 +519,8 @@ class TestDriveUrgencyEvents:
 
         # Find the resolved event for curiosity
         resolved = [
-            (et, d) for et, d in published if et == "drive.urgency_resolved" and d["drive"] == "curiosity"
+            (et, d)
+            for et, d in published
+            if et == "drive.urgency_resolved" and d["drive"] == "curiosity"
         ]
         assert len(resolved) == 1

@@ -93,9 +93,7 @@ class NodeNet:
             node = self.nodes[key]
             if emotional_valence != 0.0:
                 # Blend emotional valence (weighted toward new input)
-                node.emotional_valence = (
-                    node.emotional_valence * 0.7 + emotional_valence * 0.3
-                )
+                node.emotional_valence = node.emotional_valence * 0.7 + emotional_valence * 0.3
             return node
 
         # Enforce capacity
@@ -147,9 +145,7 @@ class NodeNet:
         self.edges[src_key].append(edge)
         return edge
 
-    def activate(
-        self, concept: str, amount: float = 1.0, emotional_valence: float = 0.0
-    ) -> None:
+    def activate(self, concept: str, amount: float = 1.0, emotional_valence: float = 0.0) -> None:
         """Activate a concept node, injecting energy into the network.
 
         This is the primary input mechanism. Call this when a concept is
@@ -216,9 +212,7 @@ class NodeNet:
         # Apply deltas
         for key, delta in deltas.items():
             if key in self.nodes:
-                self.nodes[key].activation = min(
-                    MAX_ACTIVATION, self.nodes[key].activation + delta
-                )
+                self.nodes[key].activation = min(MAX_ACTIVATION, self.nodes[key].activation + delta)
 
         # Decay all activations
         for node in self.nodes.values():

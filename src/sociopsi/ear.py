@@ -178,9 +178,7 @@ class Ear:
                 if self._renderer is not None:
                     self._renderer.render_speech(text, is_final=True)
                 else:
-                    sys.stdout.write(
-                        f'\r\033[K{colors.GREEN}[SPEECH]{colors.RESET} "{text}"\n'
-                    )
+                    sys.stdout.write(f'\r\033[K{colors.GREEN}[SPEECH]{colors.RESET} "{text}"\n')
                     sys.stdout.flush()
 
                 # Publish on event bus
@@ -197,7 +195,6 @@ class Ear:
                 self._renderer.render_speech(text, is_final=False)
             else:
                 sys.stdout.write(
-                    f"\r\033[K{colors.DIM}[HEARING]{colors.RESET} "
-                    f"{colors.DIM}{text}{colors.RESET}"
+                    f"\r\033[K{colors.DIM}[HEARING]{colors.RESET} {colors.DIM}{text}{colors.RESET}"
                 )
                 sys.stdout.flush()

@@ -158,7 +158,9 @@ class EmotionSystem:
         new_name = dominant.name if dominant else None
         if old_name != new_name:
             self._previous = self._current
-            self._transition_log.append((old_name, new_name, dominant.intensity if dominant else 0.0))
+            self._transition_log.append(
+                (old_name, new_name, dominant.intensity if dominant else 0.0)
+            )
             # Keep log bounded
             if len(self._transition_log) > 50:
                 self._transition_log = self._transition_log[-50:]
@@ -224,7 +226,9 @@ class EmotionSystem:
             "emotion_valence": self.get_valence(),
         }
         if self._all_emotions:
-            ctx["emotions"] = {e.name: e.intensity for e in self._all_emotions if e.intensity >= self.threshold}
+            ctx["emotions"] = {
+                e.name: e.intensity for e in self._all_emotions if e.intensity >= self.threshold
+            }
         if self.had_transition():
             old, new = self.get_last_transition()  # type: ignore[misc]
             ctx["emotion_transition"] = {"from": old, "to": new}

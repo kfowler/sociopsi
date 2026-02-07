@@ -20,7 +20,7 @@ from sociopsi.ux.base import UXRenderer as UXRendererBase
 
 
 def _make_somatic(**kwargs: object) -> SomaticState:
-    defaults = dict(
+    defaults = dict(  # noqa: C408
         battery_percent=80,
         battery_health=95,
         battery_cycles=200,
@@ -47,7 +47,7 @@ class TestUXRendererABC:
     def test_cannot_instantiate_directly(self) -> None:
         try:
             UXRendererBase()  # type: ignore[abstract]
-            assert False, "Should not be able to instantiate ABC"
+            raise AssertionError("Should not be able to instantiate ABC")
         except TypeError:
             pass
 
@@ -180,7 +180,11 @@ class TestConsoleRendererEvents:
     def test_renders_events_with_timestamps(self) -> None:
         renderer = ConsoleRenderer()
         events = [
-            Event(type="app_change", description="Switched to Terminal", timestamp=datetime(2026, 2, 6, 12, 0, 0)),
+            Event(
+                type="app_change",
+                description="Switched to Terminal",
+                timestamp=datetime(2026, 2, 6, 12, 0, 0),
+            ),
         ]
         with patch("sys.stdout", new_callable=StringIO) as out:
             renderer.render_events(events)
@@ -326,7 +330,11 @@ class TestConsoleRendererResults:
     def test_skips_full_data_key(self) -> None:
         renderer = ConsoleRenderer()
         results = [
-            ActionResult(action_type="screenshot", success=True, result={"full_data": b"image", "size": "1920x1080"}),
+            ActionResult(
+                action_type="screenshot",
+                success=True,
+                result={"full_data": b"image", "size": "1920x1080"},
+            ),
         ]
         with patch("sys.stdout", new_callable=StringIO) as out:
             renderer.render_results(results)

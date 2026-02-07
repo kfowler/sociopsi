@@ -105,7 +105,7 @@ class VoiceRenderer(UXRenderer):
                         # Grab the description if present (after status word)
                         desc = " ".join(parts[3:]) if len(parts) > 3 else drive_name
                         urgent.append(desc if desc else drive_name)
-                except (ValueError, IndexError):
+                except ValueError, IndexError:
                     continue
         if urgent:
             self._speak("Feeling: " + ". ".join(urgent) + ".")
@@ -179,9 +179,7 @@ class VoiceRenderer(UXRenderer):
                     if k != "full_data" and isinstance(v, str) and v.strip()
                 }
                 if interesting:
-                    parts = ". ".join(
-                        str(v)[:200] for v in interesting.values()
-                    )
+                    parts = ". ".join(str(v)[:200] for v in interesting.values())
                     self._speak(parts)
             elif not result.success and result.error:
                 self._speak(f"Error in {result.action_type}: {result.error}")
@@ -190,9 +188,7 @@ class VoiceRenderer(UXRenderer):
     # Heartbeat — silent
     # ------------------------------------------------------------------
 
-    def render_heartbeat_change(
-        self, old_mode: str, new_mode: str, interval: float
-    ) -> None:
+    def render_heartbeat_change(self, old_mode: str, new_mode: str, interval: float) -> None:
         pass  # Silent
 
     # ------------------------------------------------------------------

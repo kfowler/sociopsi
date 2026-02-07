@@ -293,7 +293,9 @@ class ActionExecutor:
 
         # Fill any None slots (shouldn't happen, but be safe)
         return [
-            r if r is not None else ActionResult(
+            r
+            if r is not None
+            else ActionResult(
                 action_type=actions[i].type, success=False, error="Action was not executed"
             )
             for i, r in enumerate(results)
@@ -349,9 +351,7 @@ class ActionExecutor:
             try:
                 return future.result(timeout=timeout)
             except TimeoutError:
-                logger.warning(
-                    "Action %s timed out after %.1fs", action.type, timeout
-                )
+                logger.warning("Action %s timed out after %.1fs", action.type, timeout)
                 return ActionResult(
                     action_type=action.type,
                     success=False,

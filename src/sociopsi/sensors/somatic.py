@@ -39,6 +39,7 @@ SLOW_INTERVAL = 30.0
 # Raw sensor helpers (unchanged from previous monolithic gather)
 # ---------------------------------------------------------------------------
 
+
 def get_battery_info() -> tuple[int, int, int, PowerState]:
     """Get battery info via platform backend."""
     backend = get_power_backend()
@@ -98,6 +99,7 @@ def get_uptime() -> int:
 # Backwards-compat: synchronous gather (used by one-shot callers)
 # ---------------------------------------------------------------------------
 
+
 def gather_somatic() -> SomaticState:
     """Gather complete somatic state synchronously.
 
@@ -134,6 +136,7 @@ def gather_somatic() -> SomaticState:
 # ---------------------------------------------------------------------------
 # SomaticPoller: tiered threaded polling with shared state
 # ---------------------------------------------------------------------------
+
 
 def _default_state() -> SomaticState:
     """Return a safe default SomaticState for initialisation."""

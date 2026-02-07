@@ -4,8 +4,6 @@ import threading
 import time
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from sociopsi.sensors.somatic import (
     SomaticPoller,
     _default_state,
@@ -19,14 +17,14 @@ from sociopsi.types import (
     ThermalState,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_state(**overrides) -> SomaticState:
     """Build a SomaticState with sensible defaults, overriding fields."""
-    defaults = dict(
+    defaults = dict(  # noqa: C408
         battery_percent=80,
         battery_health=95,
         battery_cycles=100,
@@ -51,6 +49,7 @@ def _make_state(**overrides) -> SomaticState:
 # _default_state
 # ---------------------------------------------------------------------------
 
+
 class TestDefaultState:
     def test_returns_somatic_state(self):
         s = _default_state()
@@ -68,6 +67,7 @@ class TestDefaultState:
 # ---------------------------------------------------------------------------
 # SomaticPoller: lifecycle
 # ---------------------------------------------------------------------------
+
 
 class TestSomaticPollerLifecycle:
     @patch("sociopsi.sensors.somatic.get_thermal_backend")
@@ -119,9 +119,11 @@ class TestSomaticPollerLifecycle:
     def test_start_is_idempotent(self):
         """Calling start() twice doesn't create extra threads."""
         poller = SomaticPoller(fast_interval=100, medium_interval=100, slow_interval=100)
-        with patch.object(poller, "_poll_fast_once"), \
-             patch.object(poller, "_poll_medium_once"), \
-             patch.object(poller, "_poll_slow_once"):
+        with (
+            patch.object(poller, "_poll_fast_once"),
+            patch.object(poller, "_poll_medium_once"),
+            patch.object(poller, "_poll_slow_once"),
+        ):
             poller.start()
             assert len(poller._threads) == 3
             poller.start()
@@ -131,9 +133,11 @@ class TestSomaticPollerLifecycle:
     def test_stop_clears_threads(self):
         """After stop(), thread list is empty."""
         poller = SomaticPoller(fast_interval=100, medium_interval=100, slow_interval=100)
-        with patch.object(poller, "_poll_fast_once"), \
-             patch.object(poller, "_poll_medium_once"), \
-             patch.object(poller, "_poll_slow_once"):
+        with (
+            patch.object(poller, "_poll_fast_once"),
+            patch.object(poller, "_poll_medium_once"),
+            patch.object(poller, "_poll_slow_once"),
+        ):
             poller.start()
             assert len(poller._threads) == 3
             poller.stop()
@@ -144,6 +148,7 @@ class TestSomaticPollerLifecycle:
 # ---------------------------------------------------------------------------
 # SomaticPoller: snapshot
 # ---------------------------------------------------------------------------
+
 
 class TestSnapshot:
     def test_snapshot_returns_copy(self):
@@ -169,6 +174,7 @@ class TestSnapshot:
 # SomaticPoller: event callbacks
 # ---------------------------------------------------------------------------
 
+
 class TestEventCallbacks:
     def test_network_change_fires_event(self):
         """Network state change fires event callback."""
@@ -177,6 +183,7 @@ class TestEventCallbacks:
 
         # Set initial state with network connected
         from dataclasses import replace
+
         with poller._lock:
             poller._state = replace(poller._state, network_state=NetworkState.CONNECTED)
 
@@ -200,6 +207,7 @@ class TestEventCallbacks:
         poller = SomaticPoller(event_callback=lambda t, d, data: events.append((t, d, data)))
 
         from dataclasses import replace
+
         with poller._lock:
             poller._state = replace(poller._state, battery_percent=15)
 
@@ -209,8 +217,10 @@ class TestEventCallbacks:
         battery.cycles = 100
         battery.power_state = PowerState.BATTERY
 
-        with patch("sociopsi.sensors.somatic.get_power_backend") as mock_power, \
-             patch("sociopsi.sensors.somatic.get_display_backend") as mock_display:
+        with (
+            patch("sociopsi.sensors.somatic.get_power_backend") as mock_power,
+            patch("sociopsi.sensors.somatic.get_display_backend") as mock_display,
+        ):
             mock_power.return_value.get_battery.return_value = battery
             mock_display.return_value.get_lid_state.return_value = LidState.OPEN
 
@@ -226,6 +236,7 @@ class TestEventCallbacks:
         poller = SomaticPoller(event_callback=lambda t, d, data: events.append((t, d, data)))
 
         from dataclasses import replace
+
         with poller._lock:
             poller._state = replace(poller._state, thermal_state=ThermalState.WARM)
 
@@ -250,6 +261,7 @@ class TestEventCallbacks:
         poller = SomaticPoller(event_callback=lambda t, d, data: events.append((t, d, data)))
 
         from dataclasses import replace
+
         with poller._lock:
             poller._state = replace(
                 poller._state,
@@ -264,8 +276,10 @@ class TestEventCallbacks:
         battery.cycles = 100
         battery.power_state = PowerState.AC
 
-        with patch("sociopsi.sensors.somatic.get_power_backend") as mock_power, \
-             patch("sociopsi.sensors.somatic.get_display_backend") as mock_display:
+        with (
+            patch("sociopsi.sensors.somatic.get_power_backend") as mock_power,
+            patch("sociopsi.sensors.somatic.get_display_backend") as mock_display,
+        ):
             mock_power.return_value.get_battery.return_value = battery
             mock_display.return_value.get_lid_state.return_value = LidState.CLOSED
 
@@ -278,6 +292,7 @@ class TestEventCallbacks:
         """Poller without callback doesn't crash on threshold crossings."""
         poller = SomaticPoller()  # No event_callback
         from dataclasses import replace
+
         with poller._lock:
             poller._state = replace(poller._state, network_state=NetworkState.CONNECTED)
 
@@ -295,6 +310,7 @@ class TestEventCallbacks:
 # ---------------------------------------------------------------------------
 # SomaticPoller: error resilience
 # ---------------------------------------------------------------------------
+
 
 class TestErrorResilience:
     def test_fast_poll_survives_exception(self):
@@ -336,6 +352,7 @@ class TestErrorResilience:
 # SomaticPoller: thread safety
 # ---------------------------------------------------------------------------
 
+
 class TestThreadSafety:
     def test_concurrent_reads_and_writes(self):
         """Multiple threads reading snapshots while polls update don't crash."""
@@ -352,6 +369,7 @@ class TestThreadSafety:
 
         def writer():
             from dataclasses import replace
+
             for i in range(200):
                 with poller._lock:
                     poller._state = replace(poller._state, cpu_percent=i % 100)
@@ -370,6 +388,7 @@ class TestThreadSafety:
 # ---------------------------------------------------------------------------
 # Backwards compat: gather_somatic()
 # ---------------------------------------------------------------------------
+
 
 class TestGatherSomatic:
     @patch("sociopsi.sensors.somatic.get_thermal_backend")

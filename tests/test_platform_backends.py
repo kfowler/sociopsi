@@ -12,8 +12,8 @@ from sociopsi.platform.base import (
     NotificationBackend,
     ScreenshotBackend,
     SensorUnavailable,
-    USBDevice,
     ThunderboltDevice,
+    USBDevice,
     VolumeBackend,
 )
 

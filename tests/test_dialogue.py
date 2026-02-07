@@ -227,7 +227,10 @@ class TestDialogueManager:
         with patch.object(
             ArchetypalDialogue,
             "generate_dialogue",
-            side_effect=[ValueError("LLM error"), ([StreamSegment(component="persona", text="ok")], "recovered", 0.6)],
+            side_effect=[
+                ValueError("LLM error"),
+                ([StreamSegment(component="persona", text="ok")], "recovered", 0.6),
+            ],
         ):
             mgr = DialogueManager(model="test", event_bus=bus_instance)
             mgr.FALLBACK_INTERVAL = 0.1

@@ -727,7 +727,7 @@ class DriveSnapshot:
     format_text: str = ""
 
     @staticmethod
-    def from_system(system: "DriveSystem") -> "DriveSnapshot":
+    def from_system(system: DriveSystem) -> DriveSnapshot:
         """Capture a snapshot from a live DriveSystem."""
         return DriveSnapshot(
             drives=system.get_state(),
@@ -954,9 +954,7 @@ class DriveSystem:
                 self.drives["competence"].satisfy(0.2)
             else:
                 self._recent_failures += 1
-                self.drives["competence"].demand = min(
-                    1.0, self.drives["competence"].demand + 0.1
-                )
+                self.drives["competence"].demand = min(1.0, self.drives["competence"].demand + 0.1)
 
             # Decay counters over time
             if self._recent_successes + self._recent_failures > 20:
@@ -979,9 +977,7 @@ class DriveSystem:
                     ):
                         self._recently_acknowledged = True
 
-                if action_type in ("display_message", "notify") and result_dict.get(
-                    "acknowledged"
-                ):
+                if action_type in ("display_message", "notify") and result_dict.get("acknowledged"):
                     self._recently_acknowledged = True
 
                 sat_multiplier = self.modulators.get_drive_satisfaction_multiplier()

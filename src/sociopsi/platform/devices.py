@@ -120,7 +120,7 @@ class DarwinDeviceBackend(DeviceBackend):
                     return int(line.split("=")[-1].strip())
         except subprocess.TimeoutExpired:
             logger.warning("Ambient light sensor timed out")
-        except (ValueError, FileNotFoundError):
+        except ValueError, FileNotFoundError:
             pass
         return None
 
@@ -220,7 +220,7 @@ class LinuxDeviceBackend(DeviceBackend):
                                     )
                                 )
                                 break
-            except (subprocess.TimeoutExpired, FileNotFoundError):
+            except subprocess.TimeoutExpired, FileNotFoundError:
                 logger.warning("No Bluetooth tools available")
         return devices
 
@@ -301,7 +301,7 @@ class LinuxDeviceBackend(DeviceBackend):
                             raw_file = dev_dir / attr
                             if raw_file.exists():
                                 return int(raw_file.read_text().strip())
-        except (ValueError, OSError):
+        except ValueError, OSError:
             pass
         return None
 

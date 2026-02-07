@@ -60,10 +60,13 @@ class TestMetaCognition:
         assert metacog.get_average_harmony() == pytest.approx(0.5)
 
     def test_on_dialogue_complete(self, metacog: MetaCognition, bus: EventBus):
-        bus.publish("dialogue.complete", {
-            "mediated_thought": "Hello",
-            "harmony": 0.7,
-        })
+        bus.publish(
+            "dialogue.complete",
+            {
+                "mediated_thought": "Hello",
+                "harmony": 0.7,
+            },
+        )
         assert len(metacog.recent_thoughts) == 1
         assert metacog.harmony_history[-1] == 0.7
 

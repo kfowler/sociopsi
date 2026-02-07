@@ -51,7 +51,7 @@ class EventBus:
     falls back to synchronous inline dispatch for backward compatibility.
     """
 
-    _instance: "EventBus | None" = None
+    _instance: EventBus | None = None
 
     def __init__(self) -> None:
         self._subscriptions: dict[str, list[_Subscription]] = defaultdict(list)
@@ -69,7 +69,7 @@ class EventBus:
         self._stop_event = threading.Event()
 
     @classmethod
-    def get_instance(cls) -> "EventBus":
+    def get_instance(cls) -> EventBus:
         """Get or create singleton instance."""
         if cls._instance is None:
             cls._instance = EventBus()
@@ -218,8 +218,7 @@ class EventBus:
         while time.monotonic() < deadline:
             with self._lock:
                 all_empty = all(
-                    sub.queue.empty() and not sub._coalesce_pending
-                    for sub in self._all_subs
+                    sub.queue.empty() and not sub._coalesce_pending for sub in self._all_subs
                 )
             if all_empty:
                 return
@@ -255,9 +254,7 @@ class EventBus:
                         try:
                             sub.handler(data)
                         except Exception as e:
-                            logger.error(
-                                f"Error in event handler for {sub.event_type}: {e}"
-                            )
+                            logger.error(f"Error in event handler for {sub.event_type}: {e}")
 
                 # Check queue
                 try:
@@ -266,9 +263,7 @@ class EventBus:
                     try:
                         sub.handler(data)
                     except Exception as e:
-                        logger.error(
-                            f"Error in event handler for {sub.event_type}: {e}"
-                        )
+                        logger.error(f"Error in event handler for {sub.event_type}: {e}")
                 except queue.Empty:
                     pass
 

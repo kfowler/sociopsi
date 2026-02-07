@@ -43,7 +43,7 @@ class ConsoleRenderer(UXRenderer):
     # ------------------------------------------------------------------
 
     def render_startup(self, config_summary: dict[str, Any]) -> None:
-        for key, value in config_summary.items():
+        for _key, value in config_summary.items():
             if isinstance(value, list):
                 for line in value:
                     print(line)
@@ -113,9 +113,7 @@ class ConsoleRenderer(UXRenderer):
         print()  # Blank line after stream
 
     def render_ego(self, mediated_thought: str, harmony: float, ego_strength: float) -> None:
-        print(
-            f"\n{colors.DIM}[HARMONY] {harmony:.2f} | Ego: {ego_strength:.2f}{colors.RESET}"
-        )
+        print(f"\n{colors.DIM}[HARMONY] {harmony:.2f} | Ego: {ego_strength:.2f}{colors.RESET}")
 
     def render_reflection(self, reflection_text: str) -> None:
         print(f"\n{colors.DIM}[META] {reflection_text}{colors.RESET}")
@@ -179,9 +177,7 @@ class ConsoleRenderer(UXRenderer):
     # Heartbeat
     # ------------------------------------------------------------------
 
-    def render_heartbeat_change(
-        self, old_mode: str, new_mode: str, interval: float
-    ) -> None:
+    def render_heartbeat_change(self, old_mode: str, new_mode: str, interval: float) -> None:
         if new_mode == "override":
             print(f"  [HEARTBEAT] Set to {interval}s by psyche")
         else:
@@ -193,14 +189,11 @@ class ConsoleRenderer(UXRenderer):
 
     def render_speech(self, text: str, is_final: bool) -> None:
         if is_final:
-            sys.stdout.write(
-                f'\r\033[K{colors.GREEN}[SPEECH]{colors.RESET} "{text}"\n'
-            )
+            sys.stdout.write(f'\r\033[K{colors.GREEN}[SPEECH]{colors.RESET} "{text}"\n')
             sys.stdout.flush()
         else:
             sys.stdout.write(
-                f"\r\033[K{colors.DIM}[HEARING]{colors.RESET} "
-                f"{colors.DIM}{text}{colors.RESET}"
+                f"\r\033[K{colors.DIM}[HEARING]{colors.RESET} {colors.DIM}{text}{colors.RESET}"
             )
             sys.stdout.flush()
 
