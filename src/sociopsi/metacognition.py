@@ -2,9 +2,14 @@
 
 Tracks thoughts, analyzes harmony trends, and generates reflections
 on the agent's psychological state and processes.
+
+MetacognitionManager runs reflection in its own timer thread, decoupled
+from the main agent cycle. Frequency adapts to arousal: faster (15s) under
+high arousal, slower (60s) when dormant.
 """
 
 import logging
+import threading
 from collections import deque
 from typing import Any
 
@@ -12,6 +17,15 @@ from sociopsi.event_bus import EventBus, get_event_bus
 from sociopsi.llm import chat_with_retry
 
 logger = logging.getLogger(__name__)
+
+# Adaptive interval bounds (seconds)
+_INTERVAL_FAST: float = 15.0
+_INTERVAL_NORMAL: float = 30.0
+_INTERVAL_SLOW: float = 60.0
+
+# Arousal thresholds for interval adaptation
+_AROUSAL_HIGH: float = 0.7
+_AROUSAL_LOW: float = 0.3
 
 
 class MetaCognition:
@@ -178,3 +192,125 @@ Be introspective and insightful:"""
             "harmony_trend": self.calculate_harmony_trend(),
             "average_harmony": self.get_average_harmony(),
         }
+
+
+class MetacognitionManager:
+    """Runs metacognition on an independent timer thread.
+
+    Decoupled from the main agent cycle so reflection happens at a
+    consistent cadence regardless of cycle speed. The latest reflection
+    is cached for the agent to read without waiting.
+
+    Frequency adapts to arousal:
+      - High arousal (>0.7): every 15s (need rapid self-monitoring)
+      - Normal: every 30s
+      - Low arousal / dormant (<0.3): every 60s (conserve resources)
+    """
+
+    def __init__(
+        self,
+        metacognition: MetaCognition,
+        drive_state_fn: Any,
+        arousal_fn: Any,
+        event_bus: EventBus | None = None,
+    ) -> None:
+        """Initialize the metacognition manager.
+
+        Args:
+            metacognition: The MetaCognition instance to run reflections on.
+            drive_state_fn: Callable returning current drive state dict.
+            arousal_fn: Callable returning current arousal level (0-1 float).
+            event_bus: Event bus for subscribing to suspend signals.
+        """
+        self._metacognition = metacognition
+        self._drive_state_fn = drive_state_fn
+        self._arousal_fn = arousal_fn
+        self._event_bus = event_bus or get_event_bus()
+
+        self._interval: float = _INTERVAL_NORMAL
+        self._cached_reflection: str = ""
+        self._lock = threading.Lock()
+        self._stop_event = threading.Event()
+        self._suspended = False
+        self._thread: threading.Thread | None = None
+
+    def start(self) -> None:
+        """Start the timer thread."""
+        if self._thread is not None and self._thread.is_alive():
+            return
+        self._stop_event.clear()
+        self._thread = threading.Thread(
+            target=self._run,
+            daemon=True,
+            name="metacognition-timer",
+        )
+        self._thread.start()
+        logger.info("MetacognitionManager started (interval=%.0fs)", self._interval)
+
+    def stop(self, timeout: float = 5.0) -> None:
+        """Stop the timer thread."""
+        self._stop_event.set()
+        if self._thread is not None:
+            self._thread.join(timeout=timeout)
+            self._thread = None
+        logger.info("MetacognitionManager stopped")
+
+    def suspend(self) -> None:
+        """Suspend reflection (e.g., Layer 1 thermal critical)."""
+        self._suspended = True
+        logger.debug("MetacognitionManager suspended")
+
+    def resume(self) -> None:
+        """Resume reflection after suspend."""
+        self._suspended = False
+        logger.debug("MetacognitionManager resumed")
+
+    def get_latest_reflection(self) -> str:
+        """Consume the latest cached reflection (non-blocking).
+
+        Returns the most recent reflection and clears the cache so the
+        same reflection is not returned twice.
+
+        Returns:
+            The most recent reflection text, or empty string if none yet.
+        """
+        with self._lock:
+            result = self._cached_reflection
+            self._cached_reflection = ""
+            return result
+
+    def _adapt_interval(self) -> None:
+        """Adjust reflection interval based on current arousal."""
+        try:
+            arousal = self._arousal_fn()
+        except Exception:
+            return
+
+        if arousal > _AROUSAL_HIGH:
+            self._interval = _INTERVAL_FAST
+        elif arousal < _AROUSAL_LOW:
+            self._interval = _INTERVAL_SLOW
+        else:
+            self._interval = _INTERVAL_NORMAL
+
+    def _run(self) -> None:
+        """Timer thread main loop."""
+        while not self._stop_event.is_set():
+            if self._suspended:
+                self._stop_event.wait(timeout=1.0)
+                continue
+
+            self._adapt_interval()
+
+            # Run reflection
+            try:
+                drive_state = self._drive_state_fn()
+                reflection = self._metacognition.reflect(drive_state)
+                if reflection:
+                    with self._lock:
+                        self._cached_reflection = reflection
+            except Exception as e:
+                logger.error("MetacognitionManager reflection error: %s", e)
+
+            # Wait for the adaptive interval (or until stopped)
+            self._stop_event.wait(timeout=self._interval)
