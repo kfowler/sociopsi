@@ -22,6 +22,7 @@ from sociopsi.dialogue import ArchetypalDialogue
 from sociopsi.drives import DriveSystem
 from sociopsi.ear import Ear
 from sociopsi.event_bus import get_event_bus
+from sociopsi.expectations import ExpectationHorizon
 from sociopsi.llm import (
     LLMError,
     chat_with_retry,
@@ -96,6 +97,9 @@ class JungAgent:
         from sociopsi.actions.creative import set_semantic_memory
 
         set_semantic_memory(self.memory)
+
+        # Expectation horizon for anticipatory processing
+        self.expectations = ExpectationHorizon()
 
         # Meta-cognition for self-reflection
         self.metacognition = MetaCognition(
@@ -489,7 +493,18 @@ class JungAgent:
             if mediated_thought and not any(a.type == "speak" for a in final_actions):
                 final_actions.append(Action(type="speak", params={"text": mediated_thought}))
 
-            # 14. Execute actions
+            # 16. Expectation horizon: evaluate proposed actions before execution
+            horizon_result = self.expectations.evaluate(final_actions, self.drive_system)
+            if horizon_result.suppressed:
+                print(f"\n{colors.RED}[IMPULSE INHIBITION]{colors.RESET}")
+                for action in horizon_result.suppressed:
+                    print(f"  ✗ {action.type} (predicted net-negative)")
+                final_actions = horizon_result.approved
+
+            # 17. Snapshot drives before execution for counterfactual learning
+            drives_before = self.expectations.snapshot_drives(self.drive_system)
+
+            # Execute actions
             if final_actions:
                 print(f"\n{colors.YELLOW}[ACTIONS]{colors.RESET}")
                 for i, action in enumerate(final_actions, 1):
@@ -510,12 +525,20 @@ class JungAgent:
 
             self._last_action_results = self.executor.execute_all(final_actions)
 
-            # 15. Satisfy drives from action results
+            # Satisfy drives from action results
             self.drive_system.satisfy_from_results(self._last_action_results)
 
-            # 16. (Speech happens only via speak action with ego-mediated text)
+            # 18. Counterfactual learning: compare predicted vs actual drive changes
+            drives_after = self.expectations.snapshot_drives(self.drive_system)
+            self.expectations.learn_from_outcome(
+                horizon_result.expectations,
+                drives_before,
+                drives_after,
+            )
 
-            # 17. Log action results with full details
+            # 19. (Speech happens only via speak action with ego-mediated text)
+
+            # 20. Log action results with full details
             if self._last_action_results:
                 print(f"\n{colors.GREEN}[RESULTS]{colors.RESET}")
                 for result in self._last_action_results:
@@ -532,7 +555,7 @@ class JungAgent:
                     elif not result.success and result.error:
                         print(f"      {colors.DIM}Error: {result.error}{colors.RESET}")
 
-            # 18. Log perception, drives, and state
+            # 21. Log perception, drives, and state
             self.logger.log_cycle(
                 perception=perception,
                 somatic=somatic,
@@ -545,7 +568,7 @@ class JungAgent:
                 modulators=dict(modulators.get_state()),
             )
 
-            # 19. Check for heartbeat override
+            # 22. Check for heartbeat override
             override = self.executor.get_heartbeat_override()
             if override is not None:
                 self._current_interval = override
