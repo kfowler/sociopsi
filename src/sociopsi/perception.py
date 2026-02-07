@@ -15,6 +15,7 @@ def format_perception(
     heartbeat_mode: str,
     drives: str | None = None,
     utterances: list[str] | None = None,
+    modulators: str | None = None,
 ) -> str:
     """Format a complete perception input for the psyche."""
     lines: list[str] = []
@@ -30,6 +31,11 @@ def format_perception(
     if drives:
         lines.append("")
         lines.append(drives)
+
+    # Modulator state
+    if modulators:
+        lines.append("")
+        lines.append(modulators)
 
     # Speech heard since last heartbeat
     if utterances:

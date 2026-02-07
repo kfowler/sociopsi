@@ -62,6 +62,7 @@ class ArchetypalDialogue:
         drive_state: dict[str, dict[str, Any]],
         context: str = "",
         active_archetypes: list[str] | None = None,
+        modulator_context: dict[str, Any] | None = None,
     ) -> tuple[list[StreamSegment], str, float]:
         """Generate internal dialogue and return segments with mediated thought.
 
@@ -69,6 +70,7 @@ class ArchetypalDialogue:
             drive_state: Current drive states {name: {value, threshold, below_threshold}}
             context: Additional context (somatic state, events, etc.)
             active_archetypes: List of archetype names to include (None = all)
+            modulator_context: Modulator state for tone/temperature shaping
 
         Returns:
             Tuple of (stream segments, mediated thought, harmony score)
@@ -77,6 +79,16 @@ class ArchetypalDialogue:
         if active_archetypes is None:
             active_archetypes = list(self.archetypes.keys())
 
+        # Enrich context with modulator tone if available
+        enriched_context = context
+        if modulator_context:
+            tone = modulator_context.get("tone", "")
+            if tone:
+                enriched_context = f"{context}\nProcessing tone: {tone}" if context else f"Processing tone: {tone}"
+
+        # Get modulator-derived temperature for archetype voices
+        voice_temperature = modulator_context.get("temperature") if modulator_context else None
+
         # Submit all archetype voice generation to pool in parallel
         voice_futures: dict[str, Future[str]] = {}
         for archetype_name in active_archetypes:
@@ -84,7 +96,7 @@ class ArchetypalDialogue:
                 continue
             archetype = self.archetypes[archetype_name]
             voice_futures[archetype_name] = get_executor().submit(
-                archetype.generate_voice, drive_state, context
+                archetype.generate_voice, drive_state, enriched_context, voice_temperature
             )
 
         # Wait for all voice futures (pumping NSRunLoop if available)

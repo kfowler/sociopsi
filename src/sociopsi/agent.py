@@ -4,6 +4,7 @@ Integrates all subsystems: drives, archetypes, memory, meta-cognition,
 perception, and action execution into a coherent agent loop.
 """
 
+import random
 import signal
 import sys
 import threading
@@ -355,6 +356,13 @@ class JungAgent:
                 if line.strip():
                     print(f"  {line}")
 
+            # 6b. Print modulator state
+            modulators = self.drive_system.modulators
+            print(f"\n{colors.MAGENTA}[MODULATORS]{colors.RESET}")
+            for line in modulators.format_for_perception().split("\n")[1:]:
+                if line.strip():
+                    print(f"  {line}")
+
             # 7. Print events if any
             if events:
                 print(f"\n{colors.CYAN}[EVENTS]{colors.RESET}")
@@ -368,11 +376,13 @@ class JungAgent:
             # 9. Build context for dialogue
             drive_state = self._get_drive_state_dict()
             context = self._build_dialogue_context(somatic, events, utterances)
+            modulator_context = modulators.get_dialogue_context()
 
             # 10. Generate archetypal dialogue (internal monologue)
             segments, mediated_thought, harmony = self.dialogue.generate_dialogue(
                 drive_state=drive_state,
                 context=context,
+                modulator_context=modulator_context,
             )
 
             # Update individuation based on harmony
@@ -380,13 +390,15 @@ class JungAgent:
                 if harmony > 0.7:
                     self.drive_system.drives["individuation"].satisfy(0.05 * harmony)
 
-            # Store mediated thought in memory
+            # Store mediated thought in memory (gated by securing rate modulator)
             if mediated_thought:
-                self.memory.add_memory(
-                    content=mediated_thought,
-                    intensity=min(1.0, 0.3 + harmony * 0.5),
-                    memory_type="thought",
-                )
+                write_prob = modulators.get_memory_write_probability()
+                if random.random() < write_prob:
+                    self.memory.add_memory(
+                        content=mediated_thought,
+                        intensity=min(1.0, 0.3 + harmony * 0.5),
+                        memory_type="thought",
+                    )
 
             # 11. Run meta-cognitive reflection periodically (offloaded to pool)
             if now - self._last_reflection_time >= self._reflection_interval:
@@ -411,6 +423,7 @@ class JungAgent:
 
             # 14. Get actions from LLM (still using JSON approach for actions)
             drive_perception = self.drive_system.format_for_perception()
+            modulator_perception = modulators.format_for_perception()
             perception = format_perception(
                 config=self.config,
                 somatic=somatic,
@@ -420,6 +433,7 @@ class JungAgent:
                 heartbeat_mode=self._heartbeat_mode,
                 drives=drive_perception,
                 utterances=utterances,
+                modulators=modulator_perception,
             )
 
             # Enrich perception for Anthropic with monologue and memories
@@ -432,6 +446,11 @@ class JungAgent:
                         extra.append(f"- {seg.component}: {seg.text}")
                 if mediated_thought:
                     extra.append(f"- ego: {mediated_thought}")
+                # Add modulator tone directive
+                tone = modulators.get_prompt_tone()
+                if tone:
+                    extra.append("")
+                    extra.append(f"[TONE] {tone}")
                 sampled_memories = self.memory.sample_weighted(3)
                 if sampled_memories:
                     extra.append("")
@@ -441,7 +460,9 @@ class JungAgent:
                 if extra:
                     perception += "\n" + "\n".join(extra)
 
-            response = self._query_psyche(perception)
+            # Use modulator-derived temperature for the LLM query
+            llm_temperature = modulators.get_temperature()
+            response = self._query_psyche(perception, temperature=llm_temperature)
             parsed = parse_response(response)
 
             # 15. Build final action list
@@ -521,6 +542,7 @@ class JungAgent:
                 heartbeat_interval=self._current_interval,
                 heartbeat_mode=self._heartbeat_mode,
                 drives=self.drive_system.get_state(),
+                modulators=dict(modulators.get_state()),
             )
 
             # 19. Check for heartbeat override
@@ -539,7 +561,7 @@ class JungAgent:
 
             traceback.print_exc()
 
-    def _query_psyche(self, perception: str) -> str:
+    def _query_psyche(self, perception: str, temperature: float | None = None) -> str:
         """Query the psyche model (offloaded to thread pool)."""
         # Add perception to messages
         self._messages.append(ChatMessage(role="user", content=perception))
@@ -549,12 +571,16 @@ class JungAgent:
             # Keep system message + last N exchanges
             self._messages = [self._messages[0]] + self._messages[-(self._max_history * 2) :]
 
+        # Build options with modulator-derived temperature
+        options = {"temperature": temperature} if temperature is not None else None
+
         # Query model with retry logic, offloaded to pool
         try:
             future = submit_chat(
                 model=self.config.model,
                 messages=self._messages,
                 provider=self.config.llm_provider,
+                options=options,
             )
             self._pump_until_done(future)
             response = future.result()

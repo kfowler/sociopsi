@@ -39,6 +39,7 @@ class PsycheLogger:
         heartbeat_interval: float,
         heartbeat_mode: str,
         drives: dict[str, Any] | None = None,
+        modulators: dict[str, Any] | None = None,
     ) -> None:
         """Log a complete perception-response cycle."""
         now = datetime.now()
@@ -86,6 +87,9 @@ class PsycheLogger:
                 "mode": heartbeat_mode,
             },
         }
+
+        if modulators is not None:
+            entry["modulators"] = modulators
 
         # Write to log file
         with open(self.log_file, "a") as f:

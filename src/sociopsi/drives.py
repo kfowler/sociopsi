@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Any, Literal, TypedDict
 
 from sociopsi.config import AgentConfig
+from sociopsi.modulators import ModulatorLayer
 from sociopsi.types import Action, ActionResult, SomaticState
 
 # Type aliases for drives
@@ -709,6 +710,9 @@ class DriveSystem:
                 fall_rate=cfg["fall_rate"],
             )
 
+        # Modulator layer (computed from drives each cycle)
+        self.modulators = ModulatorLayer()
+
     def update(self, somatic: SomaticState, dt: float, had_actions: bool) -> None:
         """Update all drives based on somatic state and time elapsed."""
         # Track idle cycles
@@ -723,6 +727,9 @@ class DriveSystem:
         # Update each drive
         for drive in self.drives.values():
             drive.update(dt)
+
+        # Recompute modulators from updated drive states
+        self.modulators.update(self)
 
         # Set human-readable reasons
         self._update_reasons(somatic)
@@ -890,6 +897,7 @@ class DriveSystem:
                 if action_type in ("display_message", "notify") and result_dict.get("acknowledged"):
                     self._recently_acknowledged = True
 
+                sat_multiplier = self.modulators.get_drive_satisfaction_multiplier()
                 for drive_name, value in SATISFACTION_MAP[action_type].items():
                     if drive_name in self.drives:
                         if callable(value):
@@ -897,7 +905,7 @@ class DriveSystem:
                         else:
                             sat = value
                         if sat > 0:
-                            self.drives[drive_name].satisfy(sat)
+                            self.drives[drive_name].satisfy(sat * sat_multiplier)
 
         # Update reasons immediately based on perception results
         if self._recently_saw_person:

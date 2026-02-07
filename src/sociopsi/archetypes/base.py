@@ -48,23 +48,27 @@ class Archetype(ABC):
         self,
         drive_state: dict[str, dict[str, Any]],
         context: str = "",
+        temperature_override: float | None = None,
     ) -> str:
         """Generate archetypal voice based on drives and context.
 
         Args:
             drive_state: Current drive states {name: {value, threshold, below_threshold}}
             context: Additional context (somatic state, recent events, etc.)
+            temperature_override: If set, overrides the archetype's default temperature
+                (used by modulator layer to shape response character)
 
         Returns:
             Generated archetypal voice (1-2 sentences)
         """
         prompt = self._build_prompt(drive_state, context)
+        temp = temperature_override if temperature_override is not None else self.get_temperature()
 
         try:
             response = chat_with_retry(
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
-                options={"temperature": self.get_temperature()},
+                options={"temperature": temp},
             )
             return response["message"]["content"].strip()
         except Exception as e:
