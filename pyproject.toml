@@ -36,6 +36,9 @@ dependencies = [
 anthropic = [
     "anthropic>=0.40.0,<1.0.0",
 ]
+web = [
+    "websockets>=14.0,<16.0",
+]
 linux = [
     "vosk>=0.3.45,<0.4.0",
     "sounddevice>=0.4.6,<0.5.0",
