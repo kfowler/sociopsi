@@ -27,23 +27,23 @@ def _make_audio(**overrides: object) -> MagicMock:
 
 
 def _make_somatic(**kwargs: object) -> SomaticState:
-    defaults = dict(
-        battery_percent=80,
-        battery_health=95,
-        battery_cycles=200,
-        power_state=PowerState.AC,
-        cpu_percent=25,
-        gpu_percent=10,
-        thermal_state=ThermalState.COOL,
-        thermal_cpu=45.0,
-        thermal_gpu=40.0,
-        ram_percent=50,
-        storage_percent=60,
-        network_state=NetworkState.CONNECTED,
-        lid_state=LidState.OPEN,
-        fan_rpm=0,
-        uptime_seconds=3600,
-    )
+    defaults = {
+        "battery_percent": 80,
+        "battery_health": 95,
+        "battery_cycles": 200,
+        "power_state": PowerState.AC,
+        "cpu_percent": 25,
+        "gpu_percent": 10,
+        "thermal_state": ThermalState.COOL,
+        "thermal_cpu": 45.0,
+        "thermal_gpu": 40.0,
+        "ram_percent": 50,
+        "storage_percent": 60,
+        "network_state": NetworkState.CONNECTED,
+        "lid_state": LidState.OPEN,
+        "fan_rpm": 0,
+        "uptime_seconds": 3600,
+    }
     defaults.update(kwargs)
     return SomaticState(**defaults)
 
