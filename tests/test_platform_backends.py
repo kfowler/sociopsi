@@ -7,10 +7,13 @@ import pytest
 from sociopsi.platform.base import (
     AppBackend,
     ClipboardBackend,
+    DeviceBackend,
     NetworkControlBackend,
     NotificationBackend,
     ScreenshotBackend,
     SensorUnavailable,
+    USBDevice,
+    ThunderboltDevice,
     VolumeBackend,
 )
 
@@ -83,6 +86,217 @@ class TestBackendFactories:
             mock_sys.platform = "freebsd"
             with pytest.raises(SensorUnavailable):
                 get_volume_backend()
+
+    def test_get_device_backend_darwin(self):
+        from sociopsi.platform import get_device_backend
+
+        with patch("sociopsi.platform.sys") as mock_sys:
+            mock_sys.platform = "darwin"
+            backend = get_device_backend()
+            assert isinstance(backend, DeviceBackend)
+
+    def test_get_device_backend_linux(self):
+        from sociopsi.platform import get_device_backend
+
+        with patch("sociopsi.platform.sys") as mock_sys:
+            mock_sys.platform = "linux"
+            backend = get_device_backend()
+            assert isinstance(backend, DeviceBackend)
+
+    def test_get_device_backend_unsupported(self):
+        from sociopsi.platform import get_device_backend
+
+        with patch("sociopsi.platform.sys") as mock_sys:
+            mock_sys.platform = "freebsd"
+            with pytest.raises(SensorUnavailable):
+                get_device_backend()
+
+
+# --- Darwin device backend tests ---
+
+
+class TestDarwinDeviceBackend:
+    def test_list_usb_success(self):
+        from sociopsi.platform.devices import DarwinDeviceBackend
+
+        backend = DarwinDeviceBackend()
+        usb_json = '{"SPUSBDataType": [{"_name": "USB 3.1 Bus", "_items": [{"_name": "Hub", "manufacturer": "Apple"}]}]}'
+        with patch("sociopsi.platform.devices.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout=usb_json)
+            devices = backend.list_usb()
+            assert len(devices) == 1
+            assert devices[0].name == "Hub"
+            assert devices[0].vendor == "Apple"
+
+    def test_list_usb_empty(self):
+        from sociopsi.platform.devices import DarwinDeviceBackend
+
+        backend = DarwinDeviceBackend()
+        with patch("sociopsi.platform.devices.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout='{"SPUSBDataType": []}')
+            devices = backend.list_usb()
+            assert devices == []
+
+    def test_list_usb_timeout(self):
+        from sociopsi.platform.devices import DarwinDeviceBackend
+
+        backend = DarwinDeviceBackend()
+        with patch("sociopsi.platform.devices.subprocess.run") as mock_run:
+            import subprocess
+
+            mock_run.side_effect = subprocess.TimeoutExpired(cmd="", timeout=10)
+            devices = backend.list_usb()
+            assert devices == []
+
+    def test_list_bluetooth_success(self):
+        from sociopsi.platform.devices import DarwinDeviceBackend
+
+        backend = DarwinDeviceBackend()
+        bt_json = '{"SPBluetoothDataType": [{"device_connected": [{"AirPods": {"device_address": "AA:BB:CC", "device_rssi": -50, "device_minorType": "Headphones"}}]}]}'
+        with patch("sociopsi.platform.devices.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout=bt_json)
+            devices = backend.list_bluetooth()
+            assert len(devices) == 1
+            assert devices[0].name == "AirPods"
+            assert devices[0].address == "AA:BB:CC"
+            assert devices[0].rssi == -50
+
+    def test_list_thunderbolt_success(self):
+        from sociopsi.platform.devices import DarwinDeviceBackend
+
+        backend = DarwinDeviceBackend()
+        tb_json = '{"SPThunderboltDataType": [{"_items": [{"_name": "CalDigit", "vendor_name": "CalDigit", "device_name_key": "cd1", "link_speed": "40Gb/s"}]}]}'
+        with patch("sociopsi.platform.devices.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout=tb_json)
+            devices = backend.list_thunderbolt()
+            assert len(devices) == 1
+            assert devices[0].name == "CalDigit"
+            assert devices[0].speed == "40Gb/s"
+
+    def test_get_ambient_light_found(self):
+        from sociopsi.platform.devices import DarwinDeviceBackend
+
+        backend = DarwinDeviceBackend()
+        ioreg_output = '  "ALSSensorReading" = 150\n'
+        with patch("sociopsi.platform.devices.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout=ioreg_output)
+            result = backend.get_ambient_light()
+            assert result == 150
+
+    def test_get_ambient_light_none(self):
+        from sociopsi.platform.devices import DarwinDeviceBackend
+
+        backend = DarwinDeviceBackend()
+        with patch("sociopsi.platform.devices.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="")
+            result = backend.get_ambient_light()
+            assert result is None
+
+    def test_get_motion_present(self):
+        from sociopsi.platform.devices import DarwinDeviceBackend
+
+        backend = DarwinDeviceBackend()
+        with patch("sociopsi.platform.devices.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="SMCMotionSensor data")
+            result = backend.get_motion()
+            assert result == {"status": "present", "movement": "still"}
+
+    def test_get_motion_unavailable(self):
+        from sociopsi.platform.devices import DarwinDeviceBackend
+
+        backend = DarwinDeviceBackend()
+        with patch("sociopsi.platform.devices.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="")
+            result = backend.get_motion()
+            assert result is None
+
+
+# --- External sensor integration tests ---
+
+
+class TestExternalSensorIntegration:
+    def test_get_usb_connections_uses_backend(self):
+        from sociopsi.sensors.external import get_usb_connections
+
+        mock_backend = MagicMock()
+        mock_backend.list_usb.return_value = [
+            USBDevice(name="Keyboard", vendor="Apple", serial="123"),
+        ]
+        with patch("sociopsi.sensors.external.get_device_backend", return_value=mock_backend):
+            result = get_usb_connections()
+            assert len(result) == 1
+            assert result[0]["name"] == "Keyboard"
+            assert result[0]["vendor"] == "Apple"
+            assert result[0]["serial"] == "123"
+
+    def test_get_thunderbolt_uses_backend(self):
+        from sociopsi.sensors.external import get_thunderbolt_devices
+
+        mock_backend = MagicMock()
+        mock_backend.list_thunderbolt.return_value = [
+            ThunderboltDevice(name="Dock", vendor="CalDigit", device_id="cd1", speed="40Gb/s"),
+        ]
+        with patch("sociopsi.sensors.external.get_device_backend", return_value=mock_backend):
+            result = get_thunderbolt_devices()
+            assert len(result) == 1
+            assert result[0]["name"] == "Dock"
+            assert result[0]["speed"] == "40Gb/s"
+
+    def test_get_ambient_light_uses_backend(self):
+        from sociopsi.sensors.external import get_ambient_light
+
+        mock_backend = MagicMock()
+        mock_backend.get_ambient_light.return_value = 200
+        with (
+            patch("sociopsi.sensors.external.get_device_backend", return_value=mock_backend),
+            patch("sociopsi.sensors.external._describe_light_level", return_value="dim"),
+        ):
+            result = get_ambient_light()
+            assert result["raw"] == 200
+            assert result["normalized"] == 20
+
+    def test_get_ambient_light_unavailable(self):
+        from sociopsi.sensors.external import get_ambient_light
+
+        mock_backend = MagicMock()
+        mock_backend.get_ambient_light.return_value = None
+        with patch(
+            "sociopsi.sensors.external.get_device_backend",
+            return_value=mock_backend,
+        ):
+            result = get_ambient_light()
+            assert result["description"] == "unavailable"
+
+    def test_get_motion_uses_backend(self):
+        from sociopsi.sensors.external import get_motion
+
+        mock_backend = MagicMock()
+        mock_backend.get_motion.return_value = {"status": "present", "movement": "still"}
+        with patch("sociopsi.sensors.external.get_device_backend", return_value=mock_backend):
+            result = get_motion()
+            assert result["status"] == "present"
+
+    def test_get_motion_unavailable(self):
+        from sociopsi.sensors.external import get_motion
+
+        mock_backend = MagicMock()
+        mock_backend.get_motion.return_value = None
+        with patch("sociopsi.sensors.external.get_device_backend", return_value=mock_backend):
+            result = get_motion()
+            assert result["status"] == "unavailable"
+
+    def test_get_bluetooth_uses_backend(self):
+        from sociopsi.sensors.external import get_bluetooth_devices
+        from sociopsi.types import BluetoothDevice
+
+        mock_backend = MagicMock()
+        mock_backend.list_bluetooth.return_value = [
+            BluetoothDevice(name="AirPods", address="AA:BB:CC", rssi=-50),
+        ]
+        with patch("sociopsi.sensors.external.get_device_backend", return_value=mock_backend):
+            result = get_bluetooth_devices()
+            assert len(result) == 1
+            assert result[0].name == "AirPods"
 
 
 # --- Darwin volume backend tests ---
