@@ -18,7 +18,7 @@ from Foundation import NSDate, NSDefaultRunLoopMode, NSOrderedAscending, NSRunLo
 
 from sociopsi.actions.executor import ActionExecutor
 from sociopsi.config import AgentConfig, load_system_prompt
-from sociopsi.dialogue import ArchetypalDialogue
+from sociopsi.dialogue import DialogueManager
 from sociopsi.drives import DriveSystem
 from sociopsi.ear import Ear
 from sociopsi.emotions import EmotionSystem
@@ -107,12 +107,12 @@ class JungAgent:
         # Emergent emotion system (computed from modulators + drives)
         self.emotions = EmotionSystem()
 
-        # Archetypal dialogue system (LLM-powered internal voices)
-        self.dialogue = ArchetypalDialogue(
+        # Event-driven dialogue manager (LLM-powered internal voices)
+        self.dialogue_manager = DialogueManager(
             model=self.config.model,
             event_bus=self.event_bus,
-            pump_fn=self._pump_until_done,
         )
+        self.dialogue = self.dialogue_manager.dialogue  # Alias for ego/weights access
 
         # Semantic memory with vector embeddings
         self.memory = SemanticMemory(max_memories=100)
@@ -145,9 +145,9 @@ class JungAgent:
         self._heartbeat_mode: HeartbeatMode = "idle"
         self._last_update_time: float = time.time()
 
-        # Dialogue timing
-        self._last_dialogue_time: float = 0.0
-        self._dialogue_interval: float = 10.0  # Generate dialogue every 10s
+        # Dialogue tracking
+        self._last_consumed_dialogue_time: float = 0.0
+        self._prev_drive_urgency: dict[str, float] = {}
 
         # Reflection timing
         self._last_reflection_time: float = 0.0
@@ -249,6 +249,7 @@ class JungAgent:
         """Start the agent loop."""
         self._running = True
         self.event_bus.start()
+        self.dialogue_manager.start()
         self.event_collector.start()
         self.somatic_poller.start()
         self.drive_system.start()
@@ -281,6 +282,7 @@ class JungAgent:
         self.somatic_poller.stop()
         self.event_collector.stop()
         self.voice.stop()
+        self.dialogue_manager.stop()
         self.event_bus.stop()
         shutdown_executor(wait=False)
         self.renderer.render_shutdown("\nSocio-Psi stopped.")
@@ -461,32 +463,49 @@ class JungAgent:
             # 8c. Run node net spreading activation cycle
             self.nodenet.update()
 
-            # 9. Build context for dialogue (drive_state computed in step 3b)
+            # 9. Update dialogue manager state (non-blocking)
             context = self._build_dialogue_context(somatic, events, utterances)
             modulator_context = modulators.get_dialogue_context()
             # Enrich modulator context with emotional state
             modulator_context.update(self.emotions.get_dialogue_context())
+            self.dialogue_manager.update_state(drive_state, context, modulator_context)
 
-            # 10. Generate archetypal dialogue (internal monologue)
-            segments, mediated_thought, harmony = self.dialogue.generate_dialogue(
-                drive_state=drive_state,
-                context=context,
-                modulator_context=modulator_context,
-            )
+            # 9b. Publish dialogue triggers
+            self._publish_dialogue_triggers(utterances, somatic)
 
-            # Update individuation based on harmony
+            # 10. Read cached dialogue (non-blocking — never waits for generation)
+            cached_dialogue = self.dialogue_manager.get_cached()
+            is_new_dialogue = False
+
+            if cached_dialogue is not None and not self.dialogue_manager.is_stale():
+                segments = cached_dialogue.segments
+                mediated_thought = cached_dialogue.mediated_thought
+                harmony = cached_dialogue.harmony
+                if cached_dialogue.timestamp > self._last_consumed_dialogue_time:
+                    is_new_dialogue = True
+                    self._last_consumed_dialogue_time = cached_dialogue.timestamp
+            else:
+                # Stale or no dialogue — use drive state directly
+                segments = []
+                mediated_thought = ""
+                harmony = self.dialogue_manager.get_rolling_harmony()
+
+            # Update individuation based on rolling harmony
+            rolling_harmony = self.dialogue_manager.get_rolling_harmony()
             if "individuation" in self.drive_system.drives:
-                if harmony > 0.7:
-                    self.drive_system.drives["individuation"].satisfy(0.05 * harmony)
+                if rolling_harmony > 0.7:
+                    self.drive_system.drives["individuation"].satisfy(
+                        0.05 * rolling_harmony
+                    )
 
-            # Feed dialogue concepts into node net
-            if mediated_thought:
+            # Feed dialogue concepts into node net (only for new dialogue)
+            if is_new_dialogue and mediated_thought:
                 thought_words = [w for w in mediated_thought.lower().split() if len(w) > 3]
                 if thought_words:
                     self.nodenet.activate_concepts(thought_words[:8], amount=0.3)
 
-            # Store mediated thought in memory (gated by securing rate modulator)
-            if mediated_thought:
+            # Store mediated thought in memory (only for new dialogue)
+            if is_new_dialogue and mediated_thought:
                 write_prob = modulators.get_memory_write_probability()
                 if random.random() < write_prob:
                     self.memory.add_memory(
@@ -598,14 +617,16 @@ class JungAgent:
                 if action.type not in proposed_types and action.type not in planned_types:
                     final_actions.append(action)
 
-            # Add LLM-proposed actions, synthesizing speak text from mediated thought
+            # Add LLM-proposed actions, synthesizing speak text from new dialogue
             for action in parsed.actions:
-                if action.type == "speak" and mediated_thought:
+                if action.type == "speak" and is_new_dialogue and mediated_thought:
                     action.params["text"] = mediated_thought
                 final_actions.append(action)
 
-            # Auto-inject speak when dialogue produced a mediated thought
-            if mediated_thought and not any(a.type == "speak" for a in final_actions):
+            # Auto-inject speak when new dialogue produced a mediated thought
+            if is_new_dialogue and mediated_thought and not any(
+                a.type == "speak" for a in final_actions
+            ):
                 final_actions.append(Action(type="speak", params={"text": mediated_thought}))
 
             # 16. Expectation horizon: evaluate proposed actions before execution
@@ -801,6 +822,40 @@ class JungAgent:
             context_parts.append(memory_context)
 
         return ". ".join(context_parts) if context_parts else "All systems normal"
+
+    def _publish_dialogue_triggers(
+        self,
+        utterances: list[str] | None,
+        somatic: SomaticState,
+    ) -> None:
+        """Publish events that trigger dialogue generation.
+
+        Detects threshold crossings and salient stimuli, publishing
+        dialogue.trigger events that the DialogueManager subscribes to.
+        """
+        # Drive urgency crossing 0.7
+        for name, drive in self.drive_system.drives.items():
+            prev = self._prev_drive_urgency.get(name, 0.0)
+            if drive.urgency >= 0.7 and prev < 0.7:
+                self.event_bus.publish(
+                    "dialogue.trigger",
+                    {"reason": f"drive:{name}", "drive": name, "urgency": drive.urgency},
+                )
+            self._prev_drive_urgency[name] = drive.urgency
+
+        # Speech utterance
+        if utterances:
+            self.event_bus.publish(
+                "dialogue.trigger",
+                {"reason": "speech", "utterances": utterances},
+            )
+
+        # Somatic alarm
+        if somatic.battery_percent < 10 or somatic.thermal_state.value == "critical":
+            self.event_bus.publish(
+                "dialogue.trigger",
+                {"reason": "somatic_alarm"},
+            )
 
 
 def run_single(config: AgentConfig | None = None, perception: str | None = None) -> str:

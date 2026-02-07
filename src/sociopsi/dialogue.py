@@ -5,8 +5,11 @@ that represents the psychological dynamics of the agent.
 """
 
 import logging
+import threading
+import time
 from collections.abc import Callable
 from concurrent.futures import Future
+from dataclasses import dataclass
 from typing import Any
 
 from sociopsi.archetypes import Anima, Archetype, Ego, Persona, SelfArchetype, Shadow
@@ -342,3 +345,207 @@ class ArchetypalDialogue:
         )
 
         return selected
+
+
+@dataclass
+class DialogueResult:
+    """Cached result from event-driven dialogue generation."""
+
+    segments: list[StreamSegment]
+    mediated_thought: str
+    harmony: float
+    timestamp: float
+    trigger: str
+
+
+class DialogueManager:
+    """Event-driven dialogue manager with cached output.
+
+    Runs dialogue generation in a dedicated thread, triggered by events
+    on the bus. The agent reads cached results without blocking.
+
+    Triggers:
+        - Drive urgency crosses 0.7
+        - External stimulus (speech, person detected)
+        - Somatic alarm (thermal/battery critical)
+        - Timer fallback (every 30s if no trigger)
+    """
+
+    STALE_THRESHOLD: float = 60.0
+    FALLBACK_INTERVAL: float = 30.0
+    HARMONY_WINDOW: int = 10
+
+    def __init__(
+        self,
+        model: str = "sociopsi-mid",
+        event_bus: EventBus | None = None,
+    ) -> None:
+        self._event_bus = event_bus or get_event_bus()
+        self._dialogue = ArchetypalDialogue(
+            model=model,
+            event_bus=self._event_bus,
+            pump_fn=None,  # Background thread uses blocking waits
+        )
+
+        # Thread-safe cached result
+        self._cached: DialogueResult | None = None
+        self._lock = threading.Lock()
+
+        # Trigger mechanism
+        self._trigger_event = threading.Event()
+        self._pending_trigger: str = "init"
+
+        # Latest state for generation (updated by agent each cycle)
+        self._drive_state: dict[str, dict[str, Any]] | None = None
+        self._context: str = ""
+        self._modulator_context: dict[str, Any] | None = None
+
+        # Rolling harmony
+        self._harmony_history: list[float] = []
+
+        # Thread
+        self._running = False
+        self._thread: threading.Thread | None = None
+
+    @property
+    def dialogue(self) -> ArchetypalDialogue:
+        """Access underlying dialogue system for ego/weights."""
+        return self._dialogue
+
+    def start(self) -> None:
+        """Start the dialogue manager thread and subscribe to triggers."""
+        if self._running:
+            return
+        self._event_bus.subscribe("dialogue.trigger", self._on_trigger)
+        self._running = True
+        self._thread = threading.Thread(
+            target=self._run,
+            daemon=True,
+            name="dialogue-manager",
+        )
+        self._thread.start()
+        logger.info("DialogueManager started")
+
+    def stop(self, timeout: float = 5.0) -> None:
+        """Stop the dialogue manager thread."""
+        if not self._running:
+            return
+        self._running = False
+        self._trigger_event.set()
+        self._event_bus.unsubscribe("dialogue.trigger", self._on_trigger)
+        if self._thread is not None:
+            self._thread.join(timeout=timeout)
+            self._thread = None
+        logger.info("DialogueManager stopped")
+
+    def update_state(
+        self,
+        drive_state: dict[str, dict[str, Any]],
+        context: str,
+        modulator_context: dict[str, Any] | None = None,
+    ) -> None:
+        """Update state for next dialogue generation.
+
+        Called by the agent each cycle to provide fresh state.
+        """
+        with self._lock:
+            self._drive_state = drive_state
+            self._context = context
+            self._modulator_context = modulator_context
+
+    def get_cached(self) -> DialogueResult | None:
+        """Get the latest cached dialogue result (thread-safe, non-blocking)."""
+        with self._lock:
+            return self._cached
+
+    def is_stale(self) -> bool:
+        """Check if cached dialogue is too old to use."""
+        with self._lock:
+            if self._cached is None:
+                return True
+            return (time.time() - self._cached.timestamp) > self.STALE_THRESHOLD
+
+    def get_rolling_harmony(self) -> float:
+        """Get rolling average harmony score."""
+        with self._lock:
+            return self._rolling_harmony_unlocked()
+
+    def get_state(self) -> dict[str, Any]:
+        """Get dialogue manager state for logging/inspection."""
+        with self._lock:
+            cached_age = (
+                time.time() - self._cached.timestamp if self._cached else None
+            )
+            cached_trigger = self._cached.trigger if self._cached else None
+            rolling = self._rolling_harmony_unlocked()
+            stale = (
+                self._cached is None
+                or (time.time() - self._cached.timestamp) > self.STALE_THRESHOLD
+            )
+        dialogue_state = self._dialogue.get_state()
+        return {
+            "cached_age": cached_age,
+            "cached_trigger": cached_trigger,
+            "rolling_harmony": rolling,
+            "stale": stale,
+            **dialogue_state,
+        }
+
+    def _rolling_harmony_unlocked(self) -> float:
+        """Compute rolling harmony (caller must hold self._lock)."""
+        if not self._harmony_history:
+            return 0.5
+        return sum(self._harmony_history) / len(self._harmony_history)
+
+    def _on_trigger(self, data: dict[str, Any]) -> None:
+        """Event bus callback for dialogue triggers."""
+        with self._lock:
+            self._pending_trigger = data.get("reason", "event")
+        self._trigger_event.set()
+
+    def _run(self) -> None:
+        """Background thread: wait for triggers, generate dialogue."""
+        while self._running:
+            triggered = self._trigger_event.wait(timeout=self.FALLBACK_INTERVAL)
+            if not self._running:
+                break
+            self._trigger_event.clear()
+
+            with self._lock:
+                trigger = self._pending_trigger if triggered else "timer_fallback"
+                drive_state = self._drive_state
+                context = self._context
+                modulator_context = self._modulator_context
+
+            if drive_state is None:
+                continue
+
+            try:
+                segments, thought, harmony = self._dialogue.generate_dialogue(
+                    drive_state=drive_state,
+                    context=context,
+                    modulator_context=modulator_context,
+                )
+
+                result = DialogueResult(
+                    segments=segments,
+                    mediated_thought=thought,
+                    harmony=harmony,
+                    timestamp=time.time(),
+                    trigger=trigger,
+                )
+
+                with self._lock:
+                    self._cached = result
+                    self._harmony_history.append(harmony)
+                    if len(self._harmony_history) > self.HARMONY_WINDOW:
+                        self._harmony_history = self._harmony_history[-self.HARMONY_WINDOW:]
+
+                logger.debug(
+                    "Dialogue generated (trigger=%s, harmony=%.2f)",
+                    trigger,
+                    harmony,
+                )
+
+            except Exception:
+                logger.exception("Dialogue generation failed")
