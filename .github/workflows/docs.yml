@@ -28,14 +28,14 @@ jobs:
 
       - uses: astral-sh/setup-uv@v4
 
-      - run: uv sync --group dev
+      - run: uv sync --only-group dev --no-install-project
 
       - name: Copy PDFs into site-src
         run: |
           mkdir -p site-src/research/papers
           cp docs/research/*.pdf site-src/research/papers/
 
-      - run: uv run mkdocs build
+      - run: uv run --only-group dev mkdocs build
 
       - uses: actions/upload-pages-artifact@v3
         with:
