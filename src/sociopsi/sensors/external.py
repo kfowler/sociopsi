@@ -7,7 +7,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from sociopsi.platform import get_display_backend, get_thermal_backend
+from sociopsi.platform import get_device_backend, get_display_backend, get_thermal_backend
 from sociopsi.types import BluetoothDevice
 
 logger = logging.getLogger(__name__)
@@ -15,29 +15,16 @@ logger = logging.getLogger(__name__)
 
 def get_ambient_light() -> dict[str, Any]:
     """Get ambient light level."""
-    try:
-        # Use ioreg to get ambient light sensor data
-        result = subprocess.run(
-            ["ioreg", "-r", "-c", "AppleLMUController"],
-            capture_output=True,
-            text=True,
-            timeout=2,
-        )
-        # Parse the output for light level
-        for line in result.stdout.split("\n"):
-            if "ALSSensorReading" in line:
-                # Extract the value
-                value = int(line.split("=")[-1].strip())
-                # Normalize to 0-100
-                normalized = min(100, value // 10)
-                return {
-                    "raw": value,
-                    "normalized": normalized,
-                    "description": _describe_light_level(normalized),
-                }
-        return {"raw": 0, "normalized": 50, "description": "unknown"}
-    except subprocess.TimeoutExpired, ValueError, FileNotFoundError:
+    backend = get_device_backend()
+    raw = backend.get_ambient_light()
+    if raw is None:
         return {"raw": 0, "normalized": 50, "description": "unavailable"}
+    normalized = min(100, raw // 10)
+    return {
+        "raw": raw,
+        "normalized": normalized,
+        "description": _describe_light_level(normalized),
+    }
 
 
 def _describe_light_level(level: int) -> str:
@@ -49,41 +36,8 @@ def _describe_light_level(level: int) -> str:
 
 def get_bluetooth_devices() -> list[BluetoothDevice]:
     """Get nearby Bluetooth devices."""
-    devices: list[BluetoothDevice] = []
-    try:
-        result = subprocess.run(
-            ["system_profiler", "SPBluetoothDataType", "-json"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-        import json
-
-        data = json.loads(result.stdout)
-
-        # Parse connected devices
-        bt_data = data.get("SPBluetoothDataType", [{}])[0]
-        connected = bt_data.get("device_connected", [])
-
-        for device_dict in connected:
-            for name, info in device_dict.items():
-                devices.append(
-                    BluetoothDevice(
-                        name=name,
-                        address=info.get("device_address", "unknown"),
-                        rssi=info.get("device_rssi", 0),
-                        device_type=info.get("device_minorType", None),
-                    )
-                )
-
-    except subprocess.TimeoutExpired:
-        logger.warning("Bluetooth scan timed out")
-    except ValueError as e:
-        logger.warning(f"Bluetooth data parse error: {e}")
-    except FileNotFoundError:
-        logger.warning("system_profiler not found")
-
-    return devices
+    backend = get_device_backend()
+    return backend.list_bluetooth()
 
 
 def get_location() -> dict[str, Any]:
@@ -148,57 +102,25 @@ def get_location() -> dict[str, Any]:
 
 def get_motion() -> dict[str, Any]:
     """Get accelerometer/motion data."""
-    # M2 Macs may not expose accelerometer data easily
-    # This is a placeholder that could be enhanced with IOKit
-    try:
-        result = subprocess.run(
-            ["ioreg", "-r", "-c", "SMCMotionSensor"],
-            capture_output=True,
-            text=True,
-            timeout=2,
-        )
-        if result.stdout.strip():
-            return {"status": "present", "movement": "still"}
+    backend = get_device_backend()
+    data = backend.get_motion()
+    if data is None:
         return {"status": "unavailable"}
-    except subprocess.TimeoutExpired, FileNotFoundError:
-        return {"status": "unavailable"}
+    return data
 
 
 def get_usb_connections() -> list[dict[str, Any]]:
     """Get USB-C port connections."""
-    connections: list[dict[str, Any]] = []
-    try:
-        result = subprocess.run(
-            ["system_profiler", "SPUSBDataType", "-json"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-        import json
-
-        data = json.loads(result.stdout)
-
-        def extract_devices(items: list[dict[str, Any]], depth: int = 0) -> None:
-            for item in items:
-                if "_name" in item and item.get("_name") != "USB 3.1 Bus":
-                    connections.append(
-                        {
-                            "name": item.get("_name", "Unknown"),
-                            "vendor": item.get("manufacturer", "Unknown"),
-                            "serial": item.get("serial_num", None),
-                        }
-                    )
-                # Recurse into nested items
-                if "_items" in item:
-                    extract_devices(item["_items"], depth + 1)
-
-        usb_data = data.get("SPUSBDataType", [])
-        extract_devices(usb_data)
-
-    except subprocess.TimeoutExpired, ValueError, FileNotFoundError:
-        pass
-
-    return connections
+    backend = get_device_backend()
+    devices = backend.list_usb()
+    return [
+        {
+            "name": d.name,
+            "vendor": d.vendor,
+            "serial": d.serial,
+        }
+        for d in devices
+    ]
 
 
 def capture_camera(duration: float = 0.5) -> dict[str, Any]:
@@ -408,37 +330,17 @@ def get_displays() -> list[dict[str, Any]]:
 
 def get_thunderbolt_devices() -> list[dict[str, Any]]:
     """Get Thunderbolt device connections."""
-    devices: list[dict[str, Any]] = []
-    try:
-        result = subprocess.run(
-            ["system_profiler", "SPThunderboltDataType", "-json"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-        import json
-
-        data = json.loads(result.stdout)
-        tb_data = data.get("SPThunderboltDataType", [])
-
-        for bus in tb_data:
-            # Get devices on this bus
-            for device in bus.get("_items", []):
-                devices.append(
-                    {
-                        "name": device.get("_name", "Unknown"),
-                        "vendor": device.get("vendor_name", "Unknown"),
-                        "device_id": device.get("device_name_key", None),
-                        "speed": device.get("link_speed", "Unknown"),
-                    }
-                )
-    except subprocess.TimeoutExpired:
-        logger.warning("Thunderbolt scan timed out")
-    except ValueError as e:
-        logger.warning(f"Thunderbolt data parse error: {e}")
-    except FileNotFoundError:
-        logger.warning("system_profiler not found")
-    return devices
+    backend = get_device_backend()
+    devices = backend.list_thunderbolt()
+    return [
+        {
+            "name": d.name,
+            "vendor": d.vendor,
+            "device_id": d.device_id,
+            "speed": d.speed,
+        }
+        for d in devices
+    ]
 
 
 def get_io_summary() -> dict[str, Any]:
