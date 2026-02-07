@@ -1,19 +1,26 @@
 """Platform abstraction layer for hardware access.
 
 Detects the current platform and provides the appropriate backends
-for power, thermal, display, and speech recognition.
+for power, thermal, display, speech recognition, volume, notification,
+clipboard, screenshot, app control, and network management.
 """
 
 import sys
 
 from sociopsi.platform.base import (
+    AppBackend,
     BatteryInfo,
+    ClipboardBackend,
     DisplayBackend,
     DisplayInfo,
+    NetworkControlBackend,
+    NotificationBackend,
     PowerBackend,
+    ScreenshotBackend,
     SensorUnavailable,
     ThermalBackend,
     ThermalInfo,
+    VolumeBackend,
 )
 from sociopsi.platform.speech import SpeechBackend
 
@@ -93,17 +100,119 @@ def get_speech_backend(locale: str = "en-US", on_device: bool = True) -> SpeechB
         raise SensorUnavailable(f"No speech backend for platform: {platform}")
 
 
+def get_volume_backend() -> VolumeBackend:
+    """Get the volume control backend for the current platform."""
+    platform = _detect_platform()
+    if platform == "darwin":
+        from sociopsi.platform.system import DarwinVolumeBackend
+
+        return DarwinVolumeBackend()
+    elif platform == "linux":
+        from sociopsi.platform.system import LinuxVolumeBackend
+
+        return LinuxVolumeBackend()
+    else:
+        raise SensorUnavailable(f"No volume backend for platform: {platform}")
+
+
+def get_notification_backend() -> NotificationBackend:
+    """Get the notification backend for the current platform."""
+    platform = _detect_platform()
+    if platform == "darwin":
+        from sociopsi.platform.system import DarwinNotificationBackend
+
+        return DarwinNotificationBackend()
+    elif platform == "linux":
+        from sociopsi.platform.system import LinuxNotificationBackend
+
+        return LinuxNotificationBackend()
+    else:
+        raise SensorUnavailable(f"No notification backend for platform: {platform}")
+
+
+def get_clipboard_backend() -> ClipboardBackend:
+    """Get the clipboard backend for the current platform."""
+    platform = _detect_platform()
+    if platform == "darwin":
+        from sociopsi.platform.clipboard import DarwinClipboardBackend
+
+        return DarwinClipboardBackend()
+    elif platform == "linux":
+        from sociopsi.platform.clipboard import LinuxClipboardBackend
+
+        return LinuxClipboardBackend()
+    else:
+        raise SensorUnavailable(f"No clipboard backend for platform: {platform}")
+
+
+def get_screenshot_backend() -> ScreenshotBackend:
+    """Get the screenshot backend for the current platform."""
+    platform = _detect_platform()
+    if platform == "darwin":
+        from sociopsi.platform.screenshot import DarwinScreenshotBackend
+
+        return DarwinScreenshotBackend()
+    elif platform == "linux":
+        from sociopsi.platform.screenshot import LinuxScreenshotBackend
+
+        return LinuxScreenshotBackend()
+    else:
+        raise SensorUnavailable(f"No screenshot backend for platform: {platform}")
+
+
+def get_app_backend() -> AppBackend:
+    """Get the app control backend for the current platform."""
+    platform = _detect_platform()
+    if platform == "darwin":
+        from sociopsi.platform.apps import DarwinAppBackend
+
+        return DarwinAppBackend()
+    elif platform == "linux":
+        from sociopsi.platform.apps import LinuxAppBackend
+
+        return LinuxAppBackend()
+    else:
+        raise SensorUnavailable(f"No app backend for platform: {platform}")
+
+
+def get_network_backend() -> NetworkControlBackend:
+    """Get the network control backend for the current platform."""
+    platform = _detect_platform()
+    if platform == "darwin":
+        from sociopsi.platform.network import DarwinNetworkBackend
+
+        return DarwinNetworkBackend()
+    elif platform == "linux":
+        from sociopsi.platform.network import LinuxNetworkBackend
+
+        return LinuxNetworkBackend()
+    else:
+        raise SensorUnavailable(f"No network backend for platform: {platform}")
+
+
 __all__ = [
+    "AppBackend",
     "BatteryInfo",
+    "ClipboardBackend",
     "DisplayBackend",
     "DisplayInfo",
+    "NetworkControlBackend",
+    "NotificationBackend",
     "PowerBackend",
+    "ScreenshotBackend",
     "SensorUnavailable",
     "SpeechBackend",
     "ThermalBackend",
     "ThermalInfo",
+    "VolumeBackend",
+    "get_app_backend",
+    "get_clipboard_backend",
     "get_display_backend",
+    "get_network_backend",
+    "get_notification_backend",
     "get_power_backend",
+    "get_screenshot_backend",
     "get_speech_backend",
     "get_thermal_backend",
+    "get_volume_backend",
 ]

@@ -90,3 +90,67 @@ class DisplayBackend(ABC):
     @abstractmethod
     def list_displays(self) -> list[DisplayInfo]:
         """List connected displays."""
+
+
+class VolumeBackend(ABC):
+    """Abstract volume control backend."""
+
+    @abstractmethod
+    def set_volume(self, level: int) -> dict:
+        """Set system volume 0-100."""
+
+    @abstractmethod
+    def get_volume(self) -> int | None:
+        """Get system volume 0-100, or None if unavailable."""
+
+
+class NotificationBackend(ABC):
+    """Abstract notification backend."""
+
+    @abstractmethod
+    def notify(self, title: str, message: str, duration: int = 30) -> dict:
+        """Send a notification dialog."""
+
+    @abstractmethod
+    def display_message(self, text: str, duration: int = 5) -> dict:
+        """Display a message on screen."""
+
+
+class ClipboardBackend(ABC):
+    """Abstract clipboard backend."""
+
+    @abstractmethod
+    def read_clipboard(self) -> str | None:
+        """Read clipboard contents, or None if unavailable."""
+
+
+class ScreenshotBackend(ABC):
+    """Abstract screenshot backend."""
+
+    @abstractmethod
+    def take_screenshot(self, path: str) -> bool:
+        """Capture screenshot to path. Returns True on success."""
+
+
+class AppBackend(ABC):
+    """Abstract application control backend."""
+
+    @abstractmethod
+    def open_app(self, name: str) -> dict:
+        """Open an application by name."""
+
+    @abstractmethod
+    def close_app(self, name: str) -> dict:
+        """Close an application by name."""
+
+
+class NetworkControlBackend(ABC):
+    """Abstract network control backend."""
+
+    @abstractmethod
+    def connect_wifi(self, ssid: str | None = None) -> dict:
+        """Connect to WiFi (enable interface if no SSID)."""
+
+    @abstractmethod
+    def list_interfaces(self) -> list[dict]:
+        """List network interfaces."""

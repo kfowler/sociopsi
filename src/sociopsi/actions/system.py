@@ -1,9 +1,8 @@
 """System control actions: brightness, volume, power, sleep."""
 
-import subprocess
 from typing import Any
 
-from sociopsi.platform import get_display_backend, get_power_backend
+from sociopsi.platform import get_display_backend, get_power_backend, get_volume_backend
 
 
 def set_brightness(level: int) -> dict[str, Any]:
@@ -27,15 +26,13 @@ def set_volume(level: int) -> dict[str, Any]:
     """Set system volume (0-100)."""
     level = max(0, min(100, level))
 
-    try:
-        subprocess.run(
-            ["osascript", "-e", f"set volume output volume {level}"],
-            capture_output=True,
-            timeout=5,
-        )
-        return {"set_to": level, "description": _describe_volume(level)}
-    except Exception as e:
-        return {"error": str(e), "description": "could not adjust volume"}
+    backend = get_volume_backend()
+    result = backend.set_volume(level)
+    if "error" not in result:
+        result["description"] = _describe_volume(level)
+    else:
+        result["description"] = "could not adjust volume"
+    return result
 
 
 def _describe_volume(level: int) -> str:

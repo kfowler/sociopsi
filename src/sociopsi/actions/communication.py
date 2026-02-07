@@ -3,36 +3,23 @@
 import subprocess
 from typing import Any
 
+from sociopsi.platform import get_notification_backend
+
 
 def notify(message: str, title: str | None = None, duration: int = 30) -> dict[str, Any]:
     """Send a notification dialog that can be dismissed."""
     title = title or "Socio-Psi"
 
-    try:
-        script = f'''
-        tell application "System Events"
-            display dialog "{message}" with title "{title}" buttons {{"OK"}} giving up after {duration}
-        end tell
-        '''
-        result = subprocess.run(
-            ["osascript", "-e", script],
-            capture_output=True,
-            text=True,
-            timeout=duration + 5,
+    backend = get_notification_backend()
+    result = backend.notify(title, message, duration)
+    if "error" not in result:
+        acknowledged = result.get("acknowledged", False)
+        result["description"] = (
+            "acknowledged by User" if acknowledged else "notification shown, no response"
         )
-        # Check if user clicked OK vs dialog timed out
-        acknowledged = "gave up:true" not in result.stdout.lower()
-        return {
-            "sent": True,
-            "acknowledged": acknowledged,
-            "title": title,
-            "message": message,
-            "description": "acknowledged by User"
-            if acknowledged
-            else "notification shown, no response",
-        }
-    except Exception as e:
-        return {"error": str(e), "description": "could not notify"}
+    else:
+        result["description"] = "could not notify"
+    return result
 
 
 def _get_best_voice(language: str = "en-US") -> tuple[str | None, str]:
@@ -174,30 +161,16 @@ def display_message(text: str, duration: int | None = None) -> dict[str, Any]:
     """Display a message on screen."""
     duration = duration or 5
 
-    try:
-        script = f'''
-        tell application "System Events"
-            display dialog "{text}" buttons {{"OK"}} giving up after {duration}
-        end tell
-        '''
-        result = subprocess.run(
-            ["osascript", "-e", script],
-            capture_output=True,
-            text=True,
-            timeout=duration + 5,
+    backend = get_notification_backend()
+    result = backend.display_message(text, duration)
+    if "error" not in result:
+        acknowledged = result.get("acknowledged", False)
+        result["description"] = (
+            "acknowledged by User" if acknowledged else "message shown, no response"
         )
-        # Check if user clicked OK vs dialog timed out
-        # AppleScript returns "gave up:true" when it times out
-        acknowledged = "gave up:true" not in result.stdout.lower()
-        return {
-            "displayed": True,
-            "acknowledged": acknowledged,
-            "text": text,
-            "duration": duration,
-            "description": "acknowledged by User" if acknowledged else "message shown, no response",
-        }
-    except Exception as e:
-        return {"error": str(e), "description": "could not display message"}
+    else:
+        result["description"] = "could not display message"
+    return result
 
 
 def play_sound(sound: str) -> dict[str, Any]:

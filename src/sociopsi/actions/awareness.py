@@ -4,6 +4,8 @@ import subprocess
 from datetime import datetime
 from typing import Any
 
+from sociopsi.platform import get_clipboard_backend, get_screenshot_backend
+
 
 def check_time(**kwargs: Any) -> dict[str, Any]:
     """Check current time and temporal context."""
@@ -85,14 +87,11 @@ def take_screenshot(**kwargs: Any) -> dict[str, Any]:
         with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
             temp_path = f.name
 
-        # Use screencapture on macOS
-        result = subprocess.run(
-            ["screencapture", "-x", temp_path],
-            capture_output=True,
-            timeout=5,
-        )
+        # Use platform-abstracted screenshot backend
+        backend = get_screenshot_backend()
+        success = backend.take_screenshot(temp_path)
 
-        if result.returncode != 0:
+        if not success:
             return {"error": "Screenshot failed", "description": "Could not capture screen"}
 
         # Read and encode the image
@@ -188,45 +187,40 @@ MOOD: [work/leisure/communication]"""
 
 def read_clipboard(**kwargs: Any) -> dict[str, Any]:
     """Read current clipboard contents."""
-    try:
-        result = subprocess.run(
-            ["pbpaste"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
+    backend = get_clipboard_backend()
+    content = backend.read_clipboard()
 
-        if result.returncode == 0:
-            content = result.stdout
-            # Truncate if too long
-            preview = content[:500] + "..." if len(content) > 500 else content
-            content_type = "text"
+    if content is not None:
+        # Truncate if too long
+        preview = content[:500] + "..." if len(content) > 500 else content
+        content_type = "text"
 
-            # Check if it's a URL
-            if content.strip().startswith(("http://", "https://")):
-                content_type = "url"
-            # Check if it might be code
-            elif any(
-                kw in content for kw in ["def ", "function ", "class ", "import ", "const ", "let "]
-            ):
-                content_type = "code"
+        # Check if it's a URL
+        if content.strip().startswith(("http://", "https://")):
+            content_type = "url"
+        # Check if it might be code
+        elif any(
+            kw in content for kw in ["def ", "function ", "class ", "import ", "const ", "let "]
+        ):
+            content_type = "code"
 
-            return {
-                "content": preview,
-                "full_content": content,
-                "length": len(content),
-                "type": content_type,
-                "description": f"Clipboard contains {content_type} ({len(content)} chars)",
-            }
+        return {
+            "content": preview,
+            "full_content": content,
+            "length": len(content),
+            "type": content_type,
+            "description": f"Clipboard contains {content_type} ({len(content)} chars)",
+        }
 
-        return {"content": "", "description": "Clipboard empty"}
-
-    except Exception as e:
-        return {"error": str(e), "description": "Could not read clipboard"}
+    return {"content": "", "description": "Clipboard empty"}
 
 
 def check_calendar(days: int = 1) -> dict[str, Any]:
-    """Check upcoming calendar events."""
+    """Check upcoming calendar events.
+
+    Note: Currently macOS-only via AppleScript. On other platforms,
+    returns gracefully with no events rather than failing.
+    """
     try:
         # Use AppleScript to get calendar events
         script = f"""
@@ -283,5 +277,10 @@ def check_calendar(days: int = 1) -> dict[str, Any]:
                 "description": "No upcoming events, schedule is clear",
             }
 
-    except Exception as e:
-        return {"error": str(e), "description": "Could not check calendar"}
+    except Exception:
+        # Graceful skip on non-macOS platforms
+        return {
+            "events": [],
+            "count": 0,
+            "description": "Calendar not available on this platform",
+        }
