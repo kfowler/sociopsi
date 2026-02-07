@@ -147,9 +147,7 @@ class ExpectationHorizon:
         net_valence = sum(c.weighted_benefit for c in changes)
 
         # Confidence: base 0.5 from SATISFACTION_MAP, higher with learned corrections
-        corrections_for_action = sum(
-            1 for dn in sat_map if (action.type, dn) in self._corrections
-        )
+        corrections_for_action = sum(1 for dn in sat_map if (action.type, dn) in self._corrections)
         confidence = min(0.9, 0.5 + 0.1 * corrections_for_action)
 
         return ActionExpectation(

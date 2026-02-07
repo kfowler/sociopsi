@@ -74,7 +74,7 @@ def web_search(query: str) -> dict[str, Any]:
                         for r in results[:5]
                     ]
                     source = "duckduckgo"
-        except (FileNotFoundError, json.JSONDecodeError):
+        except FileNotFoundError, json.JSONDecodeError:
             pass
 
     # Fallback: Brave Search suggestions

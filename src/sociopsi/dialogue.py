@@ -84,7 +84,9 @@ class ArchetypalDialogue:
         if modulator_context:
             tone = modulator_context.get("tone", "")
             if tone:
-                enriched_context = f"{context}\nProcessing tone: {tone}" if context else f"Processing tone: {tone}"
+                enriched_context = (
+                    f"{context}\nProcessing tone: {tone}" if context else f"Processing tone: {tone}"
+                )
 
         # Get modulator-derived temperature for archetype voices
         voice_temperature = modulator_context.get("temperature") if modulator_context else None

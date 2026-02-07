@@ -139,9 +139,7 @@ class LinuxNetworkBackend(NetworkControlBackend):
                 if ": " in line and not line.startswith(" "):
                     parts = line.split(": ")
                     if len(parts) >= 2:
-                        interfaces.append(
-                            {"name": parts[1], "device": parts[1]}
-                        )
+                        interfaces.append({"name": parts[1], "device": parts[1]})
             return interfaces
         except Exception:
             return []

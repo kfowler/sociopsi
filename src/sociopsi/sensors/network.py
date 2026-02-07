@@ -109,7 +109,7 @@ def scan_local_network(depth: str = "quick") -> list[NetworkDevice]:
                     )
                 )
 
-    except (subprocess.TimeoutExpired, FileNotFoundError):
+    except subprocess.TimeoutExpired, FileNotFoundError:
         pass
 
     return devices

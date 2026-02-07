@@ -22,7 +22,6 @@ def notify(message: str, title: str | None = None, duration: int = 30) -> dict[s
     return result
 
 
-
 def speak(text: str, voice: str | None = None, rate: int | None = None) -> dict[str, Any]:
     """Speak text aloud via the voice queue (non-blocking) or directly (blocking fallback).
 

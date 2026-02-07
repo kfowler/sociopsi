@@ -382,7 +382,7 @@ class JungAgent:
                             plan_actions = parse_plan_response(plan_response, vocab)
                             if plan_actions:
                                 self.goal_stack.create_plan(goal, plan_actions)
-                        except (LLMError, TimeoutError):
+                        except LLMError, TimeoutError:
                             pass  # Will retry next cycle
 
             # 4. Check for compulsive actions (survival override)

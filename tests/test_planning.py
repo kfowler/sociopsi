@@ -270,9 +270,7 @@ class TestGoalStack:
 
         # Second attempt
         plan2 = stack.create_plan(goal, [Action(type="observe")])
-        stack.record_result(
-            plan2, ActionResult(action_type="observe", success=False, error="fail")
-        )
+        stack.record_result(plan2, ActionResult(action_type="observe", success=False, error="fail"))
 
         assert goal.status == GoalStatus.FAILED
 

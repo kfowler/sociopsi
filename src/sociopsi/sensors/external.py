@@ -36,7 +36,7 @@ def get_ambient_light() -> dict[str, Any]:
                     "description": _describe_light_level(normalized),
                 }
         return {"raw": 0, "normalized": 50, "description": "unknown"}
-    except (subprocess.TimeoutExpired, ValueError, FileNotFoundError):
+    except subprocess.TimeoutExpired, ValueError, FileNotFoundError:
         return {"raw": 0, "normalized": 50, "description": "unavailable"}
 
 
@@ -109,7 +109,7 @@ def get_location() -> dict[str, Any]:
                 location["source"] = "gps"
                 location["description"] = f"Located at {location.get('address', 'unknown address')}"
                 return location
-    except (subprocess.TimeoutExpired, ValueError, FileNotFoundError):
+    except subprocess.TimeoutExpired, ValueError, FileNotFoundError:
         pass
 
     # Fallback: IP-based geolocation
@@ -160,7 +160,7 @@ def get_motion() -> dict[str, Any]:
         if result.stdout.strip():
             return {"status": "present", "movement": "still"}
         return {"status": "unavailable"}
-    except (subprocess.TimeoutExpired, FileNotFoundError):
+    except subprocess.TimeoutExpired, FileNotFoundError:
         return {"status": "unavailable"}
 
 
@@ -195,7 +195,7 @@ def get_usb_connections() -> list[dict[str, Any]]:
         usb_data = data.get("SPUSBDataType", [])
         extract_devices(usb_data)
 
-    except (subprocess.TimeoutExpired, ValueError, FileNotFoundError):
+    except subprocess.TimeoutExpired, ValueError, FileNotFoundError:
         pass
 
     return connections

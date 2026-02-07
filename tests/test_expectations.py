@@ -197,9 +197,7 @@ class TestEvaluate:
         self, horizon: ExpectationHorizon, drive_system: DriveSystem
     ) -> None:
         """Evaluation should not modify the actual drive system."""
-        original_demands = {
-            name: drive.demand for name, drive in drive_system.drives.items()
-        }
+        original_demands = {name: drive.demand for name, drive in drive_system.drives.items()}
 
         horizon.evaluate(
             [Action(type="web_search"), Action(type="look")],

@@ -202,7 +202,7 @@ class WorldModel:
                 model.screen = ScreenState.from_dict(data.get("screen", {}))
                 model.location = LocationState.from_dict(data.get("location", {}))
                 model.time = TimeState.from_dict(data.get("time", {}))
-            except (json.JSONDecodeError, OSError):
+            except json.JSONDecodeError, OSError:
                 pass
 
         # Always refresh time

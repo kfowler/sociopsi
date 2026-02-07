@@ -36,7 +36,7 @@ class DarwinPowerBackend(PowerBackend):
                     cycles = int(line.split(":")[-1].strip())
                 elif "Maximum Capacity" in line:
                     health = int(line.split(":")[-1].strip().replace("%", ""))
-        except (subprocess.TimeoutExpired, ValueError, IndexError):
+        except subprocess.TimeoutExpired, ValueError, IndexError:
             pass
 
         return BatteryInfo(percent=percent, health=health, cycles=cycles, power_state=power_state)
@@ -131,7 +131,7 @@ class LinuxPowerBackend(PowerBackend):
                     design_val = int(design.read_text().strip())
                     if design_val > 0:
                         health = int((full_val / design_val) * 100)
-        except (ValueError, OSError):
+        except ValueError, OSError:
             pass
 
         return BatteryInfo(percent=percent, health=health, cycles=cycles, power_state=power_state)

@@ -40,7 +40,7 @@ class DarwinThermalBackend(ThermalBackend):
                     cpu_temp = float(line.split(":")[-1].strip().replace(" C", ""))
                 elif "GPU die temperature" in line:
                     gpu_temp = float(line.split(":")[-1].strip().replace(" C", ""))
-        except (subprocess.TimeoutExpired, ValueError, FileNotFoundError, PermissionError):
+        except subprocess.TimeoutExpired, ValueError, FileNotFoundError, PermissionError:
             cpu_percent = psutil.cpu_percent(interval=0.1)
             cpu_temp = 40 + (cpu_percent * 0.5)
             gpu_temp = cpu_temp * 0.9
@@ -66,7 +66,7 @@ class DarwinThermalBackend(ThermalBackend):
                         if "rpm" in part.lower() and i > 0:
                             return int(parts[i - 1])
             return 0
-        except (subprocess.TimeoutExpired, ValueError, FileNotFoundError, PermissionError):
+        except subprocess.TimeoutExpired, ValueError, FileNotFoundError, PermissionError:
             return 0
 
 
@@ -98,7 +98,7 @@ class LinuxThermalBackend(ThermalBackend):
                     elif cpu_temp == 50.0:
                         # Use first available as CPU temp fallback
                         cpu_temp = temp
-        except (ValueError, OSError):
+        except ValueError, OSError:
             pass
 
         # Fallback: try lm-sensors via psutil
@@ -113,7 +113,7 @@ class LinuxThermalBackend(ThermalBackend):
                                     cpu_temp = entry.current
                                 elif "gpu" in name.lower():
                                     gpu_temp = entry.current
-            except (AttributeError, OSError):
+            except AttributeError, OSError:
                 pass
 
         return ThermalInfo(
@@ -132,7 +132,7 @@ class LinuxThermalBackend(ThermalBackend):
                     rpm = int(fan_input.read_text().strip())
                     if rpm > 0:
                         return rpm
-        except (ValueError, OSError):
+        except ValueError, OSError:
             pass
 
         # Fallback: psutil fans
@@ -143,7 +143,7 @@ class LinuxThermalBackend(ThermalBackend):
                     for entry in entries:
                         if entry.current > 0:
                             return int(entry.current)
-        except (AttributeError, OSError):
+        except AttributeError, OSError:
             pass
 
         return 0
