@@ -36,6 +36,7 @@ from sociopsi.llm import (
 )
 from sociopsi.logger import PsycheLogger
 from sociopsi.memory import SemanticMemory
+from sociopsi.nodenet import NodeNet
 from sociopsi.metacognition import MetaCognition
 from sociopsi.parser import parse_response
 from sociopsi.perception import format_perception
@@ -117,6 +118,9 @@ class JungAgent:
         from sociopsi.actions.creative import set_semantic_memory
 
         set_semantic_memory(self.memory)
+
+        # Spreading activation node net for implicit associations
+        self.nodenet = NodeNet()
 
         # Expectation horizon for anticipatory processing
         self.expectations = ExpectationHorizon()
@@ -437,6 +441,19 @@ class JungAgent:
             # 8. Update memory system
             self.memory.update(dt)
 
+            # 8b. Feed concepts into node net from events and speech
+            if events:
+                event_concepts = [e.type for e in events]
+                self.nodenet.activate_concepts(event_concepts, amount=0.3)
+            if utterances:
+                for utterance in utterances:
+                    words = [w for w in utterance.lower().split() if len(w) > 3]
+                    if words:
+                        self.nodenet.activate_concepts(words, amount=0.4)
+
+            # 8c. Run node net spreading activation cycle
+            self.nodenet.update()
+
             # 9. Build context for dialogue (drive_state computed in step 3b)
             context = self._build_dialogue_context(somatic, events, utterances)
             modulator_context = modulators.get_dialogue_context()
@@ -454,6 +471,12 @@ class JungAgent:
             if "individuation" in self.drive_system.drives:
                 if harmony > 0.7:
                     self.drive_system.drives["individuation"].satisfy(0.05 * harmony)
+
+            # Feed dialogue concepts into node net
+            if mediated_thought:
+                thought_words = [w for w in mediated_thought.lower().split() if len(w) > 3]
+                if thought_words:
+                    self.nodenet.activate_concepts(thought_words[:8], amount=0.3)
 
             # Store mediated thought in memory (gated by securing rate modulator)
             if mediated_thought:
@@ -485,6 +508,12 @@ class JungAgent:
             # 13. Render harmony score
             self.renderer.render_ego(mediated_thought, harmony, self.dialogue.ego.strength)
 
+            # 13b. Print node net priming state
+            primed_nodes = self.nodenet.get_primed(3)
+            if primed_nodes:
+                primed_str = ", ".join(f"{c}({a:.2f})" for c, a in primed_nodes)
+                print(f"{colors.DIM}[PRIMING] {primed_str}{colors.RESET}")
+
             # 14. Get actions from LLM (still using JSON approach for actions)
             drive_perception = self.drive_system.format_for_perception()
             modulator_perception = modulators.format_for_perception()
@@ -505,6 +534,11 @@ class JungAgent:
                 perception += "\n" + goals_text
             if emotion_text:
                 perception += "\n" + emotion_text
+
+            # Enrich perception with node net priming context
+            priming_context = self.nodenet.get_priming_context()
+            if priming_context:
+                perception += "\n" + priming_context
 
             # Enrich perception for Anthropic with monologue and memories
             if self.config.llm_provider == "anthropic":
