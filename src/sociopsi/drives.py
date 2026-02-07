@@ -791,6 +791,12 @@ class DriveSystem:
         # Modulator layer (computed from drives each tick)
         self.modulators = ModulatorLayer()
 
+        # Persistence: restore saved state if available
+        from sociopsi.persistence import DriveStore
+
+        self._store = DriveStore(config.drives_db)
+        self._store.restore_drives(self)
+
     # ------------------------------------------------------------------
     # Timer lifecycle
     # ------------------------------------------------------------------
@@ -811,7 +817,7 @@ class DriveSystem:
         logger.debug("DriveSystem timer started (%.0fms)", self.TICK_INTERVAL * 1000)
 
     def stop(self, timeout: float = 2.0) -> None:
-        """Stop the timer thread."""
+        """Stop the timer thread and persist drive state."""
         if not self._running:
             return
         self._running = False
@@ -819,7 +825,11 @@ class DriveSystem:
         if self._timer_thread is not None:
             self._timer_thread.join(timeout=timeout)
             self._timer_thread = None
-        logger.debug("DriveSystem timer stopped")
+
+        # Save state on clean shutdown
+        self._store.save_drives(self)
+        self._store.close()
+        logger.debug("DriveSystem timer stopped, state persisted")
 
     def _timer_loop(self) -> None:
         """Timer thread main loop — ticks at TICK_INTERVAL."""
@@ -859,6 +869,9 @@ class DriveSystem:
 
         # 6. Publish urgency threshold events
         self._publish_urgency_events()
+
+        # 7. Periodic checkpoint (gated by interval inside maybe_checkpoint)
+        self._store.maybe_checkpoint(self)
 
     # ------------------------------------------------------------------
     # Public API for agent thread

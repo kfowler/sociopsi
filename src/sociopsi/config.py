@@ -378,6 +378,7 @@ class AgentConfig:
     journal_file: Path = field(default_factory=lambda: Path.home() / ".sociopsi" / "journal.jsonl")
     memory_file: Path = field(default_factory=lambda: Path.home() / ".sociopsi" / "memory.json")
     world_file: Path = field(default_factory=lambda: Path.home() / ".sociopsi" / "world.json")
+    drives_db: Path = field(default_factory=lambda: Path.home() / ".sociopsi" / "drives.db")
 
     # Logging
     log_stream: bool = True  # Print stream to console
