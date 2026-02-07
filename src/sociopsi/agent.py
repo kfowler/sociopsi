@@ -21,6 +21,7 @@ from sociopsi.config import AgentConfig, load_system_prompt
 from sociopsi.dialogue import ArchetypalDialogue
 from sociopsi.drives import DriveSystem
 from sociopsi.ear import Ear
+from sociopsi.emotions import EmotionSystem
 from sociopsi.event_bus import get_event_bus
 from sociopsi.expectations import ExpectationHorizon
 from sociopsi.llm import (
@@ -98,6 +99,9 @@ class JungAgent:
         self.ear = Ear(self.config, renderer=self.renderer)
         self.logger = PsycheLogger(self.config)
         self.drive_system = DriveSystem(self.config)
+
+        # Emergent emotion system (computed from modulators + drives)
+        self.emotions = EmotionSystem()
 
         # Archetypal dialogue system (LLM-powered internal voices)
         self.dialogue = ArchetypalDialogue(
@@ -412,7 +416,16 @@ class JungAgent:
             modulators = self.drive_system.modulators
             self.renderer.render_modulators(modulators.format_for_perception())
 
-            # 6c. Render goal stack if active
+            # 6c. Update and print emotional state
+            self.emotions.update(modulators, self.drive_system)
+            emotion_text = self.emotions.format_for_perception()
+            if emotion_text:
+                print(f"\n{colors.MAGENTA}[EMOTIONS]{colors.RESET}")
+                for line in emotion_text.split("\n")[1:]:
+                    if line.strip():
+                        print(f"  {line}")
+
+            # 6d. Render goal stack if active
             goals_text = self.goal_stack.format_for_perception()
             if goals_text:
                 self.renderer.render_planning(goals_text)
@@ -427,6 +440,8 @@ class JungAgent:
             # 9. Build context for dialogue (drive_state computed in step 3b)
             context = self._build_dialogue_context(somatic, events, utterances)
             modulator_context = modulators.get_dialogue_context()
+            # Enrich modulator context with emotional state
+            modulator_context.update(self.emotions.get_dialogue_context())
 
             # 10. Generate archetypal dialogue (internal monologue)
             segments, mediated_thought, harmony = self.dialogue.generate_dialogue(
@@ -447,6 +462,7 @@ class JungAgent:
                     self.memory.add_memory(
                         content=mediated_thought,
                         intensity=min(1.0, 0.3 + harmony * 0.5),
+                        emotional_valence=self.emotions.get_valence(),
                         memory_type="thought",
                     )
 
@@ -484,9 +500,11 @@ class JungAgent:
                 modulators=modulator_perception,
             )
 
-            # Enrich perception with goal stack
+            # Enrich perception with goal stack and emotions
             if goals_text:
                 perception += "\n" + goals_text
+            if emotion_text:
+                perception += "\n" + emotion_text
 
             # Enrich perception for Anthropic with monologue and memories
             if self.config.llm_provider == "anthropic":
@@ -598,6 +616,7 @@ class JungAgent:
                 heartbeat_mode=self._heartbeat_mode,
                 drives=self.drive_system.get_state(),
                 modulators=dict(modulators.get_state()),
+                emotions=self.emotions.get_state(),
             )
 
             # 22. Check for heartbeat override
