@@ -38,6 +38,12 @@ from sociopsi.memory import SemanticMemory
 from sociopsi.metacognition import MetaCognition
 from sociopsi.parser import parse_response
 from sociopsi.perception import format_perception
+from sociopsi.planning import (
+    DRIVE_ACTION_VOCABULARY,
+    GoalStack,
+    build_plan_prompt,
+    parse_plan_response,
+)
 from sociopsi.sensors.events import EventCollector
 from sociopsi.sensors.somatic import gather_somatic
 from sociopsi.terminal import colors
@@ -106,6 +112,9 @@ class JungAgent:
             model=self.config.model,
             event_bus=self.event_bus,
         )
+
+        # Hierarchical planning (ReCoN-inspired goal stack)
+        self.goal_stack = GoalStack()
 
         # State
         self._running: bool = False
@@ -340,6 +349,36 @@ class JungAgent:
             had_actions = len(self._last_action_results) > 0
             self.drive_system.update(somatic, dt, had_actions)
 
+            # 3b. Update goal stack from drives
+            drive_state = self._get_drive_state_dict()
+            self.goal_stack.update_from_drives(drive_state)
+            self.goal_stack.check_goal_satisfaction(drive_state)
+
+            # Generate plans for goals that need them
+            for goal in self.goal_stack.goals:
+                if self.goal_stack.needs_plan(goal):
+                    vocab = DRIVE_ACTION_VOCABULARY.get(goal.drive_name, [])
+                    if vocab:
+                        prompt = build_plan_prompt(
+                            goal=goal,
+                            drive_states=drive_state,
+                            available_actions=vocab,
+                            recent_results=self._last_action_results,
+                        )
+                        try:
+                            plan_future = submit_chat(
+                                model=self.config.model,
+                                messages=[{"role": "user", "content": prompt}],
+                                provider=self.config.llm_provider,
+                            )
+                            self._pump_until_done(plan_future)
+                            plan_response = plan_future.result()["message"]["content"]
+                            plan_actions = parse_plan_response(plan_response, vocab)
+                            if plan_actions:
+                                self.goal_stack.create_plan(goal, plan_actions)
+                        except (LLMError, TimeoutError):
+                            pass  # Will retry next cycle
+
             # 4. Check for compulsive actions (survival override)
             compulsive = self.drive_system.get_compulsive_actions(somatic)
             if compulsive:
@@ -367,6 +406,14 @@ class JungAgent:
                 if line.strip():
                     print(f"  {line}")
 
+            # 6c. Print goal stack if active
+            goals_text = self.goal_stack.format_for_perception()
+            if goals_text:
+                print(f"\n{colors.GREEN}[PLANNING]{colors.RESET}")
+                for line in goals_text.split("\n")[1:]:
+                    if line.strip():
+                        print(f"  {line}")
+
             # 7. Print events if any
             if events:
                 print(f"\n{colors.CYAN}[EVENTS]{colors.RESET}")
@@ -377,8 +424,7 @@ class JungAgent:
             # 8. Update memory system
             self.memory.update(dt)
 
-            # 9. Build context for dialogue
-            drive_state = self._get_drive_state_dict()
+            # 9. Build context for dialogue (drive_state computed in step 3b)
             context = self._build_dialogue_context(somatic, events, utterances)
             modulator_context = modulators.get_dialogue_context()
 
@@ -440,6 +486,10 @@ class JungAgent:
                 modulators=modulator_perception,
             )
 
+            # Enrich perception with goal stack
+            if goals_text:
+                perception += "\n" + goals_text
+
             # Enrich perception for Anthropic with monologue and memories
             if self.config.llm_provider == "anthropic":
                 extra: list[str] = []
@@ -476,11 +526,19 @@ class JungAgent:
             if compulsive:
                 final_actions.extend(compulsive)
 
-            # Get primed actions for high-urgency drives
+            # Get planned actions from goal stack (replaces primed for planned drives)
+            planned: list[Action] = []
+            active_plan = self.goal_stack.active_plan
+            if active_plan:
+                planned = self.goal_stack.get_next_actions()
+                final_actions.extend(planned)
+
+            # Get primed actions for high-urgency drives (skip if already planned)
             primed = self.drive_system.get_primed_actions()
             proposed_types = {a.type for a in parsed.actions}
+            planned_types = {a.type for a in planned}
             for action in primed:
-                if action.type not in proposed_types:
+                if action.type not in proposed_types and action.type not in planned_types:
                     final_actions.append(action)
 
             # Add LLM-proposed actions, synthesizing speak text from mediated thought
@@ -511,6 +569,8 @@ class JungAgent:
                     # Mark source of action
                     if action in compulsive:
                         source = f" {colors.RED}(compulsive){colors.RESET}"
+                    elif action in planned:
+                        source = f" {colors.GREEN}(planned){colors.RESET}"
                     elif action in primed:
                         source = f" {colors.MAGENTA}(primed){colors.RESET}"
                     else:
@@ -535,6 +595,13 @@ class JungAgent:
                 drives_before,
                 drives_after,
             )
+
+            # 18b. Record results back to the planning system
+            if active_plan and planned and self._last_action_results:
+                for result in self._last_action_results:
+                    if result.action_type == planned[0].type:
+                        self.goal_stack.record_result(active_plan, result)
+                        break
 
             # 19. (Speech happens only via speak action with ego-mediated text)
 
