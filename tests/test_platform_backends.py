@@ -14,7 +14,6 @@ from sociopsi.platform.base import (
     VolumeBackend,
 )
 
-
 # --- Backend factory tests ---
 
 
@@ -231,9 +230,7 @@ class TestDarwinNetworkBackend:
         from sociopsi.platform.network import DarwinNetworkBackend
 
         backend = DarwinNetworkBackend()
-        mock_output = (
-            "Hardware Port: Wi-Fi\nDevice: en0\nEthernet Address: aa:bb:cc:dd:ee:ff\n"
-        )
+        mock_output = "Hardware Port: Wi-Fi\nDevice: en0\nEthernet Address: aa:bb:cc:dd:ee:ff\n"
         with patch("sociopsi.platform.network.subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0, stdout=mock_output)
             result = backend.connect_wifi()
@@ -245,7 +242,9 @@ class TestDarwinNetworkBackend:
 
         backend = DarwinNetworkBackend()
         with patch("sociopsi.platform.network.subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(returncode=0, stdout="Hardware Port: Ethernet\nDevice: en1\n")
+            mock_run.return_value = MagicMock(
+                returncode=0, stdout="Hardware Port: Ethernet\nDevice: en1\n"
+            )
             result = backend.connect_wifi()
             assert "error" in result
 
@@ -352,9 +351,7 @@ class TestActionIntegration:
 
         mock_backend = MagicMock()
         mock_backend.read_clipboard.return_value = "https://example.com"
-        with patch(
-            "sociopsi.actions.awareness.get_clipboard_backend", return_value=mock_backend
-        ):
+        with patch("sociopsi.actions.awareness.get_clipboard_backend", return_value=mock_backend):
             result = read_clipboard()
             assert result["type"] == "url"
             assert result["length"] == 19
@@ -364,9 +361,7 @@ class TestActionIntegration:
 
         mock_backend = MagicMock()
         mock_backend.connect_wifi.return_value = {"connected": True, "device": "wlan0"}
-        with patch(
-            "sociopsi.actions.environment.get_network_backend", return_value=mock_backend
-        ):
+        with patch("sociopsi.actions.environment.get_network_backend", return_value=mock_backend):
             result = connect_network()
             assert result["connected"] is True
             assert "description" in result
