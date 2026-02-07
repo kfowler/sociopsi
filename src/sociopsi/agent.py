@@ -501,7 +501,9 @@ class JungAgent:
             rolling_harmony = self.dialogue_manager.get_rolling_harmony()
             if "individuation" in self.drive_system.drives:
                 if rolling_harmony > 0.7:
-                    self.drive_system.drives["individuation"].satisfy(0.05 * rolling_harmony)
+                    self.drive_system.drives["individuation"].satisfy(
+                        0.05 * rolling_harmony
+                    )
 
             # Feed dialogue concepts into node net (only for new dialogue)
             if is_new_dialogue and mediated_thought:
@@ -622,10 +624,8 @@ class JungAgent:
                 final_actions.append(action)
 
             # Auto-inject speak when new dialogue produced a mediated thought
-            if (
-                is_new_dialogue
-                and mediated_thought
-                and not any(a.type == "speak" for a in final_actions)
+            if is_new_dialogue and mediated_thought and not any(
+                a.type == "speak" for a in final_actions
             ):
                 final_actions.append(Action(type="speak", params={"text": mediated_thought}))
 

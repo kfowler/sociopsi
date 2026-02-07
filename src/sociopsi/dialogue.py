@@ -473,7 +473,9 @@ class DialogueManager:
     def get_state(self) -> dict[str, Any]:
         """Get dialogue manager state for logging/inspection."""
         with self._lock:
-            cached_age = time.time() - self._cached.timestamp if self._cached else None
+            cached_age = (
+                time.time() - self._cached.timestamp if self._cached else None
+            )
             cached_trigger = self._cached.trigger if self._cached else None
             rolling = self._rolling_harmony_unlocked()
             stale = (
@@ -537,7 +539,7 @@ class DialogueManager:
                     self._cached = result
                     self._harmony_history.append(harmony)
                     if len(self._harmony_history) > self.HARMONY_WINDOW:
-                        self._harmony_history = self._harmony_history[-self.HARMONY_WINDOW :]
+                        self._harmony_history = self._harmony_history[-self.HARMONY_WINDOW:]
 
                 logger.debug(
                     "Dialogue generated (trigger=%s, harmony=%.2f)",
