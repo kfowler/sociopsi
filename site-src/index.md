@@ -57,6 +57,6 @@ Survey of Psi theory foundations, MicroPsi2 architecture, and the state of machi
 
 ## Links
 
-- [GitHub Repository](https://github.com/kfowler/consciousness)
+- [GitHub Repository](https://github.com/kfowler/sociopsi)
 - [Research Overview](research/index.md)
 - [All References](research/references.md)

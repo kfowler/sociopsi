@@ -1,9 +1,9 @@
 site_name: Socio-Psi
-site_url: https://kfowler.github.io/consciousness/
+site_url: https://kfowler.github.io/sociopsi/
 site_description: A Psi-theoretic architecture for machine subjectivity
 site_author: K Fowler
-repo_url: https://github.com/kfowler/consciousness
-repo_name: kfowler/consciousness
+repo_url: https://github.com/kfowler/sociopsi
+repo_name: kfowler/sociopsi
 
 docs_dir: site-src
 site_dir: site

@@ -36,9 +36,9 @@ anthropic = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/kfowler/consciousness"
-Repository = "https://github.com/kfowler/consciousness"
-Issues = "https://github.com/kfowler/consciousness/issues"
+Homepage = "https://github.com/kfowler/sociopsi"
+Repository = "https://github.com/kfowler/sociopsi"
+Issues = "https://github.com/kfowler/sociopsi/issues"
 
 [project.scripts]
 sociopsi = "sociopsi.main:main"
