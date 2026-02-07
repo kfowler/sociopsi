@@ -404,6 +404,9 @@ class AgentConfig:
     ear_locale: str = "en-US"
     ear_on_device: bool = True
 
+    # UX renderer mode: "console" (default terminal output)
+    ux_mode: str = "console"
+
     def __post_init__(self) -> None:
         """Initialize config: load config file, create data directory, validate voices."""
         # Load config file from ~/.sociopsi/config.json

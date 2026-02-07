@@ -12,6 +12,7 @@ from sociopsi.platform.base import (
     AudioBackend,
     BatteryInfo,
     ClipboardBackend,
+    DeviceBackend,
     DisplayBackend,
     DisplayInfo,
     NetworkControlBackend,
@@ -21,6 +22,8 @@ from sociopsi.platform.base import (
     SensorUnavailable,
     ThermalBackend,
     ThermalInfo,
+    ThunderboltDevice,
+    USBDevice,
     VoiceInfo,
     VolumeBackend,
 )
@@ -80,6 +83,21 @@ def get_display_backend() -> DisplayBackend:
         return LinuxDisplayBackend()
     else:
         raise SensorUnavailable(f"No display backend for platform: {platform}")
+
+
+def get_device_backend() -> DeviceBackend:
+    """Get the device enumeration backend for the current platform."""
+    platform = _detect_platform()
+    if platform == "darwin":
+        from sociopsi.platform.devices import DarwinDeviceBackend
+
+        return DarwinDeviceBackend()
+    elif platform == "linux":
+        from sociopsi.platform.devices import LinuxDeviceBackend
+
+        return LinuxDeviceBackend()
+    else:
+        raise SensorUnavailable(f"No device backend for platform: {platform}")
 
 
 def get_speech_backend(locale: str = "en-US", on_device: bool = True) -> SpeechBackend:
@@ -212,6 +230,7 @@ __all__ = [
     "AudioBackend",
     "BatteryInfo",
     "ClipboardBackend",
+    "DeviceBackend",
     "DisplayBackend",
     "DisplayInfo",
     "NetworkControlBackend",
@@ -222,11 +241,14 @@ __all__ = [
     "SpeechBackend",
     "ThermalBackend",
     "ThermalInfo",
+    "ThunderboltDevice",
+    "USBDevice",
     "VoiceInfo",
     "VolumeBackend",
     "get_app_backend",
     "get_audio_backend",
     "get_clipboard_backend",
+    "get_device_backend",
     "get_display_backend",
     "get_network_backend",
     "get_notification_backend",

@@ -51,7 +51,7 @@ class Journal:
                         somatic_snapshot=data.get("somatic_snapshot"),
                     )
                 )
-            except (json.JSONDecodeError, KeyError):
+            except json.JSONDecodeError, KeyError:
                 continue
 
         return entries
@@ -78,7 +78,7 @@ class Journal:
                         )
                         if len(entries) >= limit:
                             break
-                except (json.JSONDecodeError, KeyError):
+                except json.JSONDecodeError, KeyError:
                     continue
 
         return entries
@@ -99,7 +99,7 @@ class MemoryStore:
             try:
                 with open(self.path) as f:
                     self._cache = json.load(f)
-            except (json.JSONDecodeError, OSError):
+            except json.JSONDecodeError, OSError:
                 self._cache = {}
 
     def _save(self) -> None:

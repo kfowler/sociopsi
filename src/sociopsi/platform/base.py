@@ -3,7 +3,7 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
-from sociopsi.types import LidState, PowerState, ThermalState
+from sociopsi.types import BluetoothDevice, LidState, PowerState, ThermalState
 
 
 @dataclass
@@ -216,3 +216,46 @@ class AudioBackend(ABC):
         Returns:
             Best voice, or None if no voices available.
         """
+
+
+@dataclass
+class USBDevice:
+    """USB device info."""
+
+    name: str
+    vendor: str
+    serial: str | None = None
+
+
+@dataclass
+class ThunderboltDevice:
+    """Thunderbolt device info."""
+
+    name: str
+    vendor: str
+    device_id: str | None = None
+    speed: str = "Unknown"
+
+
+class DeviceBackend(ABC):
+    """Abstract device enumeration backend."""
+
+    @abstractmethod
+    def list_usb(self) -> list[USBDevice]:
+        """List connected USB devices."""
+
+    @abstractmethod
+    def list_bluetooth(self) -> list[BluetoothDevice]:
+        """List connected Bluetooth devices."""
+
+    @abstractmethod
+    def list_thunderbolt(self) -> list[ThunderboltDevice]:
+        """List connected Thunderbolt devices."""
+
+    @abstractmethod
+    def get_ambient_light(self) -> int | None:
+        """Get ambient light sensor reading in lux, or None if unavailable."""
+
+    @abstractmethod
+    def get_motion(self) -> dict[str, str] | None:
+        """Get motion sensor data, or None if unavailable."""

@@ -169,7 +169,10 @@ class DarwinSpeechBackend(SpeechBackend):
             recording_format = input_node.outputFormatForBus_(0)
 
             input_node.installTapOnBus_bufferSize_format_block_(
-                0, 1024, recording_format, self._audio_tap_block,
+                0,
+                1024,
+                recording_format,
+                self._audio_tap_block,
             )
 
             engine.prepare()
@@ -188,7 +191,9 @@ class DarwinSpeechBackend(SpeechBackend):
 
         self._available = True
         self._start_recognition()
-        logger.info(f"DarwinSpeechBackend started (locale={self._locale}, on_device={self._on_device})")
+        logger.info(
+            f"DarwinSpeechBackend started (locale={self._locale}, on_device={self._on_device})"
+        )
 
     def stop_listening(self) -> None:
         """Stop speech recognition and release resources."""
@@ -254,7 +259,8 @@ class DarwinSpeechBackend(SpeechBackend):
         self._request = request
 
         self._recognition_task = self._recognizer.recognitionTaskWithRequest_resultHandler_(
-            request, self._recognition_result_handler,
+            request,
+            self._recognition_result_handler,
         )
 
     def _recognition_result_handler(self, result: Any, error: Any) -> None:

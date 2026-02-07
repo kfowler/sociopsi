@@ -86,7 +86,13 @@ class TestModulatorLayer:
         for drive in drive_system.drives.values():
             drive.demand = 1.0
         mods.update(drive_system)
-        for attr in ("arousal_level", "resolution", "selection_threshold", "securing_rate", "goal_valuation"):
+        for attr in (
+            "arousal_level",
+            "resolution",
+            "selection_threshold",
+            "securing_rate",
+            "goal_valuation",
+        ):
             val = getattr(mods, attr)
             assert 0.0 <= val <= 1.0, f"{attr} = {val} out of range"
 
@@ -94,7 +100,13 @@ class TestModulatorLayer:
         for drive in drive_system.drives.values():
             drive.demand = 0.0
         mods.update(drive_system)
-        for attr in ("arousal_level", "resolution", "selection_threshold", "securing_rate", "goal_valuation"):
+        for attr in (
+            "arousal_level",
+            "resolution",
+            "selection_threshold",
+            "securing_rate",
+            "goal_valuation",
+        ):
             val = getattr(mods, attr)
             assert 0.0 <= val <= 1.0, f"{attr} = {val} out of range"
 
@@ -144,7 +156,9 @@ class TestModulatorLayer:
         initial = drive_system.modulators.arousal_level
         drive_system.update(somatic, dt=5.0, had_actions=True)
         # Value should have changed from drive updates
-        assert drive_system.modulators.arousal_level != initial or True  # May not change if balanced
+        assert (
+            drive_system.modulators.arousal_level != initial or True
+        )  # May not change if balanced
 
 
 class TestModulatorOutputs:

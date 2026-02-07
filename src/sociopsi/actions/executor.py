@@ -1,5 +1,7 @@
 """Main action executor that dispatches to specific handlers."""
 
+import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
 from sociopsi.actions import (
@@ -16,6 +18,114 @@ from sociopsi.actions import (
 from sociopsi.config import AgentConfig
 from sociopsi.types import Action, ActionResult
 from sociopsi.world import WorldModel
+
+logger = logging.getLogger(__name__)
+
+# Action categories define execution semantics.
+# PARALLEL categories run concurrently (independent reads/fetches).
+# SEQUENTIAL categories run in order (ordering or state consistency matters).
+ActionCategory = str  # "perception" | "learning" | "communication" | ...
+
+PARALLEL_CATEGORIES: frozenset[str] = frozenset({"perception", "learning"})
+SEQUENTIAL_CATEGORIES: tuple[str, ...] = (
+    "communication",
+    "self_regulation",
+    "creative",
+    "memory",
+)
+
+# Map each action type to its category.
+ACTION_CATEGORIES: dict[str, ActionCategory] = {
+    # Perception — independent reads, no side effects
+    "check_battery": "perception",
+    "check_thermals": "perception",
+    "check_memory": "perception",
+    "check_network": "perception",
+    "check_processes": "perception",
+    "sense_age": "perception",
+    "sense_all": "perception",
+    "look": "perception",
+    "look_for": "perception",
+    "watch": "perception",
+    "listen": "perception",
+    "listen_for": "perception",
+    "transcribe": "perception",
+    "sense_light": "perception",
+    "sense_motion": "perception",
+    "sense_touch": "perception",
+    "sense_presence": "perception",
+    "sense_location": "perception",
+    "sense_connections": "perception",
+    "sense_breath": "perception",
+    "sense_io": "perception",
+    "sense_disk_io": "perception",
+    "sense_disks": "perception",
+    "sense_displays": "perception",
+    "sense_thunderbolt": "perception",
+    "sense_usb": "perception",
+    "sense_network": "perception",
+    "ping": "perception",
+    "probe": "perception",
+    "trace_route": "perception",
+    "scan_local": "perception",
+    "check_time": "perception",
+    "check_weather": "perception",
+    "take_screenshot": "perception",
+    "read_clipboard": "perception",
+    "check_calendar": "perception",
+    # Learning — independent fetches
+    "web_search": "learning",
+    "web_read": "learning",
+    "read_hacker_news": "learning",
+    "describe_image": "learning",
+    "transcribe_audio": "learning",
+    # Communication — ordering matters for coherent output
+    "notify": "communication",
+    "speak": "communication",
+    "display_message": "communication",
+    "play_sound": "communication",
+    "play_music": "communication",
+    # Self-regulation — state mutations
+    "set_brightness": "self_regulation",
+    "set_volume": "self_regulation",
+    "set_power_mode": "self_regulation",
+    "set_heartbeat": "self_regulation",
+    "sleep": "self_regulation",
+    "wake_display": "self_regulation",
+    # Creative — stateful internal processes
+    "compose_thought": "creative",
+    "dream": "creative",
+    "observe": "creative",
+    "set_wallpaper": "creative",
+    "meditate": "creative",
+    "stretch": "creative",
+    "play_piano": "creative",
+    # Memory — memory consistency
+    "journal_write": "memory",
+    "journal_read": "memory",
+    "store_memory": "memory",
+    "recall_memory": "memory",
+    # Environment — state changes
+    "open_app": "self_regulation",
+    "close_app": "self_regulation",
+    "connect_network": "self_regulation",
+    # Interaction — ordering matters
+    "send_message": "communication",
+    "type_text": "communication",
+}
+
+# Per-category timeout in seconds (default 10s).
+CATEGORY_TIMEOUTS: dict[str, float] = {
+    "perception": 10.0,
+    "learning": 15.0,
+    "communication": 10.0,
+    "self_regulation": 10.0,
+    "creative": 30.0,
+    "memory": 10.0,
+}
+DEFAULT_TIMEOUT: float = 10.0
+
+MAX_PARALLEL_WORKERS: int = 4
 
 
 class ActionExecutor:
@@ -143,8 +253,117 @@ class ActionExecutor:
             )
 
     def execute_all(self, actions: list[Action]) -> list[ActionResult]:
-        """Execute a list of actions."""
-        return [self.execute(action) for action in actions]
+        """Execute actions with parallel-by-category scheduling.
+
+        Actions in parallel categories (perception, learning) run concurrently
+        via a thread pool. Sequential categories (communication, self_regulation,
+        creative, memory) run in order after parallel groups complete.
+
+        Each action has a per-category timeout. Failed or timed-out actions
+        return an ActionResult with an error but don't block others.
+        """
+        if not actions:
+            return []
+
+        # Group actions by category, preserving original order index
+        groups: dict[str, list[tuple[int, Action]]] = {}
+        for i, action in enumerate(actions):
+            cat = ACTION_CATEGORIES.get(action.type, "self_regulation")
+            groups.setdefault(cat, []).append((i, action))
+
+        results: list[ActionResult | None] = [None] * len(actions)
+
+        # Phase 1: Execute all parallel categories concurrently
+        parallel_groups = {
+            cat: items for cat, items in groups.items() if cat in PARALLEL_CATEGORIES
+        }
+        if parallel_groups:
+            self._execute_parallel(parallel_groups, results)
+
+        # Phase 2: Execute sequential categories in defined order
+        for cat in SEQUENTIAL_CATEGORIES:
+            if cat in groups:
+                self._execute_sequential(cat, groups[cat], results)
+
+        # Phase 3: Any remaining categories not in either list (defensive)
+        handled = PARALLEL_CATEGORIES | set(SEQUENTIAL_CATEGORIES)
+        for cat, items in groups.items():
+            if cat not in handled:
+                self._execute_sequential(cat, items, results)
+
+        # Fill any None slots (shouldn't happen, but be safe)
+        return [
+            r if r is not None else ActionResult(
+                action_type=actions[i].type, success=False, error="Action was not executed"
+            )
+            for i, r in enumerate(results)
+        ]
+
+    def _execute_parallel(
+        self,
+        groups: dict[str, list[tuple[int, Action]]],
+        results: list[ActionResult | None],
+    ) -> None:
+        """Execute all actions from parallel categories concurrently."""
+        with ThreadPoolExecutor(max_workers=MAX_PARALLEL_WORKERS) as pool:
+            # Submit all parallel actions
+            future_to_idx: dict[Any, tuple[int, Action, str]] = {}
+            for cat, items in groups.items():
+                timeout = CATEGORY_TIMEOUTS.get(cat, DEFAULT_TIMEOUT)
+                for idx, action in items:
+                    future = pool.submit(self._execute_with_timeout, action, timeout)
+                    future_to_idx[future] = (idx, action, cat)
+
+            # Collect results as they complete
+            for future in as_completed(future_to_idx):
+                idx, action, cat = future_to_idx[future]
+                try:
+                    results[idx] = future.result()
+                except Exception as e:
+                    logger.error("Parallel action %s failed: %s", action.type, e)
+                    results[idx] = ActionResult(
+                        action_type=action.type,
+                        success=False,
+                        error=str(e),
+                    )
+
+    def _execute_sequential(
+        self,
+        category: str,
+        items: list[tuple[int, Action]],
+        results: list[ActionResult | None],
+    ) -> None:
+        """Execute actions in a sequential category one at a time."""
+        timeout = CATEGORY_TIMEOUTS.get(category, DEFAULT_TIMEOUT)
+        for idx, action in items:
+            results[idx] = self._execute_with_timeout(action, timeout)
+
+    def _execute_with_timeout(self, action: Action, timeout: float) -> ActionResult:
+        """Execute a single action with a timeout.
+
+        Uses a thread to enforce the timeout. If the action exceeds the
+        timeout, returns an error result without blocking others.
+        """
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(self.execute, action)
+            try:
+                return future.result(timeout=timeout)
+            except TimeoutError:
+                logger.warning(
+                    "Action %s timed out after %.1fs", action.type, timeout
+                )
+                return ActionResult(
+                    action_type=action.type,
+                    success=False,
+                    error=f"Action timed out after {timeout}s",
+                )
+            except Exception as e:
+                logger.error("Action %s raised: %s", action.type, e)
+                return ActionResult(
+                    action_type=action.type,
+                    success=False,
+                    error=str(e),
+                )
 
     def get_heartbeat_override(self) -> float | None:
         """Get any heartbeat override set by the psyche."""

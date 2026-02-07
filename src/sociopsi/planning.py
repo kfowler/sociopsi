@@ -215,7 +215,7 @@ def parse_plan_response(response: str, available_actions: list[str]) -> list[Act
     try:
         items = json.loads(text[start : end + 1])
     except json.JSONDecodeError:
-        logger.warning(f"Failed to parse plan JSON: {text[start:end + 1][:100]}")
+        logger.warning(f"Failed to parse plan JSON: {text[start : end + 1][:100]}")
         return actions
 
     if not isinstance(items, list):
@@ -281,8 +281,7 @@ class GoalStack:
         self._goals = [
             g
             for g in self._goals
-            if g.status == GoalStatus.ACTIVE
-            and (now - g.created_at) < GOAL_STALENESS_TIMEOUT
+            if g.status == GoalStatus.ACTIVE and (now - g.created_at) < GOAL_STALENESS_TIMEOUT
         ]
 
         # Check which drives need new goals
@@ -326,8 +325,7 @@ class GoalStack:
         self._plans[goal.drive_name] = plan
         goal.attempts += 1
         logger.info(
-            f"Plan for {goal.drive_name}: {[a.type for a in actions]} "
-            f"(attempt {goal.attempts})"
+            f"Plan for {goal.drive_name}: {[a.type for a in actions]} (attempt {goal.attempts})"
         )
         return plan
 
@@ -456,8 +454,7 @@ class GoalStack:
                 next_action = plan.next_action()
                 action_str = f" -> {next_action.type}" if next_action else ""
                 lines.append(
-                    f"  {goal.drive_name} (p={goal.priority:.2f}): "
-                    f"{step_info}{action_str}"
+                    f"  {goal.drive_name} (p={goal.priority:.2f}): {step_info}{action_str}"
                 )
             else:
                 lines.append(f"  {goal.drive_name} (p={goal.priority:.2f}): needs plan")

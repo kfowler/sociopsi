@@ -29,7 +29,7 @@ class DarwinDisplayBackend(DisplayBackend):
                         if part == "brightness" and i + 1 < len(parts):
                             return int(float(parts[i + 1]) * 100)
             return None
-        except (FileNotFoundError, subprocess.TimeoutExpired, ValueError):
+        except FileNotFoundError, subprocess.TimeoutExpired, ValueError:
             return None
 
     def set_brightness(self, level: int) -> dict:
@@ -69,7 +69,7 @@ class DarwinDisplayBackend(DisplayBackend):
             if '"AppleClamshellState" = Yes' in result.stdout:
                 return LidState.CLOSED
             return LidState.OPEN
-        except (subprocess.TimeoutExpired, FileNotFoundError):
+        except subprocess.TimeoutExpired, FileNotFoundError:
             return LidState.OPEN
 
     def list_displays(self) -> list[DisplayInfo]:
@@ -118,7 +118,7 @@ class LinuxDisplayBackend(DisplayBackend):
                 max_brightness = int((bl / "max_brightness").read_text().strip())
                 if max_brightness > 0:
                     return int((brightness / max_brightness) * 100)
-        except (ValueError, OSError):
+        except ValueError, OSError:
             pass
 
         # Try ddcutil for external monitors
@@ -133,7 +133,7 @@ class LinuxDisplayBackend(DisplayBackend):
                 for part in result.stdout.split(","):
                     if "current value" in part.lower():
                         return int(part.split("=")[-1].strip())
-        except (FileNotFoundError, subprocess.TimeoutExpired, ValueError):
+        except FileNotFoundError, subprocess.TimeoutExpired, ValueError:
             pass
 
         return None
@@ -151,7 +151,7 @@ class LinuxDisplayBackend(DisplayBackend):
                 target = int((level / 100) * max_brightness)
                 (bl / "brightness").write_text(str(target))
                 return {"set_to": level}
-        except (ValueError, OSError):
+        except ValueError, OSError:
             pass
 
         # Try xrandr
@@ -164,10 +164,13 @@ class LinuxDisplayBackend(DisplayBackend):
             )
             if result.returncode == 0:
                 return {"set_to": level}
-        except (FileNotFoundError, subprocess.TimeoutExpired):
+        except FileNotFoundError, subprocess.TimeoutExpired:
             pass
 
-        return {"error": "no brightness control available", "description": "could not adjust brightness"}
+        return {
+            "error": "no brightness control available",
+            "description": "could not adjust brightness",
+        }
 
     def get_lid_state(self) -> LidState:
         try:
@@ -208,6 +211,6 @@ class LinuxDisplayBackend(DisplayBackend):
                             mirror="Off",
                         )
                     )
-        except (FileNotFoundError, subprocess.TimeoutExpired):
+        except FileNotFoundError, subprocess.TimeoutExpired:
             logger.warning("xrandr not available")
         return displays

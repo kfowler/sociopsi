@@ -73,9 +73,7 @@ class ModulatorLayer:
         competence_sat = 1.0 - drives["competence"].demand
         certainty_sat = 1.0 - drives["certainty"].demand
         raw_resolution = (
-            competence_sat * 0.4
-            + certainty_sat * 0.3
-            + (1.0 - drives["arousal"].demand) * 0.3
+            competence_sat * 0.4 + certainty_sat * 0.3 + (1.0 - drives["arousal"].demand) * 0.3
         )
         self.resolution = _smooth(self.resolution, raw_resolution, s)
 

@@ -172,9 +172,7 @@ class LinuxAudioBackend(AudioBackend):
                     lang_str = lang_str.decode("utf-8", errors="replace")
                 if language and not lang_str.lower().startswith(language.lower()):
                     continue
-                result.append(
-                    VoiceInfo(name=v.name, identifier=v.id, language=lang_str, quality=1)
-                )
+                result.append(VoiceInfo(name=v.name, identifier=v.id, language=lang_str, quality=1))
             return result
         except Exception:
             pass
@@ -192,10 +190,8 @@ class LinuxAudioBackend(AudioBackend):
                 if len(parts) >= 4:
                     lang = parts[1]
                     name = parts[3]
-                    result.append(
-                        VoiceInfo(name=name, identifier=name, language=lang, quality=0)
-                    )
-        except (FileNotFoundError, subprocess.TimeoutExpired):
+                    result.append(VoiceInfo(name=name, identifier=name, language=lang, quality=0))
+        except FileNotFoundError, subprocess.TimeoutExpired:
             pass
 
         return result

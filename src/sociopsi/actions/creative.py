@@ -257,7 +257,7 @@ Respond with ONLY the image prompt, nothing else. Keep it under 100 words."""
     # Check if ComfyUI is running
     try:
         urllib.request.urlopen(f"{COMFYUI_URL}/system_stats", timeout=2)
-    except (urllib.error.URLError, TimeoutError):
+    except urllib.error.URLError, TimeoutError:
         return {
             "error": "ComfyUI not running",
             "prompt": prompt,
@@ -530,19 +530,19 @@ Choose musically interesting options for a {mood or "peaceful"} mood. Be creativ
             try:
                 tempo = int("".join(c for c in line.split(":")[1] if c.isdigit() or c == "-")[:3])
                 tempo = max(40, min(80, tempo))
-            except (ValueError, IndexError):
+            except ValueError, IndexError:
                 pass
         elif line.startswith("VELOCITY:"):
             try:
                 velocity = int("".join(c for c in line.split(":")[1] if c.isdigit())[:2])
                 velocity = max(30, min(60, velocity))
-            except (ValueError, IndexError):
+            except ValueError, IndexError:
                 pass
         elif line.startswith("ROOT:"):
             try:
                 root = int("".join(c for c in line.split(":")[1] if c.isdigit())[:2])
                 root = max(48, min(72, root))
-            except (ValueError, IndexError):
+            except ValueError, IndexError:
                 pass
         elif line.startswith("SCALE:"):
             try:
@@ -553,7 +553,7 @@ Choose musically interesting options for a {mood or "peaceful"} mood. Be creativ
                 intervals = [max(-12, min(24, i)) for i in intervals[:8]]
                 if not intervals:
                     intervals = [0, 2, 4, 7, 9]
-            except (ValueError, IndexError):
+            except ValueError, IndexError:
                 pass
         elif line.startswith("NOTES:"):
             try:
@@ -566,7 +566,7 @@ Choose musically interesting options for a {mood or "peaceful"} mood. Be creativ
                 ]
                 if not note_sequence:
                     note_sequence = [0, 2, 4, 2, 0]
-            except (ValueError, IndexError):
+            except ValueError, IndexError:
                 pass
 
     # Build scale from root and intervals
@@ -593,7 +593,7 @@ Choose musically interesting options for a {mood or "peaceful"} mood. Be creativ
             )
             if result.returncode == 0:
                 played = True
-        except (FileNotFoundError, subprocess.TimeoutExpired):
+        except FileNotFoundError, subprocess.TimeoutExpired:
             pass
 
         # Try fluidsynth (if installed)
@@ -606,7 +606,7 @@ Choose musically interesting options for a {mood or "peaceful"} mood. Be creativ
                 )
                 if result.returncode == 0:
                     played = True
-            except (FileNotFoundError, subprocess.TimeoutExpired):
+            except FileNotFoundError, subprocess.TimeoutExpired:
                 pass
 
         # Fallback: open with system default (QuickTime)
