@@ -1,12 +1,24 @@
-"""Psi drive system - motivational economy based on Joscha Bach's Psi theory."""
+"""Psi drive system - motivational economy based on Joscha Bach's Psi theory.
 
+DriveSystem is a continuously-ticking subsystem. It runs its own 100ms timer
+thread, accepts satisfaction signals via a thread-safe queue, and applies
+exponential decay to satisfaction (modelling fading reward). The agent reads
+drive state via snapshot() rather than pushing update() each cycle.
+"""
+
+import logging
+import queue
+import threading
+import time
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Literal, TypedDict
 
 from sociopsi.config import AgentConfig
 from sociopsi.modulators import ModulatorLayer
 from sociopsi.types import Action, ActionResult, SomaticState
+
+logger = logging.getLogger(__name__)
 
 # Type aliases for drives
 DriveName = Literal[
@@ -59,8 +71,16 @@ class Drive:
     last_value: float = 0.0  # for computing delta
     reason: str = ""  # human-readable state description
 
+    # Exponential decay half-life for satisfaction (seconds).
+    # After this many seconds, satisfaction halves.
+    satisfaction_halflife: float = 2.0
+
     def update(self, dt: float) -> None:
-        """Update demand based on time and satisfaction."""
+        """Update demand based on time and satisfaction.
+
+        Satisfaction decays exponentially (modelling fading reward) rather
+        than resetting to zero each tick.
+        """
         self.last_value = self.demand
 
         # Demand rises when unsatisfied, falls when satisfied
@@ -78,8 +98,10 @@ class Drive:
         # Urgency: high demand + rising = most urgent
         self.urgency = self.demand * (1.0 + max(0.0, self.delta * 10))
 
-        # Reset satisfaction for next tick (must be re-supplied)
-        self.satisfaction = 0.0
+        # Exponential decay of satisfaction (models fading reward)
+        if self.satisfaction_halflife > 0 and dt > 0:
+            decay = 0.5 ** (dt / self.satisfaction_halflife)
+            self.satisfaction *= decay
 
     def satisfy(self, amount: float) -> None:
         """Apply satisfaction to this drive."""
@@ -687,34 +709,197 @@ Respond with ONLY the sentence, nothing else."""
         return "I am here."
 
 
-class DriveSystem:
-    """Manages the full drive economy."""
+@dataclass
+class _SatisfactionSignal:
+    """A queued satisfaction signal from an action result."""
 
-    def __init__(self, config: AgentConfig) -> None:
+    action_type: str
+    result: ActionResult
+
+
+@dataclass
+class DriveSnapshot:
+    """Frozen read-only copy of drive state at a point in time."""
+
+    drives: dict[str, DriveState] = field(default_factory=dict)
+    modulators_text: str = ""
+    suggestions: list[tuple[str, str, str]] = field(default_factory=list)
+    format_text: str = ""
+
+    @staticmethod
+    def from_system(system: "DriveSystem") -> "DriveSnapshot":
+        """Capture a snapshot from a live DriveSystem."""
+        return DriveSnapshot(
+            drives=system.get_state(),
+            modulators_text=system.modulators.format_for_perception(),
+            suggestions=system.get_suggestions(),
+            format_text=system.format_for_perception(),
+        )
+
+
+class DriveSystem:
+    """Manages the full drive economy.
+
+    Runs a 100ms timer thread that continuously updates drives. Satisfaction
+    signals are queued from action results and drained by the timer thread.
+    The agent reads state via snapshot() instead of pushing update() each cycle.
+    """
+
+    #: Timer tick interval in seconds
+    TICK_INTERVAL: float = 0.1
+
+    def __init__(self, config: AgentConfig, event_bus: Any = None) -> None:
         self.config = config
         self.drives: dict[str, Drive] = {}
         self._last_update: float = 0.0
         self._idle_cycles: int = 0
         self._recent_failures: int = 0
         self._recent_successes: int = 0
-        self._recently_saw_person: bool = False  # Track if person was seen recently
-        self._recently_acknowledged: bool = False  # Track if user acknowledged us
+        self._recently_saw_person: bool = False
+        self._recently_acknowledged: bool = False
+
+        # Thread-safe satisfaction queue
+        self._satisfaction_queue: queue.Queue[_SatisfactionSignal] = queue.Queue()
+
+        # Latest somatic state (written by agent thread, read by timer)
+        self._somatic: SomaticState | None = None
+        self._somatic_lock: threading.Lock = threading.Lock()
+
+        # Timer thread state
+        self._running: bool = False
+        self._timer_thread: threading.Thread | None = None
+        self._stop_event: threading.Event = threading.Event()
+        self._last_tick_time: float = time.time()
+
+        # Event bus for publishing urgency threshold crossings
+        self._event_bus = event_bus
+
+        # Urgency tracking for threshold events
+        self._prev_urgency: dict[str, float] = {}
+        self._urgency_threshold: float = 0.7
 
         # Initialize drives
         for name, cfg in DRIVE_CONFIGS.items():
             self.drives[name] = Drive(
                 name=name,
-                demand=cfg["baseline"],  # Start at baseline
+                demand=cfg["baseline"],
                 baseline=cfg["baseline"],
                 rise_rate=cfg["rise_rate"],
                 fall_rate=cfg["fall_rate"],
             )
 
-        # Modulator layer (computed from drives each cycle)
+        # Modulator layer (computed from drives each tick)
         self.modulators = ModulatorLayer()
 
+    # ------------------------------------------------------------------
+    # Timer lifecycle
+    # ------------------------------------------------------------------
+
+    def start(self) -> None:
+        """Start the 100ms timer thread."""
+        if self._running:
+            return
+        self._running = True
+        self._stop_event.clear()
+        self._last_tick_time = time.time()
+        self._timer_thread = threading.Thread(
+            target=self._timer_loop,
+            daemon=True,
+            name="drive-system-timer",
+        )
+        self._timer_thread.start()
+        logger.debug("DriveSystem timer started (%.0fms)", self.TICK_INTERVAL * 1000)
+
+    def stop(self, timeout: float = 2.0) -> None:
+        """Stop the timer thread."""
+        if not self._running:
+            return
+        self._running = False
+        self._stop_event.set()
+        if self._timer_thread is not None:
+            self._timer_thread.join(timeout=timeout)
+            self._timer_thread = None
+        logger.debug("DriveSystem timer stopped")
+
+    def _timer_loop(self) -> None:
+        """Timer thread main loop — ticks at TICK_INTERVAL."""
+        while self._running:
+            now = time.time()
+            dt = now - self._last_tick_time
+            self._last_tick_time = now
+
+            try:
+                self._tick(dt)
+            except Exception:
+                logger.exception("Error in drive system tick")
+
+            self._stop_event.wait(timeout=self.TICK_INTERVAL)
+
+    def _tick(self, dt: float) -> None:
+        """One timer tick: drain queue, update drives, publish events."""
+        # 1. Drain satisfaction queue
+        self._drain_satisfaction_queue()
+
+        # 2. Apply somatic-derived satisfaction
+        with self._somatic_lock:
+            somatic = self._somatic
+        if somatic is not None:
+            self._update_from_somatic(somatic)
+
+        # 3. Update each drive
+        for drive in self.drives.values():
+            drive.update(dt)
+
+        # 4. Recompute modulators
+        self.modulators.update(self)
+
+        # 5. Update reasons
+        if somatic is not None:
+            self._update_reasons(somatic)
+
+        # 6. Publish urgency threshold events
+        self._publish_urgency_events()
+
+    # ------------------------------------------------------------------
+    # Public API for agent thread
+    # ------------------------------------------------------------------
+
+    def push_somatic(self, somatic: SomaticState, had_actions: bool) -> None:
+        """Push latest somatic state for the timer thread to use.
+
+        Called by the agent thread each cycle. The timer thread reads
+        this asynchronously.
+        """
+        with self._somatic_lock:
+            self._somatic = somatic
+        if not had_actions:
+            self._idle_cycles += 1
+        else:
+            self._idle_cycles = 0
+
+    def queue_satisfaction(self, results: list[ActionResult]) -> None:
+        """Queue satisfaction signals from action results (thread-safe).
+
+        The timer thread drains these before computing demand.
+        """
+        for result in results:
+            self._satisfaction_queue.put(
+                _SatisfactionSignal(action_type=result.action_type, result=result)
+            )
+
+    def snapshot(self) -> DriveSnapshot:
+        """Return a frozen snapshot of the current drive state.
+
+        This is the primary read API for the agent thread.
+        """
+        return DriveSnapshot.from_system(self)
+
     def update(self, somatic: SomaticState, dt: float, had_actions: bool) -> None:
-        """Update all drives based on somatic state and time elapsed."""
+        """Update all drives synchronously (backward-compatible).
+
+        When the timer is running, prefer push_somatic() + snapshot().
+        This method is still usable for tests or non-threaded operation.
+        """
         # Track idle cycles
         if not had_actions:
             self._idle_cycles += 1
@@ -723,6 +908,9 @@ class DriveSystem:
 
         # Update satisfaction signals from somatic state
         self._update_from_somatic(somatic)
+
+        # Drain any queued satisfaction signals
+        self._drain_satisfaction_queue()
 
         # Update each drive
         for drive in self.drives.values():
@@ -733,6 +921,114 @@ class DriveSystem:
 
         # Set human-readable reasons
         self._update_reasons(somatic)
+
+        # Publish urgency events
+        self._publish_urgency_events()
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _drain_satisfaction_queue(self) -> None:
+        """Drain all queued satisfaction signals and apply them."""
+        signals: list[_SatisfactionSignal] = []
+        while True:
+            try:
+                signals.append(self._satisfaction_queue.get_nowait())
+            except queue.Empty:
+                break
+
+        if not signals:
+            return
+
+        # Reset tracking flags for this batch
+        self._recently_saw_person = False
+        self._recently_acknowledged = False
+
+        for sig in signals:
+            result = sig.result
+
+            # Track success/failure for competence
+            if result.success:
+                self._recent_successes += 1
+                self.drives["competence"].satisfy(0.2)
+            else:
+                self._recent_failures += 1
+                self.drives["competence"].demand = min(
+                    1.0, self.drives["competence"].demand + 0.1
+                )
+
+            # Decay counters over time
+            if self._recent_successes + self._recent_failures > 20:
+                self._recent_successes = self._recent_successes // 2
+                self._recent_failures = self._recent_failures // 2
+
+            # Apply specific satisfaction mapping
+            action_type = sig.action_type
+            if action_type in SATISFACTION_MAP:
+                result_dict = result.result if isinstance(result.result, dict) else {}
+
+                # Track person sighting
+                if action_type in ("look", "look_for"):
+                    if result_dict.get("person_present") or _has_person(
+                        result_dict.get("description", "")
+                    ):
+                        self._recently_saw_person = True
+                    if result_dict.get("looking_at_camera") or _person_looking_at_camera(
+                        result_dict.get("description", "")
+                    ):
+                        self._recently_acknowledged = True
+
+                if action_type in ("display_message", "notify") and result_dict.get(
+                    "acknowledged"
+                ):
+                    self._recently_acknowledged = True
+
+                sat_multiplier = self.modulators.get_drive_satisfaction_multiplier()
+                for drive_name, value in SATISFACTION_MAP[action_type].items():
+                    if drive_name in self.drives:
+                        if callable(value):
+                            sat = value(result_dict)
+                        else:
+                            sat = value
+                        if sat > 0:
+                            self.drives[drive_name].satisfy(sat * sat_multiplier)
+
+        # Update reasons immediately based on perception results
+        if self._recently_saw_person:
+            self.drives["affiliation"].reason = "someone nearby"
+        if self._recently_acknowledged:
+            self.drives["recognition"].reason = "acknowledged"
+
+    def _publish_urgency_events(self) -> None:
+        """Publish events when drives cross urgency thresholds."""
+        if self._event_bus is None:
+            return
+
+        for name, drive in self.drives.items():
+            prev = self._prev_urgency.get(name, 0.0)
+            # Crossed upward through threshold
+            if drive.urgency >= self._urgency_threshold > prev:
+                self._event_bus.publish(
+                    "drive.urgency_high",
+                    {
+                        "drive": name,
+                        "urgency": drive.urgency,
+                        "demand": drive.demand,
+                        "reason": drive.reason,
+                    },
+                )
+            # Crossed downward through threshold
+            elif drive.urgency < self._urgency_threshold <= prev:
+                self._event_bus.publish(
+                    "drive.urgency_resolved",
+                    {
+                        "drive": name,
+                        "urgency": drive.urgency,
+                        "demand": drive.demand,
+                    },
+                )
+            self._prev_urgency[name] = drive.urgency
 
     def _update_from_somatic(self, somatic: SomaticState) -> None:
         """Set satisfaction signals based on somatic state."""
@@ -854,64 +1150,15 @@ class DriveSystem:
             d["individuation"].reason = "integrated"
 
     def satisfy_from_results(self, results: list[ActionResult]) -> None:
-        """Apply satisfaction from action results."""
-        # Reset tracking flags at start of new results processing
-        self._recently_saw_person = False
-        self._recently_acknowledged = False
+        """Apply satisfaction from action results.
 
-        for result in results:
-            action_type = result.action_type
-
-            # Track success/failure for competence
-            if result.success:
-                self._recent_successes += 1
-                # General competence satisfaction for any success
-                self.drives["competence"].satisfy(0.2)
-            else:
-                self._recent_failures += 1
-                # Failure increases competence demand (via negative satisfaction effect)
-                self.drives["competence"].demand = min(1.0, self.drives["competence"].demand + 0.1)
-
-            # Decay counters over time
-            if self._recent_successes + self._recent_failures > 20:
-                self._recent_successes = self._recent_successes // 2
-                self._recent_failures = self._recent_failures // 2
-
-            # Apply specific satisfaction mapping
-            if action_type in SATISFACTION_MAP:
-                result_dict = result.result if isinstance(result.result, dict) else {}
-
-                # Track if we saw a person (for affiliation reason updates)
-                if action_type in ("look", "look_for"):
-                    # Use structured fields if available, fall back to text parsing
-                    if result_dict.get("person_present") or _has_person(
-                        result_dict.get("description", "")
-                    ):
-                        self._recently_saw_person = True
-                    if result_dict.get("looking_at_camera") or _person_looking_at_camera(
-                        result_dict.get("description", "")
-                    ):
-                        self._recently_acknowledged = True
-
-                # Track if user acknowledged a message/notification
-                if action_type in ("display_message", "notify") and result_dict.get("acknowledged"):
-                    self._recently_acknowledged = True
-
-                sat_multiplier = self.modulators.get_drive_satisfaction_multiplier()
-                for drive_name, value in SATISFACTION_MAP[action_type].items():
-                    if drive_name in self.drives:
-                        if callable(value):
-                            sat = value(result_dict)
-                        else:
-                            sat = value
-                        if sat > 0:
-                            self.drives[drive_name].satisfy(sat * sat_multiplier)
-
-        # Update reasons immediately based on perception results
-        if self._recently_saw_person:
-            self.drives["affiliation"].reason = "someone nearby"
-        if self._recently_acknowledged:
-            self.drives["recognition"].reason = "acknowledged"
+        When the timer is running, this queues signals for async processing.
+        When used synchronously (tests, backward compat), drains immediately.
+        """
+        self.queue_satisfaction(results)
+        # If timer is not running, drain immediately for backward compat
+        if not self._running:
+            self._drain_satisfaction_queue()
 
     def get_suggestions(self) -> list[tuple[str, str, str]]:
         """Get suggested actions for urgent drives.

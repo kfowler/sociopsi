@@ -99,7 +99,7 @@ class JungAgent:
         self.voice = Voice(self.config)
         self.ear = Ear(self.config, renderer=self.renderer)
         self.logger = PsycheLogger(self.config)
-        self.drive_system = DriveSystem(self.config)
+        self.drive_system = DriveSystem(self.config, event_bus=self.event_bus)
 
         # Emergent emotion system (computed from modulators + drives)
         self.emotions = EmotionSystem()
@@ -247,6 +247,7 @@ class JungAgent:
         self._running = True
         self.event_bus.start()
         self.event_collector.start()
+        self.drive_system.start()
 
         # Wire voice speaking state to ear mute/unmute to prevent hearing own speech
         self.voice._on_speak_start = self.ear.mute
@@ -271,6 +272,7 @@ class JungAgent:
         """Stop the agent loop."""
         self._running = False
         self._shutdown_event.set()
+        self.drive_system.stop()
         self.ear.stop()
         self.event_collector.stop()
         self.voice.stop()
@@ -368,12 +370,12 @@ class JungAgent:
                         drive.demand = min(1.0, drive.demand + 0.6)
                         drive.urgency = max(drive.urgency, 0.9)
 
-            # 3. Update drives
+            # 3. Push somatic state to drive system (timer thread updates drives)
             now = time.time()
             dt = now - self._last_update_time
             self._last_update_time = now
             had_actions = len(self._last_action_results) > 0
-            self.drive_system.update(somatic, dt, had_actions)
+            self.drive_system.push_somatic(somatic, had_actions)
 
             # 3b. Update goal stack from drives
             drive_state = self._get_drive_state_dict()
@@ -615,8 +617,8 @@ class JungAgent:
 
             self._last_action_results = self.executor.execute_all(final_actions)
 
-            # Satisfy drives from action results
-            self.drive_system.satisfy_from_results(self._last_action_results)
+            # Queue satisfaction signals for the drive timer thread
+            self.drive_system.queue_satisfaction(self._last_action_results)
 
             # 18. Counterfactual learning: compare predicted vs actual drive changes
             drives_after = self.expectations.snapshot_drives(self.drive_system)

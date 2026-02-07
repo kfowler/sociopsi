@@ -1,5 +1,7 @@
 """Tests for the Psi drive system."""
 
+import time
+
 import pytest
 
 from sociopsi.config import AgentConfig
@@ -9,6 +11,7 @@ from sociopsi.drives import (
     PRIMED_ACTION_DEFAULTS,
     SATISFACTION_MAP,
     Drive,
+    DriveSnapshot,
     DriveSystem,
 )
 from sociopsi.types import (
@@ -294,3 +297,228 @@ class TestDriveSuggestions:
                 assert action in valid_actions, (
                     f"Action '{action}' in {drive_name} suggestions not recognized"
                 )
+
+
+class TestDriveExponentialDecay:
+    """Tests for satisfaction exponential decay (replaces reset-to-zero)."""
+
+    def test_satisfaction_decays_not_resets(self) -> None:
+        """Test that satisfaction decays exponentially instead of resetting to zero."""
+        drive = Drive(name="test", demand=0.5, baseline=0.2, satisfaction_halflife=2.0)
+        drive.satisfy(0.8)
+        assert drive.satisfaction == 0.8
+
+        # After one tick, satisfaction should have decayed but not be zero
+        drive.update(dt=0.1)
+        assert 0 < drive.satisfaction < 0.8
+
+    def test_satisfaction_halves_at_halflife(self) -> None:
+        """Test that satisfaction roughly halves after one half-life."""
+        drive = Drive(name="test", demand=0.5, baseline=0.2, satisfaction_halflife=2.0)
+        drive.satisfy(1.0)
+
+        # Simulate exactly one half-life worth of time in one step
+        drive.update(dt=2.0)
+
+        # Should be approximately 0.5 (half of 1.0)
+        assert abs(drive.satisfaction - 0.5) < 0.05
+
+    def test_satisfaction_accumulates_with_decay(self) -> None:
+        """Test that new satisfaction adds on top of decayed value."""
+        drive = Drive(name="test", demand=0.5, baseline=0.2, satisfaction_halflife=2.0)
+        drive.satisfy(0.4)
+        drive.update(dt=1.0)  # Decays somewhat
+
+        decayed = drive.satisfaction
+        drive.satisfy(0.3)
+
+        # Should be decayed + 0.3
+        assert drive.satisfaction == pytest.approx(decayed + 0.3, abs=0.01)
+
+
+class TestDriveSystemTimer:
+    """Tests for the timer-based continuous drive update system."""
+
+    @pytest.fixture
+    def sample_somatic(self) -> SomaticState:
+        return SomaticState(
+            battery_percent=80,
+            battery_health=95,
+            battery_cycles=100,
+            power_state=PowerState.AC,
+            cpu_percent=30,
+            gpu_percent=20,
+            thermal_state=ThermalState.COOL,
+            thermal_cpu=50.0,
+            thermal_gpu=45.0,
+            ram_percent=50,
+            storage_percent=60,
+            network_state=NetworkState.CONNECTED,
+            lid_state=LidState.OPEN,
+            fan_rpm=0,
+            uptime_seconds=3600,
+        )
+
+    def test_timer_starts_and_stops(self) -> None:
+        """Test that the timer thread starts and stops cleanly."""
+        config = AgentConfig(voice_enabled=False)
+        ds = DriveSystem(config)
+
+        ds.start()
+        assert ds._running is True
+        assert ds._timer_thread is not None
+        assert ds._timer_thread.is_alive()
+
+        ds.stop()
+        assert ds._running is False
+        assert ds._timer_thread is None
+
+    def test_timer_updates_drives(self, sample_somatic: SomaticState) -> None:
+        """Test that the timer thread updates drives over time."""
+        config = AgentConfig(voice_enabled=False)
+        ds = DriveSystem(config)
+
+        # Get initial demand for curiosity
+        initial_demand = ds.drives["curiosity"].demand
+
+        ds.push_somatic(sample_somatic, had_actions=False)
+        ds.start()
+
+        # Let it tick a few times
+        time.sleep(0.35)
+        ds.stop()
+
+        # Demand should have risen (no satisfaction, natural rise)
+        assert ds.drives["curiosity"].demand > initial_demand
+
+    def test_queue_satisfaction_applies(self, sample_somatic: SomaticState) -> None:
+        """Test that queued satisfaction signals are applied by the timer."""
+        config = AgentConfig(voice_enabled=False)
+        ds = DriveSystem(config)
+        ds.push_somatic(sample_somatic, had_actions=True)
+
+        # Make curiosity unsatisfied
+        ds.drives["curiosity"].demand = 0.8
+        ds.drives["curiosity"].satisfaction = 0.0
+
+        ds.start()
+
+        # Queue a satisfaction signal
+        results = [
+            ActionResult(
+                action_type="web_search",
+                success=True,
+                result={"results": [{"title": "Test"}], "count": 1},
+            )
+        ]
+        ds.queue_satisfaction(results)
+
+        # Wait for timer to drain
+        time.sleep(0.25)
+        ds.stop()
+
+        # Curiosity should have some satisfaction from the queued signal
+        # (it decays, so it may not be exact, but should be > 0)
+        assert ds.drives["curiosity"].satisfaction > 0
+
+    def test_snapshot_returns_frozen_state(self) -> None:
+        """Test that snapshot returns an independent copy of drive state."""
+        config = AgentConfig(voice_enabled=False)
+        ds = DriveSystem(config)
+
+        snap = ds.snapshot()
+        assert isinstance(snap, DriveSnapshot)
+        assert len(snap.drives) == len(ds.drives)
+        assert snap.format_text  # Should have content
+
+        # Mutating the snapshot should not affect the system
+        for key in snap.drives:
+            snap.drives[key]["demand"] = 999.0
+
+        for drive in ds.drives.values():
+            assert drive.demand != 999.0
+
+    def test_push_somatic_tracks_idle(self, sample_somatic: SomaticState) -> None:
+        """Test that push_somatic tracks idle cycles correctly."""
+        config = AgentConfig(voice_enabled=False)
+        ds = DriveSystem(config)
+
+        ds.push_somatic(sample_somatic, had_actions=False)
+        assert ds._idle_cycles == 1
+
+        ds.push_somatic(sample_somatic, had_actions=False)
+        assert ds._idle_cycles == 2
+
+        ds.push_somatic(sample_somatic, had_actions=True)
+        assert ds._idle_cycles == 0
+
+    def test_satisfy_from_results_backward_compat(self) -> None:
+        """Test that satisfy_from_results still works without timer."""
+        config = AgentConfig(voice_enabled=False)
+        ds = DriveSystem(config)
+
+        results = [
+            ActionResult(
+                action_type="web_search",
+                success=True,
+                result={"results": [{"title": "Test"}], "count": 1},
+            )
+        ]
+
+        # Without starting the timer, satisfy_from_results should still work
+        ds.satisfy_from_results(results)
+        assert ds.drives["curiosity"].satisfaction > 0
+
+
+class TestDriveUrgencyEvents:
+    """Tests for urgency threshold event publishing."""
+
+    def test_urgency_crossing_publishes_event(self) -> None:
+        """Test that crossing urgency threshold publishes an event."""
+        published: list[tuple[str, dict]] = []
+
+        class MockBus:
+            def publish(self, event_type: str, data: dict) -> None:
+                published.append((event_type, data))
+
+        config = AgentConfig(voice_enabled=False)
+        ds = DriveSystem(config, event_bus=MockBus())
+
+        # Set curiosity just below threshold
+        ds.drives["curiosity"].demand = 0.65
+        ds.drives["curiosity"].urgency = 0.65
+        ds._prev_urgency["curiosity"] = 0.65
+
+        # Now push it above threshold
+        ds.drives["curiosity"].demand = 0.85
+        ds.drives["curiosity"].urgency = 0.85
+
+        ds._publish_urgency_events()
+
+        assert len(published) >= 1
+        event_type, data = published[0]
+        assert event_type == "drive.urgency_high"
+        assert data["drive"] == "curiosity"
+
+    def test_urgency_resolved_publishes_event(self) -> None:
+        """Test that resolving urgency publishes a resolved event."""
+        published: list[tuple[str, dict]] = []
+
+        class MockBus:
+            def publish(self, event_type: str, data: dict) -> None:
+                published.append((event_type, data))
+
+        config = AgentConfig(voice_enabled=False)
+        ds = DriveSystem(config, event_bus=MockBus())
+
+        # Set curiosity above threshold previously
+        ds.drives["curiosity"].urgency = 0.5
+        ds._prev_urgency["curiosity"] = 0.8
+
+        ds._publish_urgency_events()
+
+        # Find the resolved event for curiosity
+        resolved = [
+            (et, d) for et, d in published if et == "drive.urgency_resolved" and d["drive"] == "curiosity"
+        ]
+        assert len(resolved) == 1
