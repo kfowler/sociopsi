@@ -1,95 +1,39 @@
 """Somatic (body state) sensors."""
 
-import subprocess
-
 import psutil
 
+from sociopsi.platform import get_display_backend, get_power_backend, get_thermal_backend
 from sociopsi.types import (
-    LidState,
     NetworkState,
-    PowerState,
     SomaticState,
-    ThermalState,
 )
 
 
-def get_battery_info() -> tuple[int, int, int, PowerState]:
-    """Get battery percentage, health, cycles, and power state."""
-    battery = psutil.sensors_battery()
-    percent = int(battery.percent) if battery else 100
+def get_battery_info():
+    """Get battery info via platform backend."""
+    backend = get_power_backend()
+    info = backend.get_battery()
+    if info is None:
+        from sociopsi.types import PowerState
 
-    # Determine power state
-    if battery is None:
-        power_state = PowerState.AC
-    elif battery.power_plugged:
-        power_state = PowerState.CHARGING if percent < 100 else PowerState.AC
-    else:
-        power_state = PowerState.BATTERY
-
-    # Get battery health and cycles from system_profiler
-    health = 100
-    cycles = 0
-    try:
-        result = subprocess.run(
-            ["system_profiler", "SPPowerDataType"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        for line in result.stdout.split("\n"):
-            if "Cycle Count" in line:
-                cycles = int(line.split(":")[-1].strip())
-            elif "Maximum Capacity" in line:
-                health = int(line.split(":")[-1].strip().replace("%", ""))
-    except (subprocess.TimeoutExpired, ValueError, IndexError):
-        pass
-
-    return percent, health, cycles, power_state
+        return 100, 100, 0, PowerState.AC
+    return info.percent, info.health, info.cycles, info.power_state
 
 
-def get_thermal_state() -> tuple[ThermalState, float, float]:
-    """Get thermal state and temperatures."""
-    # Try to get temperatures via powermetrics or SMC
-    cpu_temp = 50.0  # Default fallback
-    gpu_temp = 45.0
+def get_thermal_state():
+    """Get thermal state via platform backend."""
+    backend = get_thermal_backend()
+    info = backend.get_thermals()
+    if info is None:
+        from sociopsi.types import ThermalState
 
-    try:
-        # Use osx-cpu-temp if available, or estimate from CPU usage
-        result = subprocess.run(
-            ["sudo", "powermetrics", "-n", "1", "-i", "100", "--samplers", "smc"],
-            capture_output=True,
-            text=True,
-            timeout=3,
-        )
-        for line in result.stdout.split("\n"):
-            if "CPU die temperature" in line:
-                cpu_temp = float(line.split(":")[-1].strip().replace(" C", ""))
-            elif "GPU die temperature" in line:
-                gpu_temp = float(line.split(":")[-1].strip().replace(" C", ""))
-    except (subprocess.TimeoutExpired, ValueError, FileNotFoundError, PermissionError):
-        # Estimate from CPU usage as fallback
-        cpu_percent = psutil.cpu_percent(interval=0.1)
-        cpu_temp = 40 + (cpu_percent * 0.5)  # Rough estimate
-        gpu_temp = cpu_temp * 0.9
-
-    # Categorize thermal state
-    max_temp = max(cpu_temp, gpu_temp)
-    if max_temp >= 95:
-        state = ThermalState.CRITICAL
-    elif max_temp >= 80:
-        state = ThermalState.HOT
-    elif max_temp >= 60:
-        state = ThermalState.WARM
-    else:
-        state = ThermalState.COOL
-
-    return state, cpu_temp, gpu_temp
+        return ThermalState.COOL, 50.0, 45.0
+    return info.state, info.cpu_temp, info.gpu_temp
 
 
 def get_network_state() -> NetworkState:
     """Get network connection state."""
     try:
-        # Check for active network connections
         addrs = psutil.net_if_addrs()
         stats = psutil.net_if_stats()
 
@@ -97,7 +41,6 @@ def get_network_state() -> NetworkState:
             if stat.isup and iface not in ("lo", "lo0"):
                 if iface in addrs:
                     for addr in addrs[iface]:
-                        # Check for IPv4 address that's not localhost
                         if addr.family.name == "AF_INET" and not addr.address.startswith("127."):
                             return NetworkState.CONNECTED
 
@@ -106,41 +49,17 @@ def get_network_state() -> NetworkState:
         return NetworkState.LIMITED
 
 
-def get_lid_state() -> LidState:
-    """Get lid open/closed state."""
-    try:
-        result = subprocess.run(
-            ["ioreg", "-r", "-k", "AppleClamshellState", "-d", "4"],
-            capture_output=True,
-            text=True,
-            timeout=2,
-        )
-        if '"AppleClamshellState" = Yes' in result.stdout:
-            return LidState.CLOSED
-        return LidState.OPEN
-    except (subprocess.TimeoutExpired, FileNotFoundError):
-        return LidState.OPEN
+def get_lid_state():
+    """Get lid state via platform backend."""
+    backend = get_display_backend()
+    return backend.get_lid_state()
 
 
 def get_fan_speed() -> int:
-    """Get fan RPM."""
-    try:
-        result = subprocess.run(
-            ["sudo", "powermetrics", "-n", "1", "-i", "100", "--samplers", "smc"],
-            capture_output=True,
-            text=True,
-            timeout=3,
-        )
-        for line in result.stdout.split("\n"):
-            if "Fan" in line and "rpm" in line.lower():
-                # Extract RPM value
-                parts = line.split()
-                for i, part in enumerate(parts):
-                    if "rpm" in part.lower() and i > 0:
-                        return int(parts[i - 1])
-        return 0
-    except (subprocess.TimeoutExpired, ValueError, FileNotFoundError, PermissionError):
-        return 0
+    """Get fan RPM via platform backend."""
+    backend = get_thermal_backend()
+    rpm = backend.get_fan_speed()
+    return rpm if rpm is not None else 0
 
 
 def get_uptime() -> int:

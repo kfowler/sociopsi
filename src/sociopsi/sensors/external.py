@@ -7,6 +7,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from sociopsi.platform import get_display_backend, get_thermal_backend
 from sociopsi.types import BluetoothDevice
 
 logger = logging.getLogger(__name__)
@@ -309,26 +310,13 @@ def _describe_audio_level(rms: float) -> str:
 
 def get_fan_speed() -> dict[str, Any]:
     """Get fan speed in RPM."""
-    try:
-        result = subprocess.run(
-            ["sudo", "powermetrics", "-n", "1", "-i", "100", "--samplers", "smc"],
-            capture_output=True,
-            text=True,
-            timeout=3,
-        )
-        for line in result.stdout.split("\n"):
-            if "Fan" in line and "rpm" in line.lower():
-                parts = line.split()
-                for i, part in enumerate(parts):
-                    if "rpm" in part.lower() and i > 0:
-                        rpm = int(parts[i - 1])
-                        return {
-                            "rpm": rpm,
-                            "description": _describe_fan_speed(rpm),
-                        }
-        return {"rpm": 0, "description": "silent"}
-    except (subprocess.TimeoutExpired, ValueError, FileNotFoundError, PermissionError):
+    backend = get_thermal_backend()
+    rpm = backend.get_fan_speed()
+    if rpm is None:
         return {"rpm": 0, "description": "unknown"}
+    if rpm == 0:
+        return {"rpm": 0, "description": "silent"}
+    return {"rpm": rpm, "description": _describe_fan_speed(rpm)}
 
 
 def _describe_fan_speed(rpm: int) -> str:
@@ -404,37 +392,18 @@ def get_disks() -> list[dict[str, Any]]:
 
 def get_displays() -> list[dict[str, Any]]:
     """Get connected displays."""
-    displays: list[dict[str, Any]] = []
-    try:
-        result = subprocess.run(
-            ["system_profiler", "SPDisplaysDataType", "-json"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-        import json
-
-        data = json.loads(result.stdout)
-        display_data = data.get("SPDisplaysDataType", [])
-
-        for gpu in display_data:
-            for display in gpu.get("spdisplays_ndrvs", []):
-                displays.append(
-                    {
-                        "name": display.get("_name", "Unknown"),
-                        "resolution": display.get("_spdisplays_resolution", "Unknown"),
-                        "type": display.get("spdisplays_connection_type", "Unknown"),
-                        "main": display.get("spdisplays_main", "No") == "Yes",
-                        "mirror": display.get("spdisplays_mirror", "Off"),
-                    }
-                )
-    except subprocess.TimeoutExpired:
-        logger.warning("Display info timed out")
-    except ValueError as e:
-        logger.warning(f"Display info parse error: {e}")
-    except FileNotFoundError:
-        logger.warning("system_profiler not found")
-    return displays
+    backend = get_display_backend()
+    infos = backend.list_displays()
+    return [
+        {
+            "name": d.name,
+            "resolution": d.resolution,
+            "type": d.connection_type,
+            "main": d.is_main,
+            "mirror": d.mirror,
+        }
+        for d in infos
+    ]
 
 
 def get_thunderbolt_devices() -> list[dict[str, Any]]:

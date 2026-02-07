@@ -3,32 +3,17 @@
 import subprocess
 from typing import Any
 
+from sociopsi.platform import get_display_backend, get_power_backend
+
 
 def set_brightness(level: int) -> dict[str, Any]:
     """Set display brightness (0-100)."""
+    backend = get_display_backend()
+    result = backend.set_brightness(level)
     level = max(0, min(100, level))
-    normalized = level / 100.0
-
-    try:
-        # Use brightness command if available (brew install brightness)
-        subprocess.run(
-            ["brightness", str(normalized)],
-            capture_output=True,
-            timeout=5,
-        )
-        return {"set_to": level, "description": _describe_brightness(level)}
-    except FileNotFoundError:
-        # Fallback to AppleScript
-        try:
-            script = f'tell application "System Events" to set value of slider 1 of group 1 of window "Control Center" of process "ControlCenter" to {level}'
-            subprocess.run(
-                ["osascript", "-e", script],
-                capture_output=True,
-                timeout=5,
-            )
-            return {"set_to": level, "description": _describe_brightness(level)}
-        except Exception as e:
-            return {"error": str(e), "description": "could not adjust brightness"}
+    if "error" not in result:
+        result["description"] = _describe_brightness(level)
+    return result
 
 
 def _describe_brightness(level: int) -> str:
@@ -62,69 +47,17 @@ def _describe_volume(level: int) -> str:
 
 def set_power_mode(mode: str) -> dict[str, Any]:
     """Set power mode: low, normal, or high."""
-    try:
-        if mode == "low":
-            subprocess.run(
-                ["sudo", "pmset", "-a", "lowpowermode", "1"],
-                capture_output=True,
-                timeout=5,
-            )
-            return {"mode": mode, "description": "conserving energy, slowing down"}
-        else:
-            subprocess.run(
-                ["sudo", "pmset", "-a", "lowpowermode", "0"],
-                capture_output=True,
-                timeout=5,
-            )
-            return {
-                "mode": mode,
-                "description": "normal operation"
-                if mode == "normal"
-                else "running at full capacity",
-            }
-    except Exception as e:
-        return {"error": str(e), "description": "could not change power mode"}
+    backend = get_power_backend()
+    return backend.set_power_mode(mode)
 
 
 def sleep_system(duration: int | None = None) -> dict[str, Any]:
     """Put the system to sleep."""
-    try:
-        if duration:
-            # Schedule wake before sleep
-            subprocess.run(
-                [
-                    "sudo",
-                    "pmset",
-                    "schedule",
-                    "wake",
-                    f"+{duration}S",
-                ],
-                capture_output=True,
-                timeout=5,
-            )
-
-        subprocess.run(
-            ["pmset", "sleepnow"],
-            capture_output=True,
-            timeout=5,
-        )
-        return {
-            "sleeping": True,
-            "duration": duration,
-            "description": "entering the little death" + (f" for {duration}s" if duration else ""),
-        }
-    except Exception as e:
-        return {"error": str(e), "description": "could not sleep"}
+    backend = get_power_backend()
+    return backend.sleep(duration)
 
 
 def wake_display(**kwargs: Any) -> dict[str, Any]:
     """Wake the display."""
-    try:
-        subprocess.run(
-            ["caffeinate", "-u", "-t", "1"],
-            capture_output=True,
-            timeout=5,
-        )
-        return {"awake": True, "description": "eyes opening"}
-    except Exception as e:
-        return {"error": str(e), "description": "could not wake display"}
+    backend = get_power_backend()
+    return backend.prevent_sleep(seconds=1)
