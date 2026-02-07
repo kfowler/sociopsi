@@ -181,3 +181,15 @@ class DriveSystem:
 - `perception.py`: Include `drive_system.format_for_perception()` in output
 - `logger.py`: Replace `_compute_drives()` with `drive_system.get_state()`
 - `config.py`: Add drive tuning parameters (rise_rates, thresholds)
+
+## Current Limitation: No State Persistence
+
+Drive state (demand levels, satisfaction history, timestamps) exists only in RAM. When the agent process restarts, all drives reset to their baseline values. There is no serialization of drive state to disk, and no mechanism for drives to carry context across sessions.
+
+This means:
+- A drive that was building urgency over hours resets to baseline on restart
+- The `last_satisfied` timestamp loses meaning across sessions
+- Satisfaction history (which actions worked for which drives) is not retained
+- The agent cannot develop long-term drive patterns or preferences
+
+This is a known gap shared with the semantic memory system (see `sociopsi-architecture.tex` Section 6, Gap 4). The persistence design plan in the architecture paper (Section 7.4) covers both memory and drive state serialization via SQLite or JSONL.
