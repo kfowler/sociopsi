@@ -45,7 +45,7 @@ from sociopsi.planning import (
     parse_plan_response,
 )
 from sociopsi.sensors.events import EventCollector
-from sociopsi.sensors.somatic import gather_somatic
+from sociopsi.sensors.somatic import SomaticPoller, gather_somatic
 from sociopsi.terminal import colors
 from sociopsi.types import Action, ActionResult, PsycheComponent, SomaticState, StreamSegment
 from sociopsi.voice import Voice
@@ -84,6 +84,9 @@ class JungAgent:
         # Core subsystems
         self.executor = ActionExecutor(self.config)
         self.event_collector = EventCollector()
+        self.somatic_poller = SomaticPoller(
+            event_callback=lambda t, d, data: self.event_collector.add_event(t, d, **data),
+        )
         self.voice = Voice(self.config)
         self.ear = Ear(self.config)
         self.logger = PsycheLogger(self.config)
@@ -193,6 +196,7 @@ class JungAgent:
         """Start the agent loop."""
         self._running = True
         self.event_collector.start()
+        self.somatic_poller.start()
 
         # Wire voice speaking state to ear mute/unmute to prevent hearing own speech
         self.voice._on_speak_start = self.ear.mute
@@ -245,6 +249,7 @@ class JungAgent:
         self._running = False
         self._shutdown_event.set()
         self.ear.stop()
+        self.somatic_poller.stop()
         self.event_collector.stop()
         self.voice.stop()
         shutdown_executor(wait=False)
@@ -318,8 +323,8 @@ class JungAgent:
             print(f"{colors.BOLD}[CYCLE {cycle_count}] {timestamp}{colors.RESET}")
             print("=" * 70)
 
-            # 1. Gather somatic state
-            somatic = gather_somatic()
+            # 1. Read latest somatic snapshot (non-blocking)
+            somatic = self.somatic_poller.snapshot()
 
             # 2. Collect events
             events = self.event_collector.collect_events(somatic)

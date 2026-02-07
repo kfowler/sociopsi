@@ -17,10 +17,11 @@ from sociopsi.sensors.network import (
     scan_local_network,
     trace_route,
 )
-from sociopsi.sensors.somatic import gather_somatic
+from sociopsi.sensors.somatic import SomaticPoller, gather_somatic
 
 __all__ = [
     "gather_somatic",
+    "SomaticPoller",
     "EventCollector",
     "get_ambient_light",
     "get_bluetooth_devices",
