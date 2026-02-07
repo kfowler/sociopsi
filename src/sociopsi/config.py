@@ -220,29 +220,20 @@ def _check_voice_available(voice_name: str) -> str:
         English voice as a fallback.
     """
     try:
-        import AVFoundation  # type: ignore[import-untyped]
+        from sociopsi.platform import get_audio_backend
 
-        voices = AVFoundation.AVSpeechSynthesisVoice.speechVoices()  # type: ignore[attr-defined]
-
-        # Check if requested voice exists
-        for v in voices:
-            if v.name() == voice_name:
-                return voice_name
+        audio = get_audio_backend()
+        if audio.voice_available(voice_name):
+            return voice_name
 
         # Fallback: find best available English voice
-        best_name = voice_name  # Keep original as default
-        best_quality = -1
+        best = audio.best_voice("en")
+        if best and best.name != voice_name:
+            logger.warning(f"Voice '{voice_name}' not found, using '{best.name}'")
+            return best.name
 
-        for v in voices:
-            if v.language().startswith("en") and v.quality() > best_quality:
-                best_quality = v.quality()
-                best_name = v.name()
-
-        if best_name != voice_name:
-            logger.warning(f"Voice '{voice_name}' not found, using '{best_name}'")
-
-        return best_name
-    except ImportError:
+        return voice_name
+    except Exception:
         return voice_name  # Can't check, keep original
 
 

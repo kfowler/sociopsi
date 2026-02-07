@@ -1,7 +1,5 @@
 """Tests for voice output module."""
 
-from unittest.mock import patch
-
 from sociopsi.config import AgentConfig
 from sociopsi.types import Action, StreamSegment
 from sociopsi.voice import Voice
@@ -16,7 +14,7 @@ class TestVoiceInit:
         voice = Voice(config)
 
         assert voice.config == config
-        assert voice._delegate is None
+        assert voice._audio is None
         assert voice._running is False
 
     def test_initializes_component_voices(self) -> None:
@@ -48,7 +46,7 @@ class TestVoiceStartStop:
 
         voice.start()
 
-        assert voice._delegate is None
+        assert voice._audio is None
         assert voice._running is False
 
     def test_stop_does_nothing_when_not_running(self) -> None:
@@ -103,9 +101,7 @@ class TestSpeakStream:
             StreamSegment(component="shadow", text="Darkness"),
         ]
 
-        # Mock _any_speaking to prevent immediate consumption
-        with patch.object(voice, "_any_speaking", return_value=True):
-            voice.speak_stream(segments)
+        voice.speak_stream(segments)
 
         # Should have 2 items in queue
         assert len(voice._queue) == 2
@@ -134,9 +130,7 @@ class TestSpeakStream:
             StreamSegment(component="shadow", text="Hello there"),  # OK
         ]
 
-        # Mock _any_speaking to prevent immediate consumption
-        with patch.object(voice, "_any_speaking", return_value=True):
-            voice.speak_stream(segments)
+        voice.speak_stream(segments)
 
         # Should only have 1 item (skipped short text)
         assert len(voice._queue) == 1
@@ -172,9 +166,7 @@ class TestAnnounceActions:
 
         actions = [Action(type="check_battery", params={})]
 
-        # Mock _any_speaking to prevent immediate consumption
-        with patch.object(voice, "_any_speaking", return_value=True):
-            voice.announce_actions(actions)
+        voice.announce_actions(actions)
 
         assert len(voice._queue) == 1
         item = voice._queue.popleft()
@@ -193,9 +185,7 @@ class TestAnnounceActions:
             Action(type="check_thermals", params={}),
         ]
 
-        # Mock _any_speaking to prevent immediate consumption
-        with patch.object(voice, "_any_speaking", return_value=True):
-            voice.announce_actions(actions)
+        voice.announce_actions(actions)
 
         assert len(voice._queue) == 1
         item = voice._queue.popleft()

@@ -154,3 +154,65 @@ class NetworkControlBackend(ABC):
     @abstractmethod
     def list_interfaces(self) -> list[dict]:
         """List network interfaces."""
+
+
+@dataclass
+class VoiceInfo:
+    """TTS voice descriptor."""
+
+    name: str
+    identifier: str
+    language: str
+    quality: int  # Higher is better (0=default, 1=low, 2=enhanced, 3=premium)
+
+
+class AudioBackend(ABC):
+    """Abstract TTS and sound playback backend."""
+
+    @abstractmethod
+    def speak(self, text: str, voice: str | None = None, rate: int = 200) -> None:
+        """Speak text aloud. Blocks until done.
+
+        Args:
+            text: Text to speak.
+            voice: Voice name or identifier. None for system default.
+            rate: Speech rate in words per minute.
+        """
+
+    @abstractmethod
+    def play_sound(self, path: str) -> None:
+        """Play an audio file. Blocks until done.
+
+        Args:
+            path: Path to audio file.
+        """
+
+    @abstractmethod
+    def list_voices(self, language: str = "en") -> list[VoiceInfo]:
+        """List available TTS voices.
+
+        Args:
+            language: Language prefix to filter by (e.g. "en").
+
+        Returns:
+            List of available voices, sorted by quality descending.
+        """
+
+    @abstractmethod
+    def voice_available(self, name: str) -> bool:
+        """Check if a named voice is available.
+
+        Args:
+            name: Voice display name (e.g. "Zoe (Premium)").
+        """
+
+    @abstractmethod
+    def best_voice(self, language: str = "en") -> VoiceInfo | None:
+        """Get the highest quality voice for a language.
+
+        Args:
+            language: Language prefix (e.g. "en").
+
+        Returns:
+            Best voice, or None if no voices available.
+        """

@@ -9,6 +9,7 @@ import sys
 
 from sociopsi.platform.base import (
     AppBackend,
+    AudioBackend,
     BatteryInfo,
     ClipboardBackend,
     DisplayBackend,
@@ -20,6 +21,7 @@ from sociopsi.platform.base import (
     SensorUnavailable,
     ThermalBackend,
     ThermalInfo,
+    VoiceInfo,
     VolumeBackend,
 )
 from sociopsi.platform.speech import SpeechBackend
@@ -98,6 +100,21 @@ def get_speech_backend(locale: str = "en-US", on_device: bool = True) -> SpeechB
         return LinuxSpeechBackend()
     else:
         raise SensorUnavailable(f"No speech backend for platform: {platform}")
+
+
+def get_audio_backend() -> AudioBackend:
+    """Get the TTS and sound playback backend for the current platform."""
+    platform = _detect_platform()
+    if platform == "darwin":
+        from sociopsi.platform.audio import DarwinAudioBackend
+
+        return DarwinAudioBackend()
+    elif platform == "linux":
+        from sociopsi.platform.audio import LinuxAudioBackend
+
+        return LinuxAudioBackend()
+    else:
+        raise SensorUnavailable(f"No audio backend for platform: {platform}")
 
 
 def get_volume_backend() -> VolumeBackend:
@@ -192,6 +209,7 @@ def get_network_backend() -> NetworkControlBackend:
 
 __all__ = [
     "AppBackend",
+    "AudioBackend",
     "BatteryInfo",
     "ClipboardBackend",
     "DisplayBackend",
@@ -204,8 +222,10 @@ __all__ = [
     "SpeechBackend",
     "ThermalBackend",
     "ThermalInfo",
+    "VoiceInfo",
     "VolumeBackend",
     "get_app_backend",
+    "get_audio_backend",
     "get_clipboard_backend",
     "get_display_backend",
     "get_network_backend",

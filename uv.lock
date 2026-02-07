@@ -3336,6 +3336,18 @@ wheels = [
 ]
 
 [[package]]
+name = "pyttsx3"
+version = "2.99"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pyobjc", marker = "sys_platform == 'darwin'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/94/4e/a37786f666f4f084fc45e026ca1e63f7b49ac0d90b53fa35ae62b73c96a8/pyttsx3-2.99.tar.gz", hash = "sha256:a18a5601530a570c43491b4112887fc34c47e118fc937287db8d21905da1f74e", size = 33968, upload-time = "2025-07-08T12:24:21.314Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/84/14/9fb5842581f0419b5eb85f8c26c1c0c0f4cf6b4d5be638ae3157316a2650/pyttsx3-2.99-py3-none-any.whl", hash = "sha256:ff3e4ff756c24d72b9f3f2f304e0edaafd0f58adb0e6f4b90d930440cda8b207", size = 32157, upload-time = "2025-07-08T12:24:20.299Z" },
+]
+
+[[package]]
 name = "pyyaml"
 version = "6.0.3"
 source = { registry = "https://pypi.org/simple" }
@@ -3587,7 +3599,8 @@ dependencies = [
     { name = "ollama" },
     { name = "opencv-python" },
     { name = "psutil" },
-    { name = "pyobjc" },
+    { name = "pyobjc", marker = "sys_platform == 'darwin'" },
+    { name = "pyttsx3", marker = "sys_platform == 'linux'" },
     { name = "sentence-transformers" },
     { name = "sounddevice" },
     { name = "soundfile" },
@@ -3617,7 +3630,8 @@ requires-dist = [
     { name = "ollama", specifier = ">=0.4.0,<1.0.0" },
     { name = "opencv-python", specifier = ">=4.9.0,<5.0.0" },
     { name = "psutil", specifier = ">=6.0.0,<7.0.0" },
-    { name = "pyobjc", specifier = ">=12.1,<13.0.0" },
+    { name = "pyobjc", marker = "sys_platform == 'darwin'", specifier = ">=12.1,<13.0.0" },
+    { name = "pyttsx3", marker = "sys_platform == 'linux'", specifier = ">=2.90,<3.0.0" },
     { name = "sentence-transformers", specifier = ">=2.2.0,<3.0.0" },
     { name = "sounddevice", specifier = ">=0.4.6,<0.5.0" },
     { name = "sounddevice", marker = "extra == 'linux'", specifier = ">=0.4.6,<0.5.0" },
