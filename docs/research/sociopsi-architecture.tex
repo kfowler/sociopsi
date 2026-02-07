@@ -333,14 +333,31 @@ All four voices are generated in parallel via \texttt{ThreadPoolExecutor.submit(
 
 \subsubsection{Ego Mediation}
 
-The Ego (\texttt{ego.py}, 267 lines) performs three functions:
+The Ego (\texttt{ego.py}) performs three functions:
 
 \begin{enumerate}
-  \item \textbf{Harmony calculation}: a heuristic based on voice participation count and conflict-word frequency (``but'', ``however'', ``despite'', etc.).
-        More participating voices increase harmony; conflict words decrease it.
+  \item \textbf{Harmony calculation}: mean pairwise cosine similarity between voice embeddings (see below).
   \item \textbf{Mediation}: an LLM call that receives all archetypal voices plus the individuation level, and synthesizes them into a single coherent thought.
   \item \textbf{Development}: ego strength increases (+0.01) when harmony exceeds 0.7 and decreases ($-$0.005) when harmony drops below 0.3, creating a slow developmental arc.
 \end{enumerate}
+
+\paragraph{Harmony Score Algorithm.}
+Each archetype voice is encoded to a 384-dimensional embedding via the shared \texttt{all-MiniLM-L6-v2} sentence-transformer model (the same model used by semantic memory).
+Given $N$ non-empty voice texts $\{v_1, \ldots, v_N\}$, the embeddings $\{e_1, \ldots, e_N\}$ are computed in a single batch call, and the mean pairwise cosine similarity is:
+\[
+S = \frac{2}{N(N-1)} \sum_{i < j} \frac{e_i \cdot e_j}{\|e_i\| \cdot \|e_j\|}
+\]
+A participation bonus $P = \min(0.15,\; N \times 0.05)$ rewards broader internal dialogue (more voices participating is a precondition for integration).
+The final harmony score is:
+\[
+H = \text{clamp}\!\Big(S + P,\;\; 0.1,\;\; 1.0\Big)
+\]
+This replaces an earlier heuristic that counted conflict words (``but'', ``however'', ``despite'', etc.)\ --- a brittle proxy that was insensitive to semantic agreement expressed in different vocabulary.
+The embedding approach captures whether voices are saying \emph{similar things} regardless of surface phrasing.
+
+\paragraph{Fallback behavior.}
+If the sentence-transformer model is unavailable (e.g., \texttt{sentence-transformers} not installed) or if encoding raises an exception, the score falls back to $H = \text{clamp}(0.5 + P,\; 0.1,\; 1.0)$, the same participation-only baseline the old heuristic used.
+If fewer than two voices are active, harmony defaults to $0.5$ (neutral).
 
 \subsection{LLM Architecture}
 \label{sec:llm}
@@ -619,7 +636,8 @@ Additional limitations include:
 \begin{itemize}
   \item \textbf{Platform lock}: the agent is macOS-only due to PyObjC, NSSpeechSynthesizer, SFSpeechRecognizer, and ioreg/system\_profiler dependencies.
   \item \textbf{Sequential action execution}: actions are executed one at a time; there is no parallel execution or action scheduling.
-  \item \textbf{Harmony heuristic}: the Ego's harmony calculation uses conflict-word counting rather than semantic similarity between voice embeddings, making it insensitive to semantic agreement expressed in different words.
+  \item \textbf{Harmony heuristic}: the Ego's harmony score uses mean pairwise cosine similarity between voice embeddings, which captures semantic agreement.
+        The participation bonus (+0.05 per active voice, capped at 0.15) may still over-reward quantity over quality; future work could weight voices by archetype activation strength.
   \item \textbf{Thermal sensing}: accurate temperature readings require \texttt{sudo powermetrics}, which is impractical for normal operation; the fallback is a crude CPU-usage-based estimation.
   \item \textbf{GPU estimation}: Apple Silicon's unified memory makes GPU utilization opaque; the current implementation estimates GPU usage as CPU + 10\%.
   \item \textbf{No hot-reload}: configuration changes require restart.

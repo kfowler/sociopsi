@@ -3,7 +3,10 @@
 import logging
 from typing import TYPE_CHECKING, Any
 
+import numpy as np
+
 from sociopsi.llm import chat_with_retry
+from sociopsi.memory import get_embedding_model
 
 if TYPE_CHECKING:
     from sociopsi.archetypes.base import Archetype
@@ -92,52 +95,72 @@ IMPORTANT: Respond with ONLY plain text. No JSON, no formatting, no code blocks.
             return ""
 
     def calculate_harmony(self, archetypal_voices: dict[str, str]) -> float:
-        """Calculate harmony/agreement level between voices (0-1).
+        """Calculate harmony between archetypal voices via embedding similarity.
 
-        Higher harmony = voices are in agreement
-        Lower harmony = voices are in conflict
+        Uses mean pairwise cosine similarity between voice embeddings from the
+        shared sentence-transformers model (all-MiniLM-L6-v2, 384-dim). When
+        embeddings are unavailable, falls back to a participation-count heuristic.
+
+        The score is clamped to [0.1, 1.0]. A participation bonus rewards more
+        voices contributing (wider internal dialogue is a precondition for
+        integration). The embedding similarity captures semantic agreement even
+        when voices use different vocabulary — unlike the old conflict-word
+        frequency heuristic.
 
         Args:
-            archetypal_voices: Dictionary of archetype voices
+            archetypal_voices: Dictionary of archetype names to their voice text.
 
         Returns:
-            Harmony score (0=conflict, 1=harmony)
+            Harmony score (0.1=deep conflict, 1.0=full agreement).
         """
         if not archetypal_voices:
             return 0.5
 
-        # Simple heuristic based on voice count and length variance
-        # More sophisticated: use embeddings for semantic similarity
         voices = [v for v in archetypal_voices.values() if v]
 
         if len(voices) < 2:
             return 0.5
 
-        # Base harmony
-        base_harmony = 0.5
-
-        # More voices participating = more potential for integration
+        # Participation bonus: more voices = more potential for integration
         participation_bonus = min(0.15, len(voices) * 0.05)
 
-        # Check for conflict indicators (negations, contradictions)
-        conflict_words = [
-            "but",
-            "however",
-            "despite",
-            "although",
-            "against",
-            "don't",
-            "won't",
-            "shouldn't",
-        ]
-        conflict_count = sum(
-            1 for voice in voices for word in conflict_words if word.lower() in voice.lower()
-        )
-        conflict_penalty = min(0.3, conflict_count * 0.05)
+        # Try embedding-based similarity
+        model = get_embedding_model()
+        if model is not None:
+            try:
+                embeddings = model.encode(voices, convert_to_numpy=True)
+                similarity = self._mean_pairwise_cosine(embeddings)
+                # Map similarity (typically 0.3–0.9) into harmony range
+                harmony = similarity + participation_bonus
+            except Exception:
+                logger.warning("Embedding harmony failed, using participation fallback")
+                harmony = 0.5 + participation_bonus
+        else:
+            # No embedding model available — participation-only fallback
+            harmony = 0.5 + participation_bonus
 
-        harmony = max(0.1, min(1.0, base_harmony + participation_bonus - conflict_penalty))
+        harmony = float(np.clip(harmony, 0.1, 1.0))
         self.last_harmony = harmony
         return harmony
+
+    @staticmethod
+    def _mean_pairwise_cosine(embeddings: np.ndarray) -> float:
+        """Compute mean pairwise cosine similarity for a set of embeddings.
+
+        Args:
+            embeddings: (N, D) array of N embeddings.
+
+        Returns:
+            Mean cosine similarity across all unique pairs.
+        """
+        norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
+        norms = np.maximum(norms, 1e-10)  # avoid division by zero
+        normed = embeddings / norms
+        sim_matrix = normed @ normed.T
+        n = sim_matrix.shape[0]
+        # Extract upper triangle (excluding diagonal)
+        upper = sim_matrix[np.triu_indices(n, k=1)]
+        return float(upper.mean()) if upper.size > 0 else 0.5
 
     def develop(self, harmony: float) -> None:
         """Develop ego strength based on integration quality.
