@@ -150,7 +150,7 @@ Key: `look` only satisfies affiliation if a person is seen. Empty room makes lon
 
 ## File Structure
 
-### New file: `src/jung_agent/drives.py`
+### New file: `src/sociopsi/drives.py`
 
 ```python
 @dataclass

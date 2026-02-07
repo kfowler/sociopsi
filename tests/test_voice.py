@@ -2,9 +2,9 @@
 
 from unittest.mock import patch
 
-from jung_agent.config import AgentConfig
-from jung_agent.types import Action, StreamSegment
-from jung_agent.voice import Voice
+from sociopsi.config import AgentConfig
+from sociopsi.types import Action, StreamSegment
+from sociopsi.voice import Voice
 
 
 class TestVoiceInit:

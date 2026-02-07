@@ -2,13 +2,13 @@
 
 ## Overview
 
-Add continuous speech recognition to the jung agent using Apple's
+Add continuous speech recognition to Socio-Psi using Apple's
 SFSpeechRecognizer via PyObjC. The agent listens for human speech at all
 times and injects recognized utterances into its perception loop.
 
 ## Architecture
 
-New module `src/jung_agent/ear.py` provides the `Ear` class - a singleton
+New module `src/sociopsi/ear.py` provides the `Ear` class - a singleton
 that opens an AVAudioEngine tap on the microphone and feeds audio into
 SFSpeechAudioBufferRecognitionRequest. Delegate callbacks deliver partial
 and final transcriptions. Final utterances are buffered and drained by
@@ -61,7 +61,7 @@ Both degrade gracefully if denied.
 
 ## Deliverables
 
-1. `src/jung_agent/ear.py` - Ear class
-2. `src/jung_agent/agent.py` - Integration
-3. `src/jung_agent/config.py` - Config fields
+1. `src/sociopsi/ear.py` - Ear class
+2. `src/sociopsi/agent.py` - Integration
+3. `src/sociopsi/config.py` - Config fields
 4. `tests/test_ear.py` - Unit tests

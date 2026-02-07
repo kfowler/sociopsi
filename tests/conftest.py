@@ -1,15 +1,15 @@
-"""Pytest fixtures for jung_agent tests."""
+"""Pytest fixtures for sociopsi tests."""
 
 import pytest
 
-from jung_agent.config import AgentConfig
+from sociopsi.config import AgentConfig
 
 
 @pytest.fixture
 def config() -> AgentConfig:
     """Create a test configuration with voice disabled."""
     return AgentConfig(
-        model="jung-mid",
+        model="sociopsi-mid",
         voice_enabled=False,  # Disable voice for tests
         heartbeat_idle=1,  # Fast heartbeat for tests
     )

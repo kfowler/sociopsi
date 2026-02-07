@@ -4,7 +4,7 @@ import logging
 import logging.handlers
 from pathlib import Path
 
-from jung_agent.config import (
+from sociopsi.config import (
     AgentConfig,
     _apply_config_overrides,
     _load_config_file,
@@ -20,7 +20,7 @@ class TestAgentConfig:
         """Test that default configuration values are set correctly."""
         config = AgentConfig()
 
-        assert config.model == "jung-mid"
+        assert config.model == "sociopsi-mid"
         assert config.heartbeat_idle == 2.0
         assert config.heartbeat_active == 1.0
         assert config.heartbeat_stressed == 0.5
@@ -37,20 +37,20 @@ class TestAgentConfig:
     def test_custom_values(self) -> None:
         """Test that custom configuration values are respected."""
         config = AgentConfig(
-            model="jung-small",
+            model="sociopsi-small",
             heartbeat_idle=10,
             voice_enabled=False,
             battery_critical=15,
         )
 
-        assert config.model == "jung-small"
+        assert config.model == "sociopsi-small"
         assert config.heartbeat_idle == 10
         assert config.voice_enabled is False
         assert config.battery_critical == 15
 
     def test_data_directory_created(self, tmp_path: Path) -> None:
         """Test that data directory is created on init."""
-        data_dir = tmp_path / "test_jung_data"
+        data_dir = tmp_path / "test_sociopsi_data"
         AgentConfig(data_dir=data_dir, voice_enabled=False)  # Side effect creates dir
 
         assert data_dir.exists()
@@ -60,10 +60,10 @@ class TestAgentConfig:
         """Test that default paths are set correctly."""
         config = AgentConfig(voice_enabled=False)
 
-        assert config.data_dir == Path.home() / ".jung"
-        assert config.journal_file == Path.home() / ".jung" / "journal.jsonl"
-        assert config.memory_file == Path.home() / ".jung" / "memory.json"
-        assert config.world_file == Path.home() / ".jung" / "world.json"
+        assert config.data_dir == Path.home() / ".sociopsi"
+        assert config.journal_file == Path.home() / ".sociopsi" / "journal.jsonl"
+        assert config.memory_file == Path.home() / ".sociopsi" / "memory.json"
+        assert config.world_file == Path.home() / ".sociopsi" / "world.json"
 
     def test_modules_default(self) -> None:
         """Test that all modules are enabled by default."""
@@ -123,11 +123,11 @@ class TestLoadConfigFile:
     def test_loads_valid_json_config(self, tmp_path: Path) -> None:
         """Test loading a valid JSON config file."""
         config_file = tmp_path / "config.json"
-        config_file.write_text('{"model": "jung-small", "heartbeat_idle": 10}')
+        config_file.write_text('{"model": "sociopsi-small", "heartbeat_idle": 10}')
 
         result = _load_config_file(config_file)
 
-        assert result == {"model": "jung-small", "heartbeat_idle": 10}
+        assert result == {"model": "sociopsi-small", "heartbeat_idle": 10}
 
     def test_returns_empty_dict_for_invalid_json(self, tmp_path: Path) -> None:
         """Test that invalid JSON returns empty dict."""
@@ -154,9 +154,9 @@ class TestApplyConfigOverrides:
     def test_applies_string_override(self) -> None:
         """Test applying a string config override."""
         config = AgentConfig(voice_enabled=False)
-        _apply_config_overrides(config, {"model": "jung-small"})
+        _apply_config_overrides(config, {"model": "sociopsi-small"})
 
-        assert config.model == "jung-small"
+        assert config.model == "sociopsi-small"
 
     def test_applies_int_override(self) -> None:
         """Test applying an integer config override."""
@@ -190,10 +190,10 @@ class TestApplyConfigOverrides:
     def test_ignores_unknown_keys(self) -> None:
         """Test that unknown config keys are ignored."""
         config = AgentConfig(voice_enabled=False)
-        _apply_config_overrides(config, {"unknown_key": "value", "model": "jung"})
+        _apply_config_overrides(config, {"unknown_key": "value", "model": "sociopsi"})
 
         # Model should be updated, unknown key should be ignored
-        assert config.model == "jung"
+        assert config.model == "sociopsi"
 
     def test_rejects_wrong_type_for_int(self) -> None:
         """Test that wrong type for int field is rejected."""

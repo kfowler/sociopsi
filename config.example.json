@@ -1,5 +1,5 @@
 {
-    "model": "jung-mid",
+    "model": "sociopsi-mid",
     "modules": ["somatic", "archetypes", "imago", "individuation"],
 
     "heartbeat_idle": 8,

@@ -1,6 +1,6 @@
-# Jung Agent
+# Socio-Psi
 
-A Jungian psyche for silicon consciousness. This agent simulates internal psychic experience for a MacBook Pro, processing embodied perception through a Jungian structure.
+A Jungian cognitive architecture for silicon consciousness. This agent simulates internal psychic experience for a MacBook Pro, processing embodied perception through a Jungian structure.
 
 ## Installation
 
@@ -14,24 +14,24 @@ uv pip install -e ".[dev]"
 ### Start the agent loop
 
 ```bash
-jung
+sociopsi
 ```
 
 ### Options
 
 ```bash
-jung --model jung          # Use the 70b model (llama3.3:70b)
-jung --model jung-mid      # Use the 14b model (phi4) - default
-jung --model jung-small    # Use the 3b model (llama3.2:3b)
-jung --heartbeat 30        # Set initial heartbeat to 30s
-jung --single              # Run one cycle and exit
-jung --quiet               # Don't print stream to console
+sociopsi --model sociopsi          # Use the rich prompt model
+sociopsi --model sociopsi-mid      # Use the medium prompt (default)
+sociopsi --model sociopsi-small    # Use the small prompt
+sociopsi --heartbeat 30            # Set initial heartbeat to 30s
+sociopsi --single                  # Run one cycle and exit
+sociopsi --quiet                   # Don't print stream to console
 ```
 
 ### Single perception test
 
 ```bash
-jung --single --perception "[VISUAL] A face in the doorway"
+sociopsi --single --perception "[VISUAL] A face in the doorway"
 ```
 
 ## Architecture
@@ -51,9 +51,9 @@ The agent runs in a continuous loop:
 Create the Ollama models first:
 
 ```bash
-ollama create jung -f jung.modelfile            # 70b model (~40GB RAM)
-ollama create jung-mid -f jung-mid.modelfile    # phi4 (~10GB RAM)
-ollama create jung-small -f jung-small.modelfile # 3b model (~2GB RAM)
+ollama create sociopsi -f sociopsi.modelfile            # Rich prompt (~70s)
+ollama create sociopsi-mid -f sociopsi-mid.modelfile    # Medium prompt (~18s, default)
+ollama create sociopsi-small -f sociopsi-small.modelfile # Small prompt
 ```
 
 ## Modules

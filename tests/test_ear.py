@@ -2,8 +2,8 @@
 
 from unittest.mock import MagicMock, patch
 
-from jung_agent.config import AgentConfig
-from jung_agent.ear import BENIGN_ERROR_CODES, Ear, MAX_CONSECUTIVE_ERRORS
+from sociopsi.config import AgentConfig
+from sociopsi.ear import BENIGN_ERROR_CODES, Ear, MAX_CONSECUTIVE_ERRORS
 
 
 class TestEarInit:
@@ -147,11 +147,11 @@ class TestUtteranceBuffer:
 class TestPerceptionIntegration:
     """Tests for speech perception formatting."""
 
-    @patch("jung_agent.perception._generate_composite", return_value="All is well.")
+    @patch("sociopsi.perception._generate_composite", return_value="All is well.")
     def test_format_perception_without_utterances(self, _mock_composite: MagicMock) -> None:
         """Test that perception works without utterances."""
-        from jung_agent.perception import format_perception
-        from jung_agent.types import SomaticState
+        from sociopsi.perception import format_perception
+        from sociopsi.types import SomaticState
 
         somatic = MagicMock(spec=SomaticState)
         somatic.to_tag.return_value = "[SOMATIC: test]"
@@ -168,11 +168,11 @@ class TestPerceptionIntegration:
 
         assert "[SPEECH]" not in result
 
-    @patch("jung_agent.perception._generate_composite", return_value="All is well.")
+    @patch("sociopsi.perception._generate_composite", return_value="All is well.")
     def test_format_perception_with_utterances(self, _mock_composite: MagicMock) -> None:
         """Test that utterances appear in perception string."""
-        from jung_agent.perception import format_perception
-        from jung_agent.types import SomaticState
+        from sociopsi.perception import format_perception
+        from sociopsi.types import SomaticState
 
         somatic = MagicMock(spec=SomaticState)
         somatic.to_tag.return_value = "[SOMATIC: test]"
@@ -192,11 +192,11 @@ class TestPerceptionIntegration:
         assert '"hello there"' in result
         assert '"what are you doing"' in result
 
-    @patch("jung_agent.perception._generate_composite", return_value="All is well.")
+    @patch("sociopsi.perception._generate_composite", return_value="All is well.")
     def test_format_perception_empty_utterances_omitted(self, _mock_composite: MagicMock) -> None:
         """Test that empty utterance list omits [SPEECH] section."""
-        from jung_agent.perception import format_perception
-        from jung_agent.types import SomaticState
+        from sociopsi.perception import format_perception
+        from sociopsi.types import SomaticState
 
         somatic = MagicMock(spec=SomaticState)
         somatic.to_tag.return_value = "[SOMATIC: test]"

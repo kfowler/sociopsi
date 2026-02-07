@@ -1,1 +1,1 @@
-"""Test suite for jung_agent."""
+"""Test suite for sociopsi."""

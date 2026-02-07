@@ -35,4 +35,8 @@ ENV/
 .DS_Store
 
 # Project specific
-.jung/
+.sociopsi/
+
+# MkDocs
+site/
+site-src/research/papers/

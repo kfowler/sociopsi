@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import pytest
 
-from jung_agent.llm import (
+from sociopsi.llm import (
     LLMError,
     get_executor,
     shutdown_executor,
@@ -48,7 +48,7 @@ class TestSubmitChat:
 
     def test_returns_future(self) -> None:
         mock_response = {"message": {"content": "Hello!"}}
-        with patch("jung_agent.llm.ollama.chat", return_value=mock_response):
+        with patch("sociopsi.llm.ollama.chat", return_value=mock_response):
             future = submit_chat(
                 model="test",
                 messages=[{"role": "user", "content": "Hi"}],
@@ -57,9 +57,9 @@ class TestSubmitChat:
         assert future.result(timeout=5) == mock_response
 
     def test_future_propagates_exception(self) -> None:
-        with patch("jung_agent.llm.ollama.chat") as mock_chat:
+        with patch("sociopsi.llm.ollama.chat") as mock_chat:
             mock_chat.side_effect = ConnectionError("Always fails")
-            with patch("jung_agent.llm.time.sleep"):
+            with patch("sociopsi.llm.time.sleep"):
                 future = submit_chat(
                     model="test",
                     messages=[{"role": "user", "content": "Hi"}],
@@ -74,7 +74,7 @@ class TestSubmitGenerateText:
 
     def test_returns_future_with_text(self) -> None:
         mock_response = {"message": {"content": "  Generated text  \n"}}
-        with patch("jung_agent.llm.ollama.chat", return_value=mock_response):
+        with patch("sociopsi.llm.ollama.chat", return_value=mock_response):
             future = submit_generate_text(model="test", prompt="Generate")
         assert isinstance(future, Future)
         assert future.result(timeout=5) == "Generated text"
@@ -106,7 +106,7 @@ class TestParallelExecution:
             time.sleep(delay)
             return {"message": {"content": "done"}}
 
-        with patch("jung_agent.llm.ollama.chat", side_effect=slow_chat):
+        with patch("sociopsi.llm.ollama.chat", side_effect=slow_chat):
             start = time.time()
             futures = [
                 submit_chat(model="test", messages=[{"role": "user", "content": f"msg{i}"}])

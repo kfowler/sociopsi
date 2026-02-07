@@ -1,6 +1,6 @@
 """Tests for the LLM response parser."""
 
-from jung_agent.parser import _normalize_component, _repair_json, parse_response
+from sociopsi.parser import _normalize_component, _repair_json, parse_response
 
 
 class TestParseResponse:

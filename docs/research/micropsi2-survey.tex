@@ -10,7 +10,7 @@
   and Artificial Inner Life}
 }
 \author{%
-  \sffamily Jung Agent Project\\[0.3em]
+  \sffamily Socio-Psi Project\\[0.3em]
   \small\textcolor{jungmuted}{Technical Report --- February 2026}
 }
 \date{}
@@ -26,7 +26,7 @@ MicroPsi2, Joscha Bach's implementation of Dietrich D\"orner's Psi theory of
 motivated cognition. We situate MicroPsi2 within the broader landscape of
 machine consciousness research, surveying Global Workspace Theory, Integrated
 Information Theory, Attention Schema Theory, predictive processing, and
-higher-order theories. We then assess the alignment between the Jung Agent---a
+higher-order theories. We then assess the alignment between the Socio-Psi---a
 Jungian archetypal cognitive architecture for situated AI---and the Psi
 theoretic tradition, identifying both convergences and divergences that inform
 the project's future direction.
@@ -64,7 +64,7 @@ This survey has three aims:
   \item Survey the current state of the art in machine consciousness
     research, identifying the major theoretical frameworks and their
     computational implications.
-  \item Assess where the Jung Agent project---a Jungian archetypal
+  \item Assess where the Socio-Psi project---a Jungian archetypal
     cognitive architecture for macOS---sits within this landscape.
 \end{enumerate}
 
@@ -127,7 +127,7 @@ related but distinct regulatory needs:
 \end{tabularx}
 \end{table}
 
-The Jung Agent extends this taxonomy with three additional drives:
+The Socio-Psi extends this taxonomy with three additional drives:
 \textbf{curiosity} (explicit exploratory motivation, implicit in Psi's
 competence/certainty interaction), \textbf{recognition} (explicit social
 acknowledgment, subsumed within Psi's social drives), and
@@ -387,7 +387,7 @@ competition.
 
 \textbf{Relevance}: IIT's emphasis on \emph{integration} resonates with
 Psi theory's emergent emotions (which are \emph{integrated} modulator
-states) and with the Jung Agent's archetypal harmony score (measuring
+states) and with the Socio-Psi's archetypal harmony score (measuring
 integration across internal voices).
 
 \subsection{Higher-Order Theories (HOT)}
@@ -397,7 +397,7 @@ that a mental state is conscious when there is a higher-order representation
 \emph{of} that state. Consciousness requires not just having a state, but
 \emph{representing oneself} as having it.
 
-\textbf{Relevance}: The Jung Agent's meta-cognition system
+\textbf{Relevance}: The Socio-Psi's meta-cognition system
 (\texttt{metacognition.py}) implements a form of higher-order monitoring:
 it tracks the agent's own thoughts, analyzes harmony trends, and generates
 reflections on its own psychological state. This is a direct computational
@@ -436,7 +436,7 @@ model includes a model of its own modeling process.
 
 \textbf{Relevance}: Psi theory's expectation horizon maps most closely to
 active inference: the agent maintains forward models of drive trajectories
-and acts to prevent predicted deprivation. The Jung Agent's drive dynamics
+and acts to prevent predicted deprivation. The Socio-Psi's drive dynamics
 (demand rising when satisfaction predictions are violated, falling when
 confirmed) implement a homeostatic version of prediction error minimization.
 The reactive sense-think-act cycle is predictive coding; adding an
@@ -458,7 +458,7 @@ reinforcement learning agents can develop rudimentary self-models and
 world-models as a byproduct of embodied goal-directed learning, validating
 Damasio's hierarchy computationally.
 
-\textbf{Relevance}: The Jung Agent is explicitly embodied---it experiences
+\textbf{Relevance}: The Socio-Psi is explicitly embodied---it experiences
 its MacBook hardware as a body (battery as vitality, CPU as mental strain,
 thermals as fever, RAM as cognitive pressure). This somatic grounding is
 more concrete than most AI consciousness projects.
@@ -542,7 +542,7 @@ Compensation & Homeostatic balance between opposed archetypes \\
 \end{table}
 
 While Jungian typology has been applied to agent personality modeling (e.g.,
-MBTI-based character systems) and narrative AI, the Jung Agent project
+MBTI-based character systems) and narrative AI, the Socio-Psi project
 appears to be the first system to implement Jungian archetypal dialogue as a
 \emph{functional cognitive subsystem}---where competing archetypal
 perspectives (Shadow, Anima, Persona, Self) are generated in parallel and
@@ -577,9 +577,9 @@ mediated by an Ego process---in a situated agent with real-world embodiment.
   \node[theory] (hot) at (-5,0) {Higher-Order\\Theories};
   \node[theory] (enact) at (-5,-2) {Enactivism};
 
-  % Jung Agent at center-bottom
+  % Socio-Psi at center-bottom
   \node[theory, fill=junggold!15, draw=junggold, minimum width=3.5cm] (jung)
-    at (0,-3.5) {\textbf{Jung Agent}};
+    at (0,-3.5) {\textbf{Socio-Psi}};
 
   % Connections from Psi
   \draw[bridge] (psi) -- node[lbl,above,sloped] {modulators $\approx$ workspace gating} (gwt);
@@ -589,7 +589,7 @@ mediated by an Ego process---in a situated agent with real-world embodiment.
   \draw[bridge] (psi) -- node[lbl,above,sloped] {meta-cognitive loop} (hot);
   \draw[bridge] (psi) -- node[lbl,above,sloped] {somatic grounding} (enact);
 
-  % Jung Agent connections
+  % Socio-Psi connections
   \draw[-{Stealth[length=4pt]}, thick, color=junggold]
     (jung) -- node[lbl,right] {drives, archetypes} (psi);
   \draw[-{Stealth[length=4pt]}, thick, color=junggold!60]
@@ -598,12 +598,12 @@ mediated by an Ego process---in a situated agent with real-world embodiment.
     (jung.east) to[bend left=20] node[lbl,right,pos=0.4] {embodiment} (enact.south);
 \end{tikzpicture}
 \caption{Theoretical relationships: Psi theory bridges multiple consciousness
-frameworks. The Jung Agent draws from Psi theory while adding archetypal
+frameworks. The Socio-Psi draws from Psi theory while adding archetypal
 dynamics, meta-cognition (HOT-adjacent), and strong embodiment (enactivist).}
 \label{fig:theory-map}
 \end{figure}
 
-The Jung Agent occupies a unique position at the intersection of:
+The Socio-Psi occupies a unique position at the intersection of:
 \begin{itemize}
   \item \textbf{Psi theory}: homeostatic drives, satisfaction dynamics,
     embodied sensing
@@ -646,7 +646,7 @@ come from scale alone. It will require \emph{architecture}---specifically,
 architecture that supports integration, embodiment, motivation, and
 self-modeling.
 
-The Jung Agent project's synthesis of Psi-theoretic drives with Jungian
+The Socio-Psi project's synthesis of Psi-theoretic drives with Jungian
 archetypal dynamics represents an experiment in building \emph{genuine inner
 life}---not as a philosophical claim, but as an engineering choice that
 produces richer, more interesting, and more adaptive behavior than systems

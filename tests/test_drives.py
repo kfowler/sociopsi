@@ -2,8 +2,8 @@
 
 import pytest
 
-from jung_agent.config import AgentConfig
-from jung_agent.drives import (
+from sociopsi.config import AgentConfig
+from sociopsi.drives import (
     DRIVE_CONFIGS,
     DRIVE_SUGGESTIONS,
     PRIMED_ACTION_DEFAULTS,
@@ -11,7 +11,7 @@ from jung_agent.drives import (
     Drive,
     DriveSystem,
 )
-from jung_agent.types import (
+from sociopsi.types import (
     ActionResult,
     LidState,
     NetworkState,

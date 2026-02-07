@@ -1,0 +1,56 @@
+site_name: Socio-Psi
+site_url: https://kfowler.github.io/consciousness/
+site_description: A Psi-theoretic architecture for machine subjectivity
+site_author: K Fowler
+repo_url: https://github.com/kfowler/consciousness
+repo_name: kfowler/consciousness
+
+docs_dir: site-src
+site_dir: site
+
+theme:
+  name: material
+  font:
+    text: Inter
+    code: IBM Plex Mono
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: pink
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: pink
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.tabs.link
+
+extra_css:
+  - stylesheets/extra.css
+
+nav:
+  - Home: index.md
+  - Research:
+    - Overview: research/index.md
+    - "System Architecture": research/sociopsi-architecture.md
+    - "Competitive Analysis": research/competitive-analysis.md
+    - "MicroPsi2 & Consciousness Survey": research/micropsi2-survey.md
+    - References: research/references.md
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true

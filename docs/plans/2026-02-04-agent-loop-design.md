@@ -38,7 +38,7 @@ while alive:
     perception = format_perception(somatic_state, events, last_action_results)
 
     # 4. Send to psyche
-    response = ollama.generate(model="jung", prompt=perception)
+    response = ollama.generate(model="sociopsi", prompt=perception)
 
     # 5. Parse response
     stream, actions = parse_response(response)

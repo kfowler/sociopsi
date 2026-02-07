@@ -1,0 +1,45 @@
+name: Deploy docs
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'site-src/**'
+      - 'docs/research/*.pdf'
+      - 'mkdocs.yml'
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v4
+
+      - run: uv sync --group dev
+
+      - name: Copy PDFs into site-src
+        run: |
+          mkdir -p site-src/research/papers
+          cp docs/research/*.pdf site-src/research/papers/
+
+      - run: uv run mkdocs build
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - uses: actions/deploy-pages@v4
+        id: deployment
