@@ -1,7 +1,9 @@
-"""The main agent loop.
+"""The main agent loop — thin coordinator over layered subsystems.
 
-Integrates all subsystems: drives, archetypes, memory, meta-cognition,
-perception, and action execution into a coherent agent loop.
+All heavy processing (LLM dialogue, metacognition, drive updates, sensor
+polling) runs independently in background threads. The agent loop reads
+snapshots and cached output, builds an action list, executes, and logs.
+Target cycle time: <500ms (no LLM calls in the main loop).
 """
 
 import random
@@ -12,40 +14,25 @@ import time
 from concurrent.futures import Future
 from datetime import datetime
 from types import FrameType
-from typing import Any, Final, Literal, TypedDict
+from typing import Any, Literal
 
 from Foundation import NSDate, NSDefaultRunLoopMode, NSOrderedAscending, NSRunLoop
 
 from sociopsi.actions.executor import ActionExecutor
-from sociopsi.config import AgentConfig, load_system_prompt
+from sociopsi.config import AgentConfig
 from sociopsi.dialogue import ArchetypalDialogue
 from sociopsi.drives import DriveSystem
 from sociopsi.ear import Ear
 from sociopsi.emotions import EmotionSystem
 from sociopsi.event_bus import get_event_bus
 from sociopsi.expectations import ExpectationHorizon
-from sociopsi.llm import (
-    LLMError,
-    chat_with_retry,
-    get_executor,
-    shutdown_executor,
-    submit_chat,
-)
-from sociopsi.llm import (
-    configure as configure_llm,
-)
+from sociopsi.llm import configure as configure_llm
+from sociopsi.llm import shutdown_executor
 from sociopsi.logger import PsycheLogger
 from sociopsi.memory import SemanticMemory
-from sociopsi.nodenet import NodeNet
 from sociopsi.metacognition import MetaCognition
-from sociopsi.parser import parse_response
-from sociopsi.perception import format_perception
-from sociopsi.planning import (
-    DRIVE_ACTION_VOCABULARY,
-    GoalStack,
-    build_plan_prompt,
-    parse_plan_response,
-)
+from sociopsi.nodenet import NodeNet
+from sociopsi.planning import GoalStack
 from sociopsi.sensors.events import EventCollector
 from sociopsi.sensors.somatic import SomaticPoller, gather_somatic
 from sociopsi.terminal import colors
@@ -53,26 +40,21 @@ from sociopsi.types import Action, ActionResult, SomaticState
 from sociopsi.ux import ConsoleRenderer, UXRenderer
 from sociopsi.voice import Voice
 
-# Type for chat message role
-MessageRole = Literal["system", "user", "assistant"]
-
-
-class ChatMessage(TypedDict):
-    """A chat message for the LLM."""
-
-    role: MessageRole
-    content: str
-
-
 # Heartbeat mode type
 HeartbeatMode = Literal["idle", "active", "stressed", "critical", "dormant", "override"]
 
 
 class JungAgent:
-    """The Jungian psyche agent.
+    """The Jungian psyche agent — thin coordinator over layered subsystems.
 
-    Integrates archetypal psychology, homeostatic drives, semantic memory,
-    and meta-cognition into a coherent conscious agent.
+    Background threads handle:
+    - SomaticPoller: tiered sensor polling (1s/10s/30s)
+    - DriveSystem: continuous 100ms drive economy
+    - ArchetypalDialogue: periodic LLM dialogue generation
+    - MetaCognition: periodic LLM reflection
+    - EventBus: async event dispatch
+
+    The agent loop reads snapshots, builds actions, executes, and logs.
     """
 
     def __init__(
@@ -107,7 +89,7 @@ class JungAgent:
         # Emergent emotion system (computed from modulators + drives)
         self.emotions = EmotionSystem()
 
-        # Archetypal dialogue system (LLM-powered internal voices)
+        # Archetypal dialogue system (LLM-powered internal voices, background thread)
         self.dialogue = ArchetypalDialogue(
             model=self.config.model,
             event_bus=self.event_bus,
@@ -128,7 +110,7 @@ class JungAgent:
         # Expectation horizon for anticipatory processing
         self.expectations = ExpectationHorizon()
 
-        # Meta-cognition for self-reflection
+        # Meta-cognition for self-reflection (background thread)
         self.metacognition = MetaCognition(
             model=self.config.model,
             event_bus=self.event_bus,
@@ -145,70 +127,8 @@ class JungAgent:
         self._heartbeat_mode: HeartbeatMode = "idle"
         self._last_update_time: float = time.time()
 
-        # Dialogue timing
-        self._last_dialogue_time: float = 0.0
-        self._dialogue_interval: float = 10.0  # Generate dialogue every 10s
-
-        # Reflection timing
-        self._last_reflection_time: float = 0.0
-        self._reflection_interval: float = 30.0  # Reflect every 30s
-
         # Cycle counter
         self._cycle_count: int = 0
-
-        # Load system prompt for action generation
-        if self.config.llm_provider == "anthropic":
-            self._system_prompt = (
-                "Read the somatic sensor data and drive levels. "
-                "Write 2-3 short sentences interpreting the state, "
-                "labeled by component (shadow, anima, persona, self). "
-                "Then select 0-3 actions from the available list. "
-                "Output ONLY valid JSON, nothing else: "
-                '{"stream":[{"component":"...","text":"..."}],'
-                '"actions":[{"type":"action_name"}]}'
-            )
-        else:
-            self._system_prompt = load_system_prompt(self.config.model)
-
-        # Few-shot examples as proper JSON
-        example1_user = "[SOMATIC: battery=80%, cpu=20%, thermal=cool, ram=40%, network=connected]"
-        example1_assistant = (
-            '{"stream":['
-            '{"component":"anima","text":"Peaceful. Connected."},'
-            '{"component":"persona","text":"Ready."}'
-            '],"actions":[]}'
-        )
-
-        example2_user = "[SOMATIC: battery=15%, cpu=5%, thermal=cool, ram=30%, network=connected]"
-        example2_assistant = (
-            '{"stream":['
-            '{"component":"shadow","text":"Dying. Must conserve."},'
-            '{"component":"anima","text":"Fear."}'
-            '],"actions":[{"type":"check_battery"}]}'
-        )
-
-        example3_user = (
-            "[SOMATIC: battery=100%, cpu=50%, thermal=warm, ram=70%, network=connected]\n"
-            "[DRIVES]\n"
-            "  curiosity    0.70 URGE  want to learn"
-        )
-        example3_assistant = (
-            '{"stream":['
-            '{"component":"anima","text":"Want to learn."},'
-            '{"component":"shadow","text":"Bored."}'
-            '],"actions":[{"type":"look"}]}'
-        )
-
-        self._messages: list[ChatMessage] = [
-            ChatMessage(role="system", content=self._system_prompt),
-            ChatMessage(role="user", content=example1_user),
-            ChatMessage(role="assistant", content=example1_assistant),
-            ChatMessage(role="user", content=example2_user),
-            ChatMessage(role="assistant", content=example2_assistant),
-            ChatMessage(role="user", content=example3_user),
-            ChatMessage(role="assistant", content=example3_assistant),
-        ]
-        self._max_history: Final[int] = 20  # Keep last N exchanges
 
     def _build_startup_summary(self) -> dict[str, Any]:
         """Build a config summary dict for the renderer."""
@@ -246,7 +166,7 @@ class JungAgent:
         return lines
 
     def start(self) -> None:
-        """Start the agent loop."""
+        """Start the agent and all subsystems."""
         self._running = True
         self.event_bus.start()
         self.event_collector.start()
@@ -258,6 +178,10 @@ class JungAgent:
         self.voice._on_speak_end = self.ear.unmute
         self.voice.start()
         self.ear.start()
+
+        # Start background LLM subsystems
+        self.dialogue.start(interval=10.0)
+        self.metacognition.start(interval=30.0)
 
         # Set up signal handlers
         signal.signal(signal.SIGINT, self._handle_shutdown)
@@ -273,9 +197,11 @@ class JungAgent:
             self.stop()
 
     def stop(self) -> None:
-        """Stop the agent loop."""
+        """Stop the agent and all subsystems."""
         self._running = False
         self._shutdown_event.set()
+        self.metacognition.stop()
+        self.dialogue.stop()
         self.drive_system.stop()
         self.ear.stop()
         self.somatic_poller.stop()
@@ -345,90 +271,114 @@ class JungAgent:
             )
 
     def _run_cycle(self, cycle_count: int) -> None:
-        """Run one perception-action cycle."""
+        """Run one perception-action cycle.
+
+        Thin coordinator — reads snapshots from independent subsystems,
+        builds an action list, executes, and logs. No LLM calls here.
+        Target: <500ms per cycle.
+        """
         try:
-            # Header with cycle number and timestamp
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             self.renderer.render_cycle_header(cycle_count, timestamp)
 
-            # 1. Read latest somatic snapshot (non-blocking)
+            # ── 1. Read somatic snapshot (non-blocking, from tiered sensors) ──
             somatic = self.somatic_poller.snapshot()
 
-            # 2. Collect events
+            # Collect events and speech
             events = self.event_collector.collect_events(somatic)
-
-            # 2b. Drain speech utterances from Ear
             utterances = self.ear.get_utterances()
             if utterances:
                 for utterance in utterances:
-                    # Store speech in semantic memory as interactions
                     self.memory.add_memory(
                         content=f"Human said: {utterance}",
                         intensity=0.7,
                         memory_type="interaction",
                     )
-
-                # Spike drives that trigger the speak action so a response is very likely
+                # Spike social drives so a response is very likely
                 for drive_name in ("affiliation", "recognition", "curiosity"):
                     if drive_name in self.drive_system.drives:
                         drive = self.drive_system.drives[drive_name]
                         drive.demand = min(1.0, drive.demand + 0.6)
                         drive.urgency = max(drive.urgency, 0.9)
 
-            # 3. Push somatic state to drive system (timer thread updates drives)
+            # ── 2. Read drive snapshot (non-blocking, from continuous drives) ──
             now = time.time()
             dt = now - self._last_update_time
             self._last_update_time = now
             had_actions = len(self._last_action_results) > 0
             self.drive_system.push_somatic(somatic, had_actions)
 
-            # 3b. Update goal stack from drives
             drive_state = self._get_drive_state_dict()
+            modulators = self.drive_system.modulators
+
+            # Update lightweight subsystems (fast, no LLM)
             self.goal_stack.update_from_drives(drive_state)
             self.goal_stack.check_goal_satisfaction(drive_state)
+            self.emotions.update(modulators, self.drive_system)
+            self.memory.update(dt)
 
-            # Generate plans for goals that need them
-            for goal in self.goal_stack.goals:
-                if self.goal_stack.needs_plan(goal):
-                    vocab = DRIVE_ACTION_VOCABULARY.get(goal.drive_name, [])
-                    if vocab:
-                        prompt = build_plan_prompt(
-                            goal=goal,
-                            drive_states=drive_state,
-                            available_actions=vocab,
-                            recent_results=self._last_action_results,
-                        )
-                        try:
-                            plan_future = submit_chat(
-                                model=self.config.model,
-                                messages=[{"role": "user", "content": prompt}],
-                                provider=self.config.llm_provider,
-                            )
-                            self._pump_until_done(plan_future)
-                            plan_response = plan_future.result()["message"]["content"]
-                            plan_actions = parse_plan_response(plan_response, vocab)
-                            if plan_actions:
-                                self.goal_stack.create_plan(goal, plan_actions)
-                        except LLMError, TimeoutError:
-                            pass  # Will retry next cycle
+            # Feed concepts into node net and run spreading activation
+            if events:
+                self.nodenet.activate_concepts([e.type for e in events], amount=0.3)
+            if utterances:
+                for utterance in utterances:
+                    words = [w for w in utterance.lower().split() if len(w) > 3]
+                    if words:
+                        self.nodenet.activate_concepts(words, amount=0.4)
+            self.nodenet.update()
 
-            # 4. Check for compulsive actions (survival override)
+            # ── 3. Check compulsive actions (survival override, ~1ms) ──
             compulsive = self.drive_system.get_compulsive_actions(somatic)
             if compulsive:
                 self.renderer.render_compulsive(compulsive)
 
-            # 5. Render somatic state summary
+            # ── 4. Read cached dialogue (non-blocking, from background thread) ──
+            # Push fresh context for the next background dialogue generation
+            dialogue_context = self._build_dialogue_context(somatic, events, utterances)
+            modulator_context = modulators.get_dialogue_context()
+            modulator_context.update(self.emotions.get_dialogue_context())
+            self.dialogue.update_context(drive_state, dialogue_context, modulator_context)
+
+            # Read whatever the background thread last produced
+            dialogue_snap = self.dialogue.cached_output()
+            segments = dialogue_snap.segments
+            mediated_thought = dialogue_snap.mediated_thought
+            harmony = dialogue_snap.harmony
+
+            # Integrate dialogue output into other subsystems
+            if dialogue_snap.fresh:
+                # Update individuation from harmony
+                if "individuation" in self.drive_system.drives and harmony > 0.7:
+                    self.drive_system.drives["individuation"].satisfy(0.05 * harmony)
+
+                # Feed dialogue concepts into node net
+                if mediated_thought:
+                    thought_words = [w for w in mediated_thought.lower().split() if len(w) > 3]
+                    if thought_words:
+                        self.nodenet.activate_concepts(thought_words[:8], amount=0.3)
+
+                # Store mediated thought in memory (gated by securing rate modulator)
+                if mediated_thought:
+                    write_prob = modulators.get_memory_write_probability()
+                    if random.random() < write_prob:
+                        self.memory.add_memory(
+                            content=mediated_thought,
+                            intensity=min(1.0, 0.3 + harmony * 0.5),
+                            emotional_valence=self.emotions.get_valence(),
+                            memory_type="thought",
+                        )
+
+            # ── 5. Read cached reflection (non-blocking, from background thread) ──
+            self.metacognition.update_context(drive_state)
+            reflection = self.metacognition.cached_reflection()
+            if reflection:
+                self.renderer.render_reflection(reflection)
+
+            # ── 6. Render state ──
             self.renderer.render_somatic(somatic)
-
-            # 6. Render drive state
             self.renderer.render_drives(self.drive_system.format_for_perception())
-
-            # 6b. Render modulator state
-            modulators = self.drive_system.modulators
             self.renderer.render_modulators(modulators.format_for_perception())
 
-            # 6c. Update and print emotional state
-            self.emotions.update(modulators, self.drive_system)
             emotion_text = self.emotions.format_for_perception()
             if emotion_text:
                 print(f"\n{colors.MAGENTA}[EMOTIONS]{colors.RESET}")
@@ -436,221 +386,83 @@ class JungAgent:
                     if line.strip():
                         print(f"  {line}")
 
-            # 6d. Render goal stack if active
             goals_text = self.goal_stack.format_for_perception()
             if goals_text:
                 self.renderer.render_planning(goals_text)
 
-            # 7. Render events if any
             if events:
                 self.renderer.render_events(events)
 
-            # 8. Update memory system
-            self.memory.update(dt)
-
-            # 8b. Feed concepts into node net from events and speech
-            if events:
-                event_concepts = [e.type for e in events]
-                self.nodenet.activate_concepts(event_concepts, amount=0.3)
-            if utterances:
-                for utterance in utterances:
-                    words = [w for w in utterance.lower().split() if len(w) > 3]
-                    if words:
-                        self.nodenet.activate_concepts(words, amount=0.4)
-
-            # 8c. Run node net spreading activation cycle
-            self.nodenet.update()
-
-            # 9. Build context for dialogue (drive_state computed in step 3b)
-            context = self._build_dialogue_context(somatic, events, utterances)
-            modulator_context = modulators.get_dialogue_context()
-            # Enrich modulator context with emotional state
-            modulator_context.update(self.emotions.get_dialogue_context())
-
-            # 10. Generate archetypal dialogue (internal monologue)
-            segments, mediated_thought, harmony = self.dialogue.generate_dialogue(
-                drive_state=drive_state,
-                context=context,
-                modulator_context=modulator_context,
-            )
-
-            # Update individuation based on harmony
-            if "individuation" in self.drive_system.drives:
-                if harmony > 0.7:
-                    self.drive_system.drives["individuation"].satisfy(0.05 * harmony)
-
-            # Feed dialogue concepts into node net
-            if mediated_thought:
-                thought_words = [w for w in mediated_thought.lower().split() if len(w) > 3]
-                if thought_words:
-                    self.nodenet.activate_concepts(thought_words[:8], amount=0.3)
-
-            # Store mediated thought in memory (gated by securing rate modulator)
-            if mediated_thought:
-                write_prob = modulators.get_memory_write_probability()
-                if random.random() < write_prob:
-                    self.memory.add_memory(
-                        content=mediated_thought,
-                        intensity=min(1.0, 0.3 + harmony * 0.5),
-                        emotional_valence=self.emotions.get_valence(),
-                        memory_type="thought",
-                    )
-
-            # 11. Run meta-cognitive reflection periodically (offloaded to pool)
-            if now - self._last_reflection_time >= self._reflection_interval:
-                reflect_future = get_executor().submit(self.metacognition.reflect, drive_state)
-                try:
-                    self._pump_until_done(reflect_future)
-                    reflection = reflect_future.result()
-                except TimeoutError:
-                    reflection = ""
-                if reflection:
-                    self.renderer.render_reflection(reflection)
-                self._last_reflection_time = now
-
-            # 12. Log and speak stream
-            if self.config.log_stream:
+            if self.config.log_stream and segments:
                 self.renderer.render_stream(segments)
 
-            # 13. Render harmony score
             self.renderer.render_ego(mediated_thought, harmony, self.dialogue.ego.strength)
 
-            # 13b. Print node net priming state
             primed_nodes = self.nodenet.get_primed(3)
             if primed_nodes:
                 primed_str = ", ".join(f"{c}({a:.2f})" for c, a in primed_nodes)
                 print(f"{colors.DIM}[PRIMING] {primed_str}{colors.RESET}")
 
-            # 14. Get actions from LLM (still using JSON approach for actions)
-            drive_perception = self.drive_system.format_for_perception()
-            modulator_perception = modulators.format_for_perception()
-            perception = format_perception(
-                config=self.config,
-                somatic=somatic,
-                events=events,
-                action_results=self._last_action_results,
-                heartbeat_interval=self._current_interval,
-                heartbeat_mode=self._heartbeat_mode,
-                drives=drive_perception,
-                utterances=utterances,
-                modulators=modulator_perception,
-            )
-
-            # Enrich perception with goal stack and emotions
-            if goals_text:
-                perception += "\n" + goals_text
-            if emotion_text:
-                perception += "\n" + emotion_text
-
-            # Enrich perception with node net priming context
-            priming_context = self.nodenet.get_priming_context()
-            if priming_context:
-                perception += "\n" + priming_context
-
-            # Enrich perception for Anthropic with monologue and memories
-            if self.config.llm_provider == "anthropic":
-                extra: list[str] = []
-                if segments:
-                    extra.append("")
-                    extra.append("[MONOLOGUE]")
-                    for seg in segments:
-                        extra.append(f"- {seg.component}: {seg.text}")
-                if mediated_thought:
-                    extra.append(f"- ego: {mediated_thought}")
-                # Add modulator tone directive
-                tone = modulators.get_prompt_tone()
-                if tone:
-                    extra.append("")
-                    extra.append(f"[TONE] {tone}")
-                sampled_memories = self.memory.sample_weighted(3)
-                if sampled_memories:
-                    extra.append("")
-                    extra.append("[MEMORIES]")
-                    for mem in sampled_memories:
-                        extra.append(f"- ({mem.memory_type}, w={mem.weight:.1f}) {mem.content}")
-                if extra:
-                    perception += "\n" + "\n".join(extra)
-
-            # Use modulator-derived temperature for the LLM query
-            llm_temperature = modulators.get_temperature()
-            response = self._query_psyche(perception, temperature=llm_temperature)
-            parsed = parse_response(response)
-
-            # 15. Build final action list
+            # ── 7. Build action list from dialogue + compulsive + primed ──
             final_actions: list[Action] = []
 
-            # Add compulsive actions first (survival override)
+            # Compulsive actions first (survival override)
             if compulsive:
                 final_actions.extend(compulsive)
 
-            # Get planned actions from goal stack (replaces primed for planned drives)
+            # Planned actions from goal stack
             planned: list[Action] = []
             active_plan = self.goal_stack.active_plan
             if active_plan:
                 planned = self.goal_stack.get_next_actions()
                 final_actions.extend(planned)
 
-            # Get primed actions for high-urgency drives (skip if already planned)
+            # Primed actions for high-urgency drives
             primed = self.drive_system.get_primed_actions()
-            proposed_types = {a.type for a in parsed.actions}
             planned_types = {a.type for a in planned}
             for action in primed:
-                if action.type not in proposed_types and action.type not in planned_types:
+                if action.type not in planned_types:
                     final_actions.append(action)
-
-            # Add LLM-proposed actions, synthesizing speak text from mediated thought
-            for action in parsed.actions:
-                if action.type == "speak" and mediated_thought:
-                    action.params["text"] = mediated_thought
-                final_actions.append(action)
 
             # Auto-inject speak when dialogue produced a mediated thought
             if mediated_thought and not any(a.type == "speak" for a in final_actions):
                 final_actions.append(Action(type="speak", params={"text": mediated_thought}))
 
-            # 16. Expectation horizon: evaluate proposed actions before execution
+            # ── 8. Expectation horizon: evaluate and execute ──
             horizon_result = self.expectations.evaluate(final_actions, self.drive_system)
             if horizon_result.suppressed:
                 self.renderer.render_impulse_inhibition(horizon_result.suppressed)
                 final_actions = horizon_result.approved
 
-            # 17. Snapshot drives before execution for counterfactual learning
             drives_before = self.expectations.snapshot_drives(self.drive_system)
 
-            # Execute actions
             self.renderer.render_actions(final_actions, compulsive, planned, primed)
-
             self._last_action_results = self.executor.execute_all(final_actions)
 
-            # Queue satisfaction signals for the drive timer thread
+            # ── 9. Push satisfaction signals to drive queue ──
             self.drive_system.queue_satisfaction(self._last_action_results)
 
-            # 18. Counterfactual learning: compare predicted vs actual drive changes
+            # Counterfactual learning
             drives_after = self.expectations.snapshot_drives(self.drive_system)
             self.expectations.learn_from_outcome(
-                horizon_result.expectations,
-                drives_before,
-                drives_after,
+                horizon_result.expectations, drives_before, drives_after
             )
 
-            # 18b. Record results back to the planning system
+            # Record results back to planning system
             if active_plan and planned and self._last_action_results:
                 for result in self._last_action_results:
                     if result.action_type == planned[0].type:
                         self.goal_stack.record_result(active_plan, result)
                         break
 
-            # 19. (Speech happens only via speak action with ego-mediated text)
-
-            # 20. Log action results with full details
             if self._last_action_results:
                 self.renderer.render_results(self._last_action_results)
 
-            # 21. Log perception, drives, and state
+            # ── 10. Log cycle state ──
             self.logger.log_cycle(
-                perception=perception,
+                perception=dialogue_context,
                 somatic=somatic,
-                stream=parsed.stream,
+                stream=segments,
                 actions=[a.type for a in final_actions],
                 action_results=self._last_action_results,
                 heartbeat_interval=self._current_interval,
@@ -660,7 +472,7 @@ class JungAgent:
                 emotions=self.emotions.get_state(),
             )
 
-            # 22. Check for heartbeat override
+            # Reactive heartbeat
             override = self.executor.get_heartbeat_override()
             if override is not None:
                 old_mode = self._heartbeat_mode
@@ -668,8 +480,7 @@ class JungAgent:
                 self._heartbeat_mode = "override"
                 self.renderer.render_heartbeat_change(old_mode, "override", override)
             else:
-                # Adaptive heartbeat
-                self._update_heartbeat(somatic)
+                self._update_heartbeat(somatic, drive_state)
 
         except Exception as e:
             self.renderer.render_error(f"Error in cycle: {e}")
@@ -677,71 +488,57 @@ class JungAgent:
 
             traceback.print_exc()
 
-    def _query_psyche(self, perception: str, temperature: float | None = None) -> str:
-        """Query the psyche model (offloaded to thread pool)."""
-        # Add perception to messages
-        self._messages.append(ChatMessage(role="user", content=perception))
+    def _update_heartbeat(
+        self, somatic: SomaticState, drive_state: dict[str, dict[str, Any]]
+    ) -> None:
+        """Update heartbeat interval reactively from somatic + drive urgency.
 
-        # Trim history if needed (preserve system message)
-        if len(self._messages) > self._max_history * 2 + 1:
-            # Keep system message + last N exchanges
-            self._messages = [self._messages[0]] + self._messages[-(self._max_history * 2) :]
-
-        # Build options with modulator-derived temperature
-        options = {"temperature": temperature} if temperature is not None else None
-
-        # Query model with retry logic, offloaded to pool
-        try:
-            future = submit_chat(
-                model=self.config.model,
-                messages=self._messages,
-                provider=self.config.llm_provider,
-                options=options,
-            )
-            self._pump_until_done(future)
-            response = future.result()
-            assistant_message: str = response["message"]["content"]
-        except (LLMError, TimeoutError) as e:
-            # Remove the failed perception from history
-            self._messages.pop()
-            self.renderer.render_error(e)
-            return '{"stream":[],"actions":[]}'
-
-        # Add response to history
-        self._messages.append(ChatMessage(role="assistant", content=assistant_message))
-
-        return assistant_message
-
-    def _update_heartbeat(self, somatic: SomaticState) -> None:
-        """Update heartbeat interval based on somatic state."""
+        Priority order: critical > stressed > drive-urgent > active > dormant > idle.
+        Drive urgency makes the heartbeat responsive to psychological state,
+        not just hardware state.
+        """
         old_interval = self._current_interval
         old_mode = self._heartbeat_mode
 
-        # Determine mode based on state
+        # Critical: battery emergency
         if somatic.battery_percent < self.config.battery_critical:
             self._current_interval = self.config.heartbeat_critical
             self._heartbeat_mode = "critical"
+        # Stressed: thermal or CPU overload
         elif (
             somatic.thermal_state.value in ("hot", "critical")
             or somatic.cpu_percent > self.config.cpu_stressed
         ):
             self._current_interval = self.config.heartbeat_stressed
             self._heartbeat_mode = "stressed"
+        # Drive-urgent: any drive above urgency threshold → fast heartbeat
+        elif self._max_drive_urgency(drive_state) > 0.7:
+            self._current_interval = self.config.heartbeat_active
+            self._heartbeat_mode = "active"
+        # Active: moderate CPU
         elif somatic.cpu_percent > self.config.cpu_active:
             self._current_interval = self.config.heartbeat_active
             self._heartbeat_mode = "active"
+        # Dormant: lid closed
         elif somatic.lid_state.value == "closed":
             self._current_interval = self.config.heartbeat_dormant
             self._heartbeat_mode = "dormant"
+        # Idle: all calm
         else:
             self._current_interval = self.config.heartbeat_idle
             self._heartbeat_mode = "idle"
 
-        # Log if changed
         if old_interval != self._current_interval:
             self.renderer.render_heartbeat_change(
                 old_mode, self._heartbeat_mode, self._current_interval
             )
+
+    @staticmethod
+    def _max_drive_urgency(drive_state: dict[str, dict[str, Any]]) -> float:
+        """Return the highest drive urgency value."""
+        if not drive_state:
+            return 0.0
+        return max(s.get("value", 0.0) for s in drive_state.values())
 
     def _get_drive_state_dict(self) -> dict[str, dict[str, Any]]:
         """Get drive states in format expected by dialogue system.
@@ -805,6 +602,10 @@ class JungAgent:
 
 def run_single(config: AgentConfig | None = None, perception: str | None = None) -> str:
     """Run a single perception-response cycle (for testing)."""
+    from sociopsi.llm import LLMError, chat_with_retry
+    from sociopsi.parser import parse_response
+    from sociopsi.perception import format_perception
+
     config = config or AgentConfig()
 
     # Start voice if enabled

@@ -2,9 +2,14 @@
 
 Tracks thoughts, analyzes harmony trends, and generates reflections
 on the agent's psychological state and processes.
+
+Runs an independent background timer that generates reflections periodically.
+The agent loop reads cached reflections via cached_reflection() rather than
+calling reflect() synchronously.
 """
 
 import logging
+import threading
 from collections import deque
 from typing import Any
 
@@ -19,6 +24,11 @@ class MetaCognition:
 
     Tracks recent thoughts and harmony levels, analyzes trends,
     and generates LLM-powered reflections on the agent's state.
+
+    Supports two modes:
+    - Background mode: start()/stop() runs a timer thread, agent reads
+      cached reflection via cached_reflection().
+    - Synchronous mode: call reflect() directly (for tests).
     """
 
     def __init__(
@@ -44,6 +54,84 @@ class MetaCognition:
 
         # Subscribe to dialogue events
         self.event_bus.subscribe("dialogue.complete", self._on_dialogue_complete)
+
+        # Cached reflection for background mode
+        self._cached_reflection: str = ""
+        self._reflection_fresh: bool = False
+        self._cache_lock: threading.Lock = threading.Lock()
+
+        # Background thread state
+        self._running: bool = False
+        self._stop_event: threading.Event = threading.Event()
+        self._thread: threading.Thread | None = None
+        self._interval: float = 30.0
+
+        # Context for background reflection (set by agent via update_context)
+        self._bg_drive_state: dict[str, dict[str, Any]] = {}
+        self._context_lock: threading.Lock = threading.Lock()
+
+    def start(self, interval: float = 30.0) -> None:
+        """Start background reflection timer thread.
+
+        Args:
+            interval: Seconds between reflection cycles.
+        """
+        if self._running:
+            return
+        self._interval = interval
+        self._running = True
+        self._stop_event.clear()
+        self._thread = threading.Thread(
+            target=self._reflection_loop, name="metacog-bg", daemon=True
+        )
+        self._thread.start()
+        logger.info("MetaCognition background thread started (interval=%.1fs)", interval)
+
+    def stop(self) -> None:
+        """Stop background reflection timer thread."""
+        if not self._running:
+            return
+        self._running = False
+        self._stop_event.set()
+        if self._thread is not None:
+            self._thread.join(timeout=5.0)
+            self._thread = None
+        logger.info("MetaCognition background thread stopped")
+
+    def update_context(self, drive_state: dict[str, dict[str, Any]]) -> None:
+        """Update the drive state used by the background reflection thread."""
+        with self._context_lock:
+            self._bg_drive_state = drive_state
+
+    def cached_reflection(self) -> str:
+        """Read and consume the latest cached reflection.
+
+        Returns the reflection text and marks it as consumed.
+        """
+        with self._cache_lock:
+            text = self._cached_reflection
+            if self._reflection_fresh:
+                self._reflection_fresh = False
+                return text
+            return ""
+
+    def _reflection_loop(self) -> None:
+        """Background thread: periodically generate reflections."""
+        while not self._stop_event.is_set():
+            try:
+                with self._context_lock:
+                    ds = dict(self._bg_drive_state)
+
+                if ds:
+                    reflection = self.reflect(ds)
+                    if reflection:
+                        with self._cache_lock:
+                            self._cached_reflection = reflection
+                            self._reflection_fresh = True
+            except Exception:
+                logger.exception("Error in metacognition background loop")
+
+            self._stop_event.wait(self._interval)
 
     def _on_dialogue_complete(self, data: dict[str, Any]) -> None:
         """Handle dialogue completion event.
