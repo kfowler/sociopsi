@@ -5,15 +5,21 @@ utterances for the agent's perception loop. The actual STT implementation
 is delegated to platform.speech (Darwin: SFSpeechRecognizer, Linux: vosk).
 """
 
+from __future__ import annotations
+
 import logging
 import sys
 import threading
 from collections import deque
+from typing import TYPE_CHECKING
 
 from sociopsi.config import AgentConfig
 from sociopsi.event_bus import get_event_bus
 from sociopsi.platform import SpeechBackend, get_speech_backend
 from sociopsi.terminal import colors
+
+if TYPE_CHECKING:
+    from sociopsi.ux.base import UXRenderer
 
 logger = logging.getLogger(__name__)
 
@@ -29,11 +35,16 @@ class Ear:
     by the agent each perception cycle.
     """
 
-    def __init__(self, config: AgentConfig) -> None:
+    def __init__(
+        self,
+        config: AgentConfig,
+        renderer: UXRenderer | None = None,
+    ) -> None:
         self.config = config
         self._enabled = bool(config.ear_enabled)
         self._locale = config.ear_locale
         self._on_device = config.ear_on_device
+        self._renderer = renderer
 
         # Thread-safe utterance buffer
         self._utterances: deque[str] = deque(maxlen=MAX_UTTERANCES)
@@ -163,9 +174,14 @@ class Ear:
                     self._utterances.append(text)
                 self._partial = ""
 
-                # Print final transcription to console
-                sys.stdout.write(f'\r\033[K{colors.GREEN}[SPEECH]{colors.RESET} "{text}"\n')
-                sys.stdout.flush()
+                # Render final transcription
+                if self._renderer is not None:
+                    self._renderer.render_speech(text, is_final=True)
+                else:
+                    sys.stdout.write(
+                        f'\r\033[K{colors.GREEN}[SPEECH]{colors.RESET} "{text}"\n'
+                    )
+                    sys.stdout.flush()
 
                 # Publish on event bus
                 self._event_bus.publish(
@@ -177,7 +193,11 @@ class Ear:
         else:
             # Partial result - overwrite current line in-place
             self._partial = text
-            sys.stdout.write(
-                f"\r\033[K{colors.DIM}[HEARING]{colors.RESET} {colors.DIM}{text}{colors.RESET}"
-            )
-            sys.stdout.flush()
+            if self._renderer is not None:
+                self._renderer.render_speech(text, is_final=False)
+            else:
+                sys.stdout.write(
+                    f"\r\033[K{colors.DIM}[HEARING]{colors.RESET} "
+                    f"{colors.DIM}{text}{colors.RESET}"
+                )
+                sys.stdout.flush()
