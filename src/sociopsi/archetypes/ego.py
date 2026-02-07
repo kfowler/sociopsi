@@ -96,22 +96,23 @@ IMPORTANT: Respond with ONLY plain text. No JSON, no formatting, no code blocks.
             return ""
 
     def calculate_harmony(self, archetypal_voices: dict[str, str]) -> float:
-        """Calculate harmony between archetypal voices using embedding similarity.
+        """Calculate harmony between archetypal voices via embedding similarity.
 
-        Uses pairwise cosine similarity between voice embeddings to measure
-        semantic agreement. Falls back to participation-count heuristic when
-        the embedding model is unavailable.
+        Uses mean pairwise cosine similarity between voice embeddings from the
+        shared sentence-transformers model (all-MiniLM-L6-v2, 384-dim). When
+        embeddings are unavailable, falls back to a participation-count heuristic.
 
-        The score combines:
-        - Mean pairwise cosine similarity (0-1) as the primary signal
-        - Participation bonus: more voices contributing raises the floor
-        - Clamped to [0.1, 1.0] to avoid degenerate extremes
+        The score is clamped to [0.1, 1.0]. A participation bonus rewards more
+        voices contributing (wider internal dialogue is a precondition for
+        integration). The embedding similarity captures semantic agreement even
+        when voices use different vocabulary — unlike the old conflict-word
+        frequency heuristic.
 
         Args:
-            archetypal_voices: Dictionary of archetype names to their voice text
+            archetypal_voices: Dictionary of archetype names to their voice text.
 
         Returns:
-            Harmony score (0.1=deep conflict, 1.0=full agreement)
+            Harmony score (0.1=deep conflict, 1.0=full agreement).
         """
         if not archetypal_voices:
             return 0.5
@@ -121,66 +122,46 @@ IMPORTANT: Respond with ONLY plain text. No JSON, no formatting, no code blocks.
         if len(voices) < 2:
             return 0.5
 
-        # Participation bonus: more voices = richer integration potential
-        participation_bonus = min(0.1, len(voices) * 0.025)
+        # Participation bonus: more voices = more potential for integration
+        participation_bonus = min(0.15, len(voices) * 0.05)
 
         # Try embedding-based similarity
         model = get_embedding_model()
         if model is not None:
-            harmony = self._embedding_harmony(voices, model, participation_bonus)
+            try:
+                embeddings = model.encode(voices, convert_to_numpy=True)
+                similarity = self._mean_pairwise_cosine(embeddings)
+                # Map similarity (typically 0.3–0.9) into harmony range
+                harmony = similarity + participation_bonus
+            except Exception:
+                logger.warning("Embedding harmony failed, using participation fallback")
+                harmony = 0.5 + participation_bonus
         else:
-            harmony = self._fallback_harmony(voices, participation_bonus)
+            # No embedding model available — participation-only fallback
+            harmony = 0.5 + participation_bonus
 
+        harmony = float(np.clip(harmony, 0.1, 1.0))
         self.last_harmony = harmony
         return harmony
 
-    def _embedding_harmony(
-        self,
-        voices: list[str],
-        model: Any,
-        participation_bonus: float,
-    ) -> float:
-        """Compute harmony via mean pairwise cosine similarity of voice embeddings.
-
-        Args:
-            voices: Non-empty voice strings
-            model: SentenceTransformer model instance
-            participation_bonus: Bonus for voice participation count
-
-        Returns:
-            Harmony score clamped to [0.1, 1.0]
-        """
-        try:
-            embeddings = model.encode(voices, normalize_embeddings=True)
-            # Pairwise cosine similarities (embeddings are L2-normalized)
-            similarities = [
-                float(np.dot(embeddings[i], embeddings[j]))
-                for i, j in combinations(range(len(embeddings)), 2)
-            ]
-            mean_sim = sum(similarities) / len(similarities)
-            # Cosine similarity for sentence embeddings typically ranges ~0.2-0.9
-            # Rescale to spread the harmony range: sim 0.3 -> ~0.1, sim 0.85 -> ~1.0
-            rescaled = (mean_sim - 0.3) / 0.55
-            harmony = max(0.1, min(1.0, rescaled + participation_bonus))
-            return harmony
-        except Exception:
-            logger.warning("Embedding harmony failed, using fallback")
-            return self._fallback_harmony(voices, participation_bonus)
-
     @staticmethod
-    def _fallback_harmony(voices: list[str], participation_bonus: float) -> float:
-        """Fallback harmony based on participation count when embeddings unavailable.
-
-        Returns a neutral score biased slightly by how many voices participated.
+    def _mean_pairwise_cosine(embeddings: np.ndarray) -> float:
+        """Compute mean pairwise cosine similarity for a set of embeddings.
 
         Args:
-            voices: Non-empty voice strings
-            participation_bonus: Bonus for voice participation count
+            embeddings: (N, D) array of N embeddings.
 
         Returns:
-            Harmony score clamped to [0.1, 1.0]
+            Mean cosine similarity across all unique pairs.
         """
-        return max(0.1, min(1.0, 0.5 + participation_bonus))
+        norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
+        norms = np.maximum(norms, 1e-10)  # avoid division by zero
+        normed = embeddings / norms
+        sim_matrix = normed @ normed.T
+        n = sim_matrix.shape[0]
+        # Extract upper triangle (excluding diagonal)
+        upper = sim_matrix[np.triu_indices(n, k=1)]
+        return float(upper.mean()) if upper.size > 0 else 0.5
 
     def develop(self, harmony: float) -> None:
         """Develop ego strength based on integration quality.

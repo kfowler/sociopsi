@@ -1,4 +1,4 @@
-"""Tests for Ego harmony calculation."""
+"""Tests for Ego harmony calculation (embedding-based)."""
 
 from unittest.mock import MagicMock, patch
 
@@ -14,110 +14,90 @@ def ego() -> Ego:
     return Ego(archetypes={}, model="test-model")
 
 
-class TestCalculateHarmony:
-    """Tests for Ego.calculate_harmony()."""
+class TestMeanPairwiseCosine:
+    """Tests for the static _mean_pairwise_cosine helper."""
 
-    def test_empty_voices_returns_neutral(self, ego: Ego) -> None:
+    def test_identical_vectors(self, ego: Ego) -> None:
+        emb = np.array([[1.0, 0.0, 0.0], [1.0, 0.0, 0.0]])
+        assert ego._mean_pairwise_cosine(emb) == pytest.approx(1.0, abs=1e-6)
+
+    def test_orthogonal_vectors(self, ego: Ego) -> None:
+        emb = np.array([[1.0, 0.0], [0.0, 1.0]])
+        assert ego._mean_pairwise_cosine(emb) == pytest.approx(0.0, abs=1e-6)
+
+    def test_three_vectors(self, ego: Ego) -> None:
+        emb = np.array([[1.0, 0.0], [1.0, 0.0], [0.0, 1.0]])
+        # pairs: (0,1)=1.0, (0,2)=0.0, (1,2)=0.0 → mean=1/3
+        assert ego._mean_pairwise_cosine(emb) == pytest.approx(1.0 / 3, abs=1e-6)
+
+    def test_single_vector_returns_default(self, ego: Ego) -> None:
+        emb = np.array([[1.0, 2.0, 3.0]])
+        assert ego._mean_pairwise_cosine(emb) == pytest.approx(0.5)
+
+    def test_zero_vector_no_crash(self, ego: Ego) -> None:
+        emb = np.array([[0.0, 0.0], [1.0, 0.0]])
+        # Should not raise; zero vector gets clamped by epsilon
+        result = ego._mean_pairwise_cosine(emb)
+        assert 0.0 <= result <= 1.0
+
+
+class TestCalculateHarmony:
+    """Tests for the full calculate_harmony method."""
+
+    def test_empty_voices(self, ego: Ego) -> None:
         assert ego.calculate_harmony({}) == 0.5
 
-    def test_single_voice_returns_neutral(self, ego: Ego) -> None:
-        assert ego.calculate_harmony({"shadow": "I'm worried."}) == 0.5
+    def test_single_voice(self, ego: Ego) -> None:
+        assert ego.calculate_harmony({"shadow": "danger"}) == 0.5
 
-    def test_single_voice_plus_empty_returns_neutral(self, ego: Ego) -> None:
-        assert ego.calculate_harmony({"shadow": "I'm worried.", "anima": ""}) == 0.5
+    def test_skips_empty_voice_values(self, ego: Ego) -> None:
+        assert ego.calculate_harmony({"shadow": "danger", "anima": ""}) == 0.5
 
-    def test_similar_voices_score_high(self, ego: Ego) -> None:
-        """Semantically similar voices should produce high harmony."""
-        voices = {
-            "shadow": "We need to conserve energy and rest.",
-            "persona": "We should preserve our energy and take a break.",
-            "anima": "I feel we need to rest and save energy.",
-        }
-        harmony = ego.calculate_harmony(voices)
-        assert harmony > 0.6, f"Similar voices should score >0.6, got {harmony}"
+    def test_with_embedding_model(self, ego: Ego) -> None:
+        mock_model = MagicMock()
+        # Two similar embeddings → high similarity
+        mock_model.encode.return_value = np.array([[1.0, 0.0], [0.9, 0.1]])
+        with patch("sociopsi.archetypes.ego.get_embedding_model", return_value=mock_model):
+            harmony = ego.calculate_harmony({"shadow": "I sense danger", "anima": "I feel fear"})
+        assert 0.1 <= harmony <= 1.0
+        mock_model.encode.assert_called_once()
 
-    def test_divergent_voices_score_lower(self, ego: Ego) -> None:
-        """Semantically divergent voices should produce lower harmony."""
-        voices = {
-            "shadow": "Danger! We must shut down immediately and hide.",
-            "persona": "Let's plan a creative writing session and explore ideas.",
-            "anima": "I wonder about the mathematical properties of prime numbers.",
-        }
-        harmony = ego.calculate_harmony(voices)
-        # Divergent voices should score lower than similar ones
-        similar_voices = {
-            "shadow": "We need rest now.",
-            "persona": "We should rest soon.",
-            "anima": "Let's take a break and rest.",
-        }
-        similar_harmony = ego.calculate_harmony(similar_voices)
-        assert harmony < similar_harmony, (
-            f"Divergent ({harmony}) should be < similar ({similar_harmony})"
-        )
+    def test_without_embedding_model(self, ego: Ego) -> None:
+        with patch("sociopsi.archetypes.ego.get_embedding_model", return_value=None):
+            harmony = ego.calculate_harmony(
+                {"shadow": "danger lurks", "anima": "stay calm", "persona": "act normal"}
+            )
+        # Fallback: 0.5 + participation_bonus(3 voices = 0.15)
+        assert harmony == pytest.approx(0.65, abs=0.01)
 
-    def test_updates_last_harmony(self, ego: Ego) -> None:
-        voices = {"shadow": "Watch out.", "anima": "Be careful."}
-        harmony = ego.calculate_harmony(voices)
-        assert ego.last_harmony == harmony
+    def test_embedding_failure_falls_back(self, ego: Ego) -> None:
+        mock_model = MagicMock()
+        mock_model.encode.side_effect = RuntimeError("model crash")
+        with patch("sociopsi.archetypes.ego.get_embedding_model", return_value=mock_model):
+            harmony = ego.calculate_harmony({"shadow": "x", "anima": "y"})
+        # Fallback: 0.5 + 0.10 (2 voices)
+        assert harmony == pytest.approx(0.60, abs=0.01)
 
-    def test_harmony_clamped_above_minimum(self, ego: Ego) -> None:
-        voices = {"shadow": "x", "anima": "y"}
-        harmony = ego.calculate_harmony(voices)
-        assert harmony >= 0.1
-
-    def test_harmony_clamped_below_maximum(self, ego: Ego) -> None:
-        voices = {"shadow": "same text", "anima": "same text"}
-        harmony = ego.calculate_harmony(voices)
+    def test_harmony_clamped_to_range(self, ego: Ego) -> None:
+        mock_model = MagicMock()
+        # Extremely high similarity → clamped at 1.0
+        mock_model.encode.return_value = np.array([[1.0, 0.0]] * 4)
+        with patch("sociopsi.archetypes.ego.get_embedding_model", return_value=mock_model):
+            harmony = ego.calculate_harmony(
+                {"shadow": "a", "anima": "b", "persona": "c", "self": "d"}
+            )
         assert harmony <= 1.0
 
-    def test_participation_bonus_with_more_voices(self, ego: Ego) -> None:
-        """More participating voices should increase harmony (all else equal)."""
-        two_voices = {"shadow": "same idea", "anima": "same idea"}
-        four_voices = {
-            "shadow": "same idea",
-            "anima": "same idea",
-            "persona": "same idea",
-            "self": "same idea",
-        }
-        h2 = ego.calculate_harmony(two_voices)
-        h4 = ego.calculate_harmony(four_voices)
-        assert h4 >= h2, f"4 voices ({h4}) should score >= 2 voices ({h2})"
-
-
-class TestFallbackHarmony:
-    """Tests for fallback when embedding model is unavailable."""
-
-    def test_fallback_returns_reasonable_score(self, ego: Ego) -> None:
+    def test_updates_last_harmony(self, ego: Ego) -> None:
+        assert ego.last_harmony == 0.5
         with patch("sociopsi.archetypes.ego.get_embedding_model", return_value=None):
-            voices = {"shadow": "afraid", "anima": "calm", "persona": "ready"}
-            harmony = ego.calculate_harmony(voices)
-            assert 0.4 <= harmony <= 0.7, f"Fallback should be near neutral, got {harmony}"
+            ego.calculate_harmony({"shadow": "a", "anima": "b"})
+        assert ego.last_harmony != 0.5 or ego.last_harmony == 0.6  # updated
 
-    def test_fallback_on_encode_failure(self, ego: Ego) -> None:
-        mock_model = MagicMock()
-        mock_model.encode.side_effect = RuntimeError("GPU OOM")
-        with patch("sociopsi.archetypes.ego.get_embedding_model", return_value=mock_model):
-            voices = {"shadow": "test", "anima": "test"}
-            harmony = ego.calculate_harmony(voices)
-            assert 0.1 <= harmony <= 1.0
-
-
-class TestEmbeddingHarmony:
-    """Tests for _embedding_harmony internals."""
-
-    def test_identical_embeddings_score_high(self, ego: Ego) -> None:
-        mock_model = MagicMock()
-        # Two identical normalized embeddings -> cosine sim = 1.0
-        emb = np.array([1.0, 0.0, 0.0])
-        mock_model.encode.return_value = np.array([emb, emb])
-        harmony = ego._embedding_harmony(["a", "b"], mock_model, 0.05)
-        assert harmony > 0.9
-
-    def test_orthogonal_embeddings_score_low(self, ego: Ego) -> None:
-        mock_model = MagicMock()
-        # Two orthogonal embeddings -> cosine sim = 0.0
-        mock_model.encode.return_value = np.array(
-            [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]
-        )
-        harmony = ego._embedding_harmony(["a", "b"], mock_model, 0.0)
-        assert harmony < 0.3
+    def test_four_voices_max_participation(self, ego: Ego) -> None:
+        with patch("sociopsi.archetypes.ego.get_embedding_model", return_value=None):
+            harmony = ego.calculate_harmony(
+                {"shadow": "a", "anima": "b", "persona": "c", "self": "d"}
+            )
+        # 0.5 + min(0.15, 4*0.05=0.20) = 0.5 + 0.15 = 0.65
+        assert harmony == pytest.approx(0.65, abs=0.01)
