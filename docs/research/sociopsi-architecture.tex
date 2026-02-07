@@ -333,14 +333,45 @@ All four voices are generated in parallel via \texttt{ThreadPoolExecutor.submit(
 
 \subsubsection{Ego Mediation}
 
-The Ego (\texttt{ego.py}, 267 lines) performs three functions:
+The Ego (\texttt{ego.py}) performs three functions:
 
 \begin{enumerate}
-  \item \textbf{Harmony calculation}: a heuristic based on voice participation count and conflict-word frequency (``but'', ``however'', ``despite'', etc.).
-        More participating voices increase harmony; conflict words decrease it.
+  \item \textbf{Harmony calculation}: semantic similarity between archetypal voice embeddings (see below).
   \item \textbf{Mediation}: an LLM call that receives all archetypal voices plus the individuation level, and synthesizes them into a single coherent thought.
   \item \textbf{Development}: ego strength increases (+0.01) when harmony exceeds 0.7 and decreases ($-$0.005) when harmony drops below 0.3, creating a slow developmental arc.
 \end{enumerate}
+
+\paragraph{Harmony scoring algorithm.}
+Harmony measures how semantically aligned the archetypal voices are in a given cycle.
+Each non-empty voice is encoded using the same \texttt{all-MiniLM-L6-v2} sentence transformer already loaded for semantic memory (384-dimensional, L2-normalized embeddings).
+The pairwise cosine similarity is computed for every pair of voices:
+\[
+\text{sim}(v_i, v_j) = \frac{v_i \cdot v_j}{\|v_i\|\,\|v_j\|}
+\]
+Since embeddings are pre-normalized, this reduces to a dot product.
+The mean of all $\binom{n}{2}$ pairwise similarities gives the raw agreement signal:
+\[
+\bar{s} = \frac{1}{\binom{n}{2}} \sum_{i < j} \text{sim}(v_i, v_j)
+\]
+Sentence-transformer cosine similarities for short passages typically fall in the range $[0.2, 0.9]$.
+To spread the harmony score across its useful range, the raw mean is rescaled:
+\[
+h_{\text{raw}} = \frac{\bar{s} - 0.3}{0.55}
+\]
+A participation bonus ($+0.025$ per active voice, capped at $+0.1$) rewards multi-voice engagement.
+The final harmony score is clamped:
+\[
+H = \text{clamp}\!\Big(h_{\text{raw}} + p,\;\; 0.1,\;\; 1.0\Big)
+\]
+
+\paragraph{Design rationale.}
+The previous heuristic counted ``conflict words'' (``but'', ``however'', ``despite'', etc.), which was insensitive to semantic agreement expressed without those specific lexemes and penalized voices that used hedging language even when substantively aligned.
+Embedding similarity captures meaning regardless of surface phrasing: two voices that agree on a course of action using different vocabulary will score high; two voices that oppose each other semantically will score low --- even if neither uses an explicit conflict marker.
+
+\paragraph{Fallback behavior.}
+When the sentence-transformer model is unavailable (e.g., dependency missing or import failure), the system falls back to a neutral score of $0.5$ plus the participation bonus.
+This ensures the Ego development arc and individuation drive can still operate, albeit without semantic sensitivity.
+The fallback is logged as a warning.
 
 \subsection{LLM Architecture}
 \label{sec:llm}
@@ -619,7 +650,7 @@ Additional limitations include:
 \begin{itemize}
   \item \textbf{Platform lock}: the agent is macOS-only due to PyObjC, NSSpeechSynthesizer, SFSpeechRecognizer, and ioreg/system\_profiler dependencies.
   \item \textbf{Sequential action execution}: actions are executed one at a time; there is no parallel execution or action scheduling.
-  \item \textbf{Harmony heuristic}: the Ego's harmony calculation uses conflict-word counting rather than semantic similarity between voice embeddings, making it insensitive to semantic agreement expressed in different words.
+  \item \textbf{Harmony calibration}: the Ego's embedding-based harmony score uses a fixed rescaling range ($[0.3, 0.85]$) derived from typical sentence-transformer similarity distributions; domain-specific calibration with logged voice data may improve sensitivity.
   \item \textbf{Thermal sensing}: accurate temperature readings require \texttt{sudo powermetrics}, which is impractical for normal operation; the fallback is a crude CPU-usage-based estimation.
   \item \textbf{GPU estimation}: Apple Silicon's unified memory makes GPU utilization opaque; the current implementation estimates GPU usage as CPU + 10\%.
   \item \textbf{No hot-reload}: configuration changes require restart.
