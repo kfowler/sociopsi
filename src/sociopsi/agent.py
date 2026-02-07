@@ -27,7 +27,6 @@ from sociopsi.expectations import ExpectationHorizon
 from sociopsi.llm import (
     LLMError,
     chat_with_retry,
-    get_executor,
     shutdown_executor,
     submit_chat,
 )
@@ -36,8 +35,8 @@ from sociopsi.llm import (
 )
 from sociopsi.logger import PsycheLogger
 from sociopsi.memory import SemanticMemory
+from sociopsi.metacognition import MetaCognition, MetacognitionManager
 from sociopsi.nodenet import NodeNet
-from sociopsi.metacognition import MetaCognition
 from sociopsi.parser import parse_response
 from sociopsi.perception import format_perception
 from sociopsi.planning import (
@@ -134,6 +133,14 @@ class JungAgent:
             event_bus=self.event_bus,
         )
 
+        # Independent metacognition timer (Layer 3 — runs in its own thread)
+        self.metacognition_manager = MetacognitionManager(
+            metacognition=self.metacognition,
+            drive_state_fn=self._get_drive_state_dict,
+            arousal_fn=lambda: self.drive_system.modulators.arousal_level,
+            event_bus=self.event_bus,
+        )
+
         # Hierarchical planning (ReCoN-inspired goal stack)
         self.goal_stack = GoalStack()
 
@@ -149,9 +156,7 @@ class JungAgent:
         self._last_dialogue_time: float = 0.0
         self._dialogue_interval: float = 10.0  # Generate dialogue every 10s
 
-        # Reflection timing
-        self._last_reflection_time: float = 0.0
-        self._reflection_interval: float = 30.0  # Reflect every 30s
+        # Reflection is now handled by MetacognitionManager (independent timer)
 
         # Cycle counter
         self._cycle_count: int = 0
@@ -258,6 +263,7 @@ class JungAgent:
         self.voice._on_speak_end = self.ear.unmute
         self.voice.start()
         self.ear.start()
+        self.metacognition_manager.start()
 
         # Set up signal handlers
         signal.signal(signal.SIGINT, self._handle_shutdown)
@@ -276,6 +282,7 @@ class JungAgent:
         """Stop the agent loop."""
         self._running = False
         self._shutdown_event.set()
+        self.metacognition_manager.stop()
         self.drive_system.stop()
         self.ear.stop()
         self.somatic_poller.stop()
@@ -496,17 +503,10 @@ class JungAgent:
                         memory_type="thought",
                     )
 
-            # 11. Run meta-cognitive reflection periodically (offloaded to pool)
-            if now - self._last_reflection_time >= self._reflection_interval:
-                reflect_future = get_executor().submit(self.metacognition.reflect, drive_state)
-                try:
-                    self._pump_until_done(reflect_future)
-                    reflection = reflect_future.result()
-                except TimeoutError:
-                    reflection = ""
-                if reflection:
-                    self.renderer.render_reflection(reflection)
-                self._last_reflection_time = now
+            # 11. Read latest reflection from independent timer (never waits)
+            reflection = self.metacognition_manager.get_latest_reflection()
+            if reflection:
+                self.renderer.render_reflection(reflection)
 
             # 12. Log and speak stream
             if self.config.log_stream:
