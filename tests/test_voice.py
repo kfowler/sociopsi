@@ -251,16 +251,13 @@ class TestActionToSpeech:
 
         assert (
             "brightness"
-            in voice._action_to_speech(Action(type="set_brightness", params={"level": 50}))
-            or ""
+            in (voice._action_to_speech(Action(type="set_brightness", params={"level": 50})) or "")
         )
         assert (
-            "volume" in voice._action_to_speech(Action(type="set_volume", params={"level": 30}))
-            or ""
+            "volume" in (voice._action_to_speech(Action(type="set_volume", params={"level": 30})) or "")
         )
         assert (
-            "search" in voice._action_to_speech(Action(type="web_search", params={"query": "test"}))
-            or ""
+            "search" in (voice._action_to_speech(Action(type="web_search", params={"query": "test"})) or "")
         )
 
     def test_returns_none_for_speak_action(self) -> None:

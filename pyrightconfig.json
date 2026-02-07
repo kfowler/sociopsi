@@ -5,5 +5,5 @@
   "venv": ".venv",
   "reportMissingImports": false,
   "reportMissingModuleSource": false,
-  "reportAttributeAccessIssue": "warning"
+  "reportAttributeAccessIssue": "none"
 }

@@ -3,6 +3,7 @@
 import json
 import sqlite3
 import time
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -19,7 +20,7 @@ def tmp_db(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
-def store(tmp_db: Path) -> DriveStore:
+def store(tmp_db: Path) -> Iterator[DriveStore]:
     """Create a DriveStore backed by a temp database."""
     s = DriveStore(tmp_db, checkpoint_interval=0)
     yield s

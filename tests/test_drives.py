@@ -157,8 +157,10 @@ class TestDriveSystem:
 
     def test_drives_start_at_baseline(self, drive_system: DriveSystem) -> None:
         """Test that drives start at their baseline values."""
+        from typing import Any, cast
+
         for drive_name, drive in drive_system.drives.items():
-            expected_baseline = DRIVE_CONFIGS[drive_name]["baseline"]
+            expected_baseline = DRIVE_CONFIGS[cast(Any, drive_name)]["baseline"]
             assert drive.demand == expected_baseline
 
     def test_update_modifies_satisfaction_from_somatic(
@@ -432,8 +434,10 @@ class TestDriveSystemTimer:
         assert snap.format_text  # Should have content
 
         # Mutating the snapshot should not affect the system
+        from typing import Any, cast
+
         for key in snap.drives:
-            snap.drives[key]["demand"] = 999.0
+            snap.drives[cast(Any, key)]["demand"] = 999.0
 
         for drive in ds.drives.values():
             assert drive.demand != 999.0

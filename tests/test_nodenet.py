@@ -122,6 +122,7 @@ class TestNodeNetAddEdge:
         net = NodeNet()
         e1 = net.add_edge("fear", "anxiety", weight=0.2)
         e2 = net.add_edge("fear", "anxiety", weight=0.2)
+        assert e1 is not None
         assert e1 is e2
         assert e1.weight > 0.2
 
@@ -243,6 +244,7 @@ class TestSpreading:
     def test_edge_weight_decays(self) -> None:
         net = NodeNet()
         edge = net.add_edge("a", "b", weight=0.5)
+        assert edge is not None
 
         net.spread()
 
@@ -295,7 +297,9 @@ class TestHebbianLearning:
         net.nodes["b"].activation = 1.0
 
         net.hebbian_update()
-        assert net.edges["a"][0].weight <= 1.0
+        edge = net.edges["a"][0]
+        assert edge is not None
+        assert edge.weight <= 1.0
 
 
 class TestUpdate:
@@ -447,7 +451,9 @@ class TestGetState:
         state = net.get_state()
         assert state["node_count"] == 2
         assert state["edge_count"] == 1
-        assert "music" in state["primed"]
+        primed = state["primed"]
+        assert isinstance(primed, list)
+        assert "music" in primed
 
 
 class TestIntegrationScenario:

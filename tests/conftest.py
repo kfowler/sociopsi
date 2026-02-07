@@ -1,6 +1,7 @@
 """Pytest fixtures for sociopsi tests."""
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -12,7 +13,7 @@ def _isolate_drives_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Ensure every test uses a temp drives.db so production state is never loaded."""
     _original_init = AgentConfig.__init__
 
-    def _patched_init(self: AgentConfig, **kwargs: object) -> None:
+    def _patched_init(self: AgentConfig, **kwargs: Any) -> None:
         if "drives_db" not in kwargs:
             kwargs["drives_db"] = tmp_path / "test_drives.db"
         _original_init(self, **kwargs)

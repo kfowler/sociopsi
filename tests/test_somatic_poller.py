@@ -24,7 +24,9 @@ from sociopsi.types import (
 
 def _make_state(**overrides) -> SomaticState:
     """Build a SomaticState with sensible defaults, overriding fields."""
-    defaults = dict(  # noqa: C408
+    from dataclasses import replace
+
+    base = SomaticState(
         battery_percent=80,
         battery_health=95,
         battery_cycles=100,
@@ -41,8 +43,7 @@ def _make_state(**overrides) -> SomaticState:
         fan_rpm=1200,
         uptime_seconds=3600,
     )
-    defaults.update(overrides)
-    return SomaticState(**defaults)
+    return replace(base, **overrides)
 
 
 # ---------------------------------------------------------------------------

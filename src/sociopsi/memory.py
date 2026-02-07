@@ -138,7 +138,8 @@ class SemanticMemory:
         if model:
             try:
                 embedding = model.encode(content, convert_to_numpy=True)
-                memory.embedding = embedding
+                if isinstance(embedding, np.ndarray):
+                    memory.embedding = embedding
             except Exception as e:
                 logger.warning(f"Failed to generate embedding: {e}")
 

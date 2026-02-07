@@ -400,7 +400,11 @@ def main() -> None:
 
     # Group by model+prompt
     from collections import defaultdict
-    scores = defaultdict(lambda: {"pass": 0, "total": 0, "times": []})
+    from typing import DefaultDict, List, TypedDict
+
+    ScoreStats = TypedDict("ScoreStats", {"pass": int, "total": int, "times": List[float]})
+
+    scores: DefaultDict[str, ScoreStats] = defaultdict(lambda: {"pass": 0, "total": 0, "times": []})
     for r in results:
         key = f"{r['model']} + {r['prompt']}"
         scores[key]["total"] += 1

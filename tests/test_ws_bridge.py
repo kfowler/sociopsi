@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+from collections.abc import Iterator
 
 import pytest
 from websockets.asyncio.client import connect
@@ -19,7 +20,7 @@ def _reset_bus():
 
 
 @pytest.fixture
-def bus() -> EventBus:
+def bus() -> Iterator[EventBus]:
     bus = EventBus()
     bus.start()
     yield bus
@@ -27,7 +28,7 @@ def bus() -> EventBus:
 
 
 @pytest.fixture
-def bridge(bus: EventBus):
+def bridge(bus: EventBus) -> Iterator[WebSocketBridge]:
     """Create a bridge on an ephemeral port, stop it after the test."""
     b = WebSocketBridge(host="localhost", port=0, event_bus=bus)
     b.start()

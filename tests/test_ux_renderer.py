@@ -1,7 +1,9 @@
 """Tests for UX renderer abstraction and ConsoleRenderer."""
 
+from dataclasses import replace
 from datetime import datetime
 from io import StringIO
+from typing import Any
 from unittest.mock import patch
 
 from sociopsi.types import (
@@ -19,8 +21,8 @@ from sociopsi.ux import ConsoleRenderer, UXRenderer
 from sociopsi.ux.base import UXRenderer as UXRendererBase
 
 
-def _make_somatic(**kwargs: object) -> SomaticState:
-    defaults = dict(  # noqa: C408
+def _make_somatic(**kwargs: Any) -> SomaticState:
+    base = SomaticState(
         battery_percent=80,
         battery_health=95,
         battery_cycles=200,
@@ -37,8 +39,7 @@ def _make_somatic(**kwargs: object) -> SomaticState:
         fan_rpm=0,
         uptime_seconds=3600,
     )
-    defaults.update(kwargs)
-    return SomaticState(**defaults)
+    return replace(base, **kwargs)
 
 
 class TestUXRendererABC:
