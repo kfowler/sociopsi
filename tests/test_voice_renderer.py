@@ -138,7 +138,9 @@ class TestVoiceRendererSomatic:
         audio = _make_audio()
         renderer = VoiceRenderer(audio)
         renderer.render_somatic(_make_somatic(thermal_state=ThermalState.HOT))
-        audio.speak.assert_called_once_with("Warning: thermal state is hot.", voice=None, rate=200)
+        audio.speak.assert_called_once_with(
+            "Warning: thermal state is hot.", voice=None, rate=200
+        )
 
     def test_critical_thermal_speaks(self) -> None:
         audio = _make_audio()
@@ -208,7 +210,9 @@ class TestVoiceRendererEgo:
         audio = _make_audio()
         renderer = VoiceRenderer(audio)
         renderer.render_ego("I should look around.", 0.75, 0.82)
-        audio.speak.assert_called_once_with("I should look around.", voice=None, rate=200)
+        audio.speak.assert_called_once_with(
+            "I should look around.", voice=None, rate=200
+        )
 
     def test_empty_thought_silent(self) -> None:
         audio = _make_audio()
@@ -273,7 +277,9 @@ class TestVoiceRendererResults:
         audio = _make_audio()
         renderer = VoiceRenderer(audio)
         results = [
-            ActionResult(action_type="look", success=True, result={"scene": "a dark room"}),
+            ActionResult(
+                action_type="look", success=True, result={"scene": "a dark room"}
+            ),
         ]
         renderer.render_results(results)
         audio.speak.assert_called_once()
