@@ -2,6 +2,10 @@
 
 Coordinates archetypes and Ego to generate rich internal monologue
 that represents the psychological dynamics of the agent.
+
+Runs an independent background thread that generates dialogue on a timer.
+The agent loop reads cached output via cached_output() rather than calling
+generate_dialogue() synchronously.
 """
 
 import logging
@@ -9,7 +13,7 @@ import threading
 import time
 from collections.abc import Callable
 from concurrent.futures import Future
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from sociopsi.archetypes import Anima, Archetype, Ego, Persona, SelfArchetype, Shadow
@@ -20,11 +24,26 @@ from sociopsi.types import PsycheComponent, StreamSegment
 logger = logging.getLogger(__name__)
 
 
+@dataclass
+class DialogueSnapshot:
+    """Frozen read-only copy of the latest dialogue output."""
+
+    segments: list[StreamSegment] = field(default_factory=list)
+    mediated_thought: str = ""
+    harmony: float = 0.5
+    fresh: bool = False  # True if not yet consumed by agent loop
+
+
 class ArchetypalDialogue:
     """Manages multi-voice internal dialogue between archetypes.
 
     The dialogue system generates voices from each archetype, then has
     the Ego mediate them into a coherent integrated thought.
+
+    Supports two modes:
+    - Background mode: start()/stop() runs a timer thread, agent reads
+      cached output via cached_output().
+    - Synchronous mode: call generate_dialogue() directly (for tests).
     """
 
     def __init__(
@@ -59,6 +78,105 @@ class ArchetypalDialogue:
         # Track last dialogue for context
         self.last_harmony: float = 0.5
         self.last_voices: dict[str, str] = {}
+
+        # Cached output for background mode
+        self._cached: DialogueSnapshot = DialogueSnapshot()
+        self._cache_lock: threading.Lock = threading.Lock()
+
+        # Background thread state
+        self._running: bool = False
+        self._stop_event: threading.Event = threading.Event()
+        self._thread: threading.Thread | None = None
+        self._interval: float = 10.0  # Generate dialogue every 10s
+
+        # Context for background generation (set by agent via update_context)
+        self._bg_drive_state: dict[str, dict[str, Any]] = {}
+        self._bg_context: str = ""
+        self._bg_modulator_context: dict[str, Any] = {}
+        self._context_lock: threading.Lock = threading.Lock()
+
+    def start(self, interval: float = 10.0) -> None:
+        """Start background dialogue generation thread.
+
+        Args:
+            interval: Seconds between dialogue generation cycles.
+        """
+        if self._running:
+            return
+        self._interval = interval
+        self._running = True
+        self._stop_event.clear()
+        self._thread = threading.Thread(
+            target=self._dialogue_loop, name="dialogue-bg", daemon=True
+        )
+        self._thread.start()
+        logger.info("Dialogue background thread started (interval=%.1fs)", interval)
+
+    def stop(self) -> None:
+        """Stop background dialogue generation thread."""
+        if not self._running:
+            return
+        self._running = False
+        self._stop_event.set()
+        if self._thread is not None:
+            self._thread.join(timeout=5.0)
+            self._thread = None
+        logger.info("Dialogue background thread stopped")
+
+    def update_context(
+        self,
+        drive_state: dict[str, dict[str, Any]],
+        context: str = "",
+        modulator_context: dict[str, Any] | None = None,
+    ) -> None:
+        """Update the context used by the background dialogue thread.
+
+        Called by the agent loop each cycle to provide fresh context.
+        """
+        with self._context_lock:
+            self._bg_drive_state = drive_state
+            self._bg_context = context
+            self._bg_modulator_context = modulator_context or {}
+
+    def cached_output(self) -> DialogueSnapshot:
+        """Read and consume the latest cached dialogue output.
+
+        Returns a snapshot and marks it as consumed (fresh=False).
+        """
+        with self._cache_lock:
+            snap = DialogueSnapshot(
+                segments=list(self._cached.segments),
+                mediated_thought=self._cached.mediated_thought,
+                harmony=self._cached.harmony,
+                fresh=self._cached.fresh,
+            )
+            self._cached.fresh = False
+            return snap
+
+    def _dialogue_loop(self) -> None:
+        """Background thread: periodically generate dialogue."""
+        while not self._stop_event.is_set():
+            try:
+                with self._context_lock:
+                    ds = dict(self._bg_drive_state)
+                    ctx = self._bg_context
+                    mc = dict(self._bg_modulator_context)
+
+                if ds:  # Only generate if context has been set
+                    segments, thought, harmony = self.generate_dialogue(
+                        drive_state=ds, context=ctx, modulator_context=mc
+                    )
+                    with self._cache_lock:
+                        self._cached = DialogueSnapshot(
+                            segments=segments,
+                            mediated_thought=thought,
+                            harmony=harmony,
+                            fresh=True,
+                        )
+            except Exception:
+                logger.exception("Error in dialogue background loop")
+
+            self._stop_event.wait(self._interval)
 
     def generate_dialogue(
         self,
