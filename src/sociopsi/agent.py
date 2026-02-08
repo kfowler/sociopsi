@@ -528,12 +528,6 @@ class JungAgent:
                 if action.type not in planned_types:
                     final_actions.append(action)
 
-            # Add LLM-proposed actions, synthesizing speak text from new dialogue
-            for action in parsed.actions:
-                if action.type == "speak" and is_new_dialogue and mediated_thought:
-                    action.params["text"] = mediated_thought
-                final_actions.append(action)
-
             # Auto-inject speak when new dialogue produced a mediated thought
             if is_new_dialogue and mediated_thought and not any(
                 a.type == "speak" for a in final_actions
