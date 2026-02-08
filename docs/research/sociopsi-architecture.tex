@@ -336,11 +336,7 @@ All four voices are generated in parallel via \texttt{ThreadPoolExecutor.submit(
 The Ego (\texttt{ego.py}) performs three functions:
 
 \begin{enumerate}
-<<<<<<< HEAD
-  \item \textbf{Harmony calculation}: semantic similarity between archetypal voice embeddings (see below).
-=======
   \item \textbf{Harmony calculation}: mean pairwise cosine similarity between voice embeddings (see below).
->>>>>>> origin/polecat/nitro/so-g5m2@mlbxiu9b
   \item \textbf{Mediation}: an LLM call that receives all archetypal voices plus the individuation level, and synthesizes them into a single coherent thought.
   \item \textbf{Development}: ego strength increases (+0.01) when harmony exceeds 0.7 and decreases ($-$0.005) when harmony drops below 0.3, creating a slow developmental arc.
 \end{enumerate}
