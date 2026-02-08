@@ -408,6 +408,11 @@ class AgentConfig:
     # UX renderer mode: "console" (default terminal output)
     ux_mode: str = "console"
 
+    # WebSocket UX server settings (used when ux_mode="web" or composite includes web)
+    ux_web_enabled: bool = False
+    ux_web_host: str = "localhost"
+    ux_web_port: int = 8765
+
     def __post_init__(self) -> None:
         """Initialize config: load config file, create data directory, validate voices."""
         # Load config file from ~/.sociopsi/config.json
