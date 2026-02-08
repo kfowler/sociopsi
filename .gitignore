@@ -34,6 +34,10 @@ ENV/
 # OS
 .DS_Store
 
+# Testing
+.coverage
+htmlcov/
+
 # Project specific
 .sociopsi/
 
